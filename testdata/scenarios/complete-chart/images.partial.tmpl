@@ -1,0 +1,5 @@
+{{- $p := . -}}
+{{- range .Images}}
+- name: {{.Name}}
+  image: {{if $p.RepositoryURL}}{{$p.RepositoryURL}}/{{end}}{{.Image}}
+{{- end }}
