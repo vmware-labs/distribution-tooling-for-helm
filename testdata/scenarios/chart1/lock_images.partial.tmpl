@@ -1,0 +1,49 @@
+- name: wordpress
+  image: {{.ServerURL}}/bitnami/wordpress:6.2.2-debian-11-r11
+  chart: wordpress
+  digests:
+    - digest: sha256:a410341508b8823774448bc457730e38d2f047497ffddf090553845493c62e0f
+      arch: linux/amd64
+    - digest: sha256:1e5991a54bc98871e61dd7f94697f86b5dc4e2b2560d5590ff292038a6434ba7
+      arch: linux/arm64
+- name: bitnami-shell
+  image: {{.ServerURL}}/bitnami/bitnami-shell:11-debian-11-r124
+  chart: wordpress
+  digests:
+    - digest: sha256:9d9195f30a8c8a82db434acd2e9c7b02f366be17a419245a7856a61117be063f
+      arch: linux/amd64
+    - digest: sha256:296dc1939f70667553ac6d3787b5b69561a5590e2719b841e2b26d3b65ba6515
+      arch: linux/arm64
+- name: apache-exporter
+  image: {{.ServerURL}}/bitnami/apache-exporter:0.13.4-debian-11-r2
+  chart: wordpress
+  digests:
+    - digest: sha256:83acfe5b679dfc843692fc3d122eb7c18f4733855e0c03ba22fa301c2dbf8c05
+      arch: linux/amd64
+    - digest: sha256:50ede0624e286591351daa96b86b3e3c8826d699f931a9f854ecbc186ae6ab1c
+      arch: linux/arm64
+- name: mysqld-exporter
+  image: {{.ServerURL}}/bitnami/mysqld-exporter:0.14.0-debian-11-r125
+  chart: mariadb
+  digests:
+    - digest: sha256:3ae642840c29e2541c63871e8d9e0f8f7a8bc5c45eb0e20afa9d134242a72d12
+      arch: linux/amd64
+    - digest: sha256:82f5ebe3529a6cb3ec6a07daf819c1ee881d472fef297bb1f7c4b5d1d0634fea
+      arch: linux/arm64
+- name: bitnami-shell
+  image: {{.ServerURL}}/bitnami/bitnami-shell:11-debian-11-r123
+  chart: mariadb
+  digests:
+    - digest: sha256:cc2370abc4a5d86dcaab4cb6e6e6a58f99fcc6f95b02752cabf8ba193f78d78e
+      arch: linux/amd64
+    - digest: sha256:5b7bd35e7935988160f3031766a51665bb709767d24f1e11ca44fc671446f486
+      arch: linux/arm64
+- name: mariadb
+  image: {{.ServerURL}}/bitnami/mariadb:10.11.4-debian-11-r0
+  chart: mariadb
+  digests:
+    - digest: sha256:d8fd0e4cdd52e10c05a165eeacdf639ac0dee12e036a62d2ab3ccec42352c7c5
+      arch: linux/amd64
+    - digest: sha256:7dd6e0d680eea4b7b00cef9dfe4b1c80ef7447db7ab21c51a2c3b8f7c0375ba3
+      arch: linux/arm64
+

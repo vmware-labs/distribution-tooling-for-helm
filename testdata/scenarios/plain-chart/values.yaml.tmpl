@@ -1,0 +1,8 @@
+{{if .ValuesImages}}
+{{range .ValuesImages}}
+{{.Name}}:
+  registry: {{.Registry}}
+  repository: {{.Repository}}
+  tag: {{.Tag}}
+{{end}}
+{{end}}

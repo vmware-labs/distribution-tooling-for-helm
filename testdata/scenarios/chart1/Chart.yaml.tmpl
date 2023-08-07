@@ -1,0 +1,14 @@
+name: wordpress
+version: 1.0.0
+annotations:
+    category: CMS
+    licenses: Apache-2.0
+    {{if .AnnotationsKey}}{{.AnnotationsKey}}{{else}}images{{end}}: |
+{{include "images.partial.tmpl" . | indent 6 }}
+dependencies:
+  - name: mariadb
+    repository: oci://registry-1.docker.io/bitnamicharts
+    version: 12.x.x
+  - name: common
+    repository: oci://registry-1.docker.io/bitnamicharts
+    version: 2.x.x
