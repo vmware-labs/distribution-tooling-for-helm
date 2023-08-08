@@ -19,6 +19,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch Version
+        id: version
+        run: |
+          PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)
+          echo "::set-output name=PLUGIN_VERSION::$PLUGIN_VERSION"
+
+      - name: Check Version
+        if: ${{ steps.version.outputs.PLUGIN_VERSION == inputs.tag }}
+        run: echo "Plugin version matches input tag"
+
       - name: Set Golang
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
 
