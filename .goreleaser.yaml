@@ -1,0 +1,35 @@
+release:
+  target_commitish: '{{ .Commit }}'
+builds:
+  - id: dt
+    binary: dt 
+    main: ./cmd/dt
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - linux_arm
+      - windows_amd64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - >-
+        -X main.Version={{ .Tag }}
+        -X main.GitCommit={{ .Commit }}
+        -X main.BuildDate={{ .Date }}
+archives:
+  - builds:
+      - dt
+    name_template: "helm-dt-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+checksum:
+  algorithm: sha256
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
