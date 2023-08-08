@@ -86,9 +86,9 @@ verifySupported() {
 getDownloadURL() {
   version="$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)"
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$version/$PROJECT_NAME_$version_$OS_$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
   else
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/latest/download/$PROJECT_NAME_$version_$OS_$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/latest/download/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
   fi
 }
 
