@@ -72,7 +72,13 @@ install: build
 
 .PHONY: test
 test: build
-test: test-style
+test: test-style 
+test: test-unit
+
+.PHONY: test-gh-ci
+test: build
+# golangci-lint not allowed on vmware-labs
+# test: test-style
 test: test-unit
 
 .PHONY: test-unit
