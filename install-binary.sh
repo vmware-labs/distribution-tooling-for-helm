@@ -60,7 +60,7 @@ initOS() {
   # Minimalist GNU for Windows
   MINGW*) OS='windows' ;;
   CYGWIN*) OS='windows' ;;
-  Darwin) OS='macos' ;;
+  Darwin) OS='darwin' ;;
   Linux) OS='linux' ;;
   esac
 }
@@ -84,11 +84,11 @@ verifySupported() {
 
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
-  version=$(git -C "$HELM_PLUGIN_DIR" describe --tags --exact-match 2>/dev/null || :)
+  version="$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)"
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$version/$PROJECT_NAME-$OS-$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$version/$PROJECT_NAME_$version_$OS_$ARCH.tgz"
   else
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/latest/download/$PROJECT_NAME-$OS-$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/latest/download/$PROJECT_NAME_$version_$OS_$ARCH.tgz"
   fi
 }
 
