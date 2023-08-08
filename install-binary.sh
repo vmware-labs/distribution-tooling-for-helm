@@ -84,7 +84,7 @@ verifySupported() {
 
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
-  version="$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)"
+  version="$(cat $HELM_PLUGIN_DIR/plugin.yaml | grep "version" | cut -d '"' -f 2)"
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
     DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
   else
@@ -122,7 +122,7 @@ downloadFile() {
 # installs it.
 installFile() {
   tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
-  HELM_TMP_BIN="$HELM_TMP/$PROJECT_NAME/bin/$BINARY_NAME"
+  HELM_TMP_BIN="$HELM_TMP/$PROJECT_NAME/$BINARY_NAME"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
   fi
