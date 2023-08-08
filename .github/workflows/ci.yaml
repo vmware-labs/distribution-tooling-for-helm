@@ -38,7 +38,7 @@ jobs:
         run: make build
 
       - name: Test
-        run: make test
+        run: make test-gh-ci
 
       - name: Install
         run: make install
