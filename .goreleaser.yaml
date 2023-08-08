@@ -22,7 +22,6 @@ builds:
 archives:
   - builds:
       - dt
-    name_template: "helm-dt-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     format_overrides:
       - goos: windows
         format: zip
