@@ -1,10 +1,10 @@
 # Distribution Tooling for Helm
 
-`dt`, is a set of utilities available in a standalone mode and as a Helm Plugin for making offline work with Helm charts easier. It is meant to be used for creating reproducible and relocatable packages for Helm charts that can be easily moved across registries without hassles. This is particularly useful for distributing Helm charts into airgapped environments like those used by Federal governments.
+`dt`, is a set of utilities available in a standalone mode and as a Helm Plugin for making offline work with Helm charts easier. It is meant to be used for creating reproducible and relocatable packages for Helm charts that can be easily moved across registries without hassles. This is particularly useful for distributing Helm charts into air-gapped environments like those used by Federal governments.
 
-This tools builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) and the, currently proposed, [images lock file HIP (PR)](https://github.com/helm/community/pull/281) as a foundation. Hence, it does require Helm charts to contain an annotation that provides the full list of container images that a Helm chart might need for its usage independently on the bootstrapping configuration. 
+This tool builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) and the, currently proposed, [images lock file HIP (PR)](https://github.com/helm/community/pull/281) as a foundation. Hence, it does require Helm charts to contain an annotation that provides the full list of container images that a Helm chart might need for its usage independently of the bootstrapping configuration. 
 
-[Bitnami Helm charts](https://github.com/bitnami/charts) are now fully annotated to support this tooling, but you can also use this set of utilities with any other Helm charts that might use any other alternative image listing annotation, like for example Helm charts relying in [artifact.io/images](https://artifacthub.io/docs/topics/annotations/helm/).
+[Bitnami Helm charts](https://github.com/bitnami/charts) are now fully annotated to support this tooling, but you can also use this set of utilities with any other Helm charts that might use any other alternative image listing annotation, like for example, Helm charts relying on [artifact.io/images](https://artifacthub.io/docs/topics/annotations/helm/).
 
 ## Installation
 
@@ -24,7 +24,7 @@ Note that all the examples below use this tool as a Helm plugin but you can just
 
 ### Building from Source
 
-You can build this tool with the following command. Golang 1.20 or above is needed to compie. [golangci-lint](https://golangci-lint.run/usage/install/) is used for linting.
+You can build this tool with the following command. Golang 1.20 or above is needed to compile. [golangci-lint](https://golangci-lint.run/usage/install/) is used for linting.
 
 ```sh
 make build
@@ -38,9 +38,9 @@ make test
 
 ## Usage
 
-The following sections list the most common commands and its usage. This tool can be used either standalone or through the Helm plugin. 
+The following sections list the most common commands and their usage. This tool can be used either standalone or through the Helm plugin. 
 
-For the sake of following this guide, lets pull one of the Bitnami Helm charts into an examples folder:
+For the sake of following this guide, let's pull one of the Bitnami Helm charts into an examples folder:
 
 ```sh
 git clone git@github.com:vmware-labs/distribution-tooling-for-helm.git
@@ -52,9 +52,9 @@ bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d exa
 
 The two simplest and most powerful commands on this tool are `wrap` and `unwrap`. With these two commands **you can relocate any Helm chart to any OCI registry in two steps**. 
 
-**Wrapping a chart** consists on packaging the chart into the usual `tar.gz`, downloading all the chart dependencies from the source registry and wrapping everything together into a single file. This will include also all the subcharts and their images. That new file, the _wrap_, can be distributed around in whatever way you want (e.g. USB stick) to then later be unwrapped into a destination OCI registry. This process is commonly referred to as _relocating a Helm chart_.
+**Wrapping a chart** consists of packaging the chart into the usual `tar.gz`, downloading all the chart dependencies from the source registry, and wrapping everything together into a single file. This will include also all the subcharts and their images. That new file, the _wrap_, can be distributed around in whatever way you want (e.g. USB stick) to then later be unwrapped into a destination OCI registry. This process is commonly referred to as _relocating a Helm chart_.
 
-Even more exciting, we don't need to download the Helm chart for wrapping it. We can point the tool to any reachable Helm chart and the tool will take care of packaging and downloading everything for us. Like for example:
+Even more exciting, we don't need to download the Helm chart for wrapping it. We can point the tool to any reachable Helm chart and the tool will take care of packaging and downloading everything for us. For example:
 
 ```sh
 helm dt wrap oci://docker.io/bitnamicharts/kibana
@@ -93,7 +93,7 @@ helm dt wrap examples/mariadb/
 
 **Unwrapping a Helm chart** can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well. 
 
-At that moment your Helm chart will be ready to be used from the target registry without any dependencies to the source. By default the tool will run in dry-mode and require you to confirm actions but you can speed everything up with the `--yes` parameter.
+At that moment your Helm chart will be ready to be used from the target registry without any dependencies to the source. By default, the tool will run in dry-run mode and require you to confirm actions but you can speed everything up with the `--yes` parameter.
 
 ```sh
 helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
@@ -114,13 +114,13 @@ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
  🎉  Helm chart unwrapped successfully: You can use it now by running "helm install oci://demo.goharbor.io/helm-plugin/kibana --generate-name"
 ```
 
-That's all per the basic most powerful usage. If you're interesting in some other additional goodies then we will dig next into some specific finer-grained commands. 
+That's all per the basic most powerful usage. If you're interested in some other additional goodies then we will dig next into some specific finer-grained commands. 
 
 ### Creating an images lock
 
 An images lock file, a.k.a. `Images.lock` is a new file that gets created inside the directory as per [this HIP submission](https://github.com/helm/community/pull/281) to Helm community. The `Images.lock` file contains the list of all the container images annotated within a Helm chart's `Chart.yaml` manifest, including also all the images from its subchart dependencies. Along with the images, some other metadata useful for automating processing and relocation is also added.
 
-So, for example the mariadb Helm chart that we downloaded earlier, has `images` annotation like this:
+So, for example, the mariadb Helm chart that we downloaded earlier, has an `images` annotation like this:
 
 ```yaml
 cat examples/mariadb/Chart.yaml | head -n 10
@@ -186,7 +186,7 @@ images:
         arch: linux/arm64
 ```
 
-By default `Images.lock` creation expects an `images` annotation in your Helm chart. However this can be overriden by the `annotations-key` flag. This is useful for example when dealing with Helm charts that rely on a different annotation like `artifacthub.io/images` which has existed for a while. You can use this flag with most of the commands in this guide.
+By default `Images.lock` creation expects an `images` annotation in your Helm chart. However, this can be overridden by the `annotations-key` flag. This is useful for example when dealing with Helm charts that rely on a different annotation like `artifacthub.io/images` which has existed for a while. You can use this flag with most of the commands in this guide.
 
 ```sh
 helm dt images lock ../charts/jenkins --annotations-key artifacthub.io/images
@@ -234,9 +234,9 @@ images:
 
 ### Verifying an images lock
 
-The `verify` command can be used to validate the integrity of an `Images.lock` file in a given Helm chart. This command will try to validate that all upstream container images that will be pulled from the Helm chart match actually the image digests that exist in the the actual lock file.
+The `verify` command can be used to validate the integrity of an `Images.lock` file in a given Helm chart. This command will try to validate that all upstream container images that will be pulled from the Helm chart match actually the image digests that exist in the actual lock file.
 
-With this command you can make sure that when you distribute a Helm chart with its corresponding `Images.lock` then any customer will be able to validate that just exactly the images defined in the lock will be pulled. Note that this is exactly part of what the `unwrap` command does, to make sure that only exactly what was wrapped gets into the target registry. Signing and other type of provenance are out of the scope from this tool for the time being and need to be added manually with external tooling. This is an area that we are very eager to improve soon.
+With this command, you can make sure that when you distribute a Helm chart with its corresponding `Images.lock` then any customer will be able to validate that just exactly the images defined in the lock will be pulled. Note that this is exactly part of what the `unwrap` command does, to make sure that only exactly what was wrapped gets into the target registry. Signing and other types of provenance are out of the scope of this tool for the time being and need to be added manually with external tooling. This is an area that we are very eager to improve soon.
 
 ```sh
 helm dt images verify examples/mariadb
@@ -271,7 +271,7 @@ e0c141706fd1ce9ec5276627ae53994343ec2719aba606c1dc228f9290698fc1.tar
 
 ### Relocating a chart
 
-This command will relocate a Helm chart rewriting the `Images.lock` and all of its subchart dependencies locks as well. Additionally, it will change the `Chart.yaml` annotations, and any images used inside `values.yaml`. All these on subchart dependencies as well.
+This command will relocate a Helm chart rewriting the `Images.lock` and all of its subchart dependencies locks as well. Additionally, it will change the `Chart.yaml` annotations, and any images used inside `values.yaml` (and all those on subchart dependencies as well).
 
 For example 
 
@@ -293,7 +293,7 @@ images:
 
 ### Pushing images
 
-Based on the `Images.lock` file, this command pushes all images (that must have been previously pulled into the `images/` folder) into their respective registries. Note that this command does not relocate anything. It will just simply try to push their images to wherever they are pointing to. 
+Based on the `Images.lock` file, this command pushes all images (that must have been previously pulled into the `images/` folder) into their respective registries. Note that this command does not relocate anything. It will just simply try to push the images to wherever they are pointing to. 
 
 Obviously, this command only makes sense when used after having pulled the images and executed the `relocate` command.
 
@@ -308,7 +308,7 @@ INFO[0033] All images pushed successfully
 
 ### Annotating a chart (EXPERIMENTAL)
 
-`Images.lock` creation relies on the existence of the special images annotation inside `Chart.yaml` If you have a Helm chart that does not contain any annotations, this command can be used to guess-and-generate an annotation with a tentative list of images. It's important to note that this list is a **best-effort** as the list of images is obtained from the `values.yaml` file and this is always an unreliable, often incomplete and error-prone source as the configuration in `values.yaml` is very variable.
+`Images.lock` creation relies on the existence of the special images annotation inside `Chart.yaml`. If you have a Helm chart that does not contain any annotations, this command can be used to guess and generate an annotation with a tentative list of images. It's important to note that this list is a **best-effort** as the list of images is obtained from the `values.yaml` file and this is always an unreliable, often incomplete, and error-prone source as the configuration in `values.yaml` is very variable.
 
 ```sh
 helm dt chart annotate examples/mariadb
