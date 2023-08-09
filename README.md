@@ -36,7 +36,7 @@ You can also verify the build by running the unit tests:
 make test
 ```
 
-## Usage
+## Basic Usage
 
 The following sections list the most common commands and their usage. This tool can be used either standalone or through the Helm plugin. 
 
@@ -48,11 +48,11 @@ cd distribution-tooling-for-helm
 bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d examples --untar" 
 ```
 
-### Wrapping and unwrapping Helm charts
-
 The two simplest and most powerful commands on this tool are `wrap` and `unwrap`. With these two commands **you can relocate any Helm chart to any OCI registry in two steps**. 
 
-**Wrapping a chart** consists of packaging the chart into the usual `tar.gz`, downloading all the chart dependencies from the source registry, and wrapping everything together into a single file. This will include also all the subcharts and their images. That new file, the _wrap_, can be distributed around in whatever way you want (e.g. USB stick) to then later be unwrapped into a destination OCI registry. This process is commonly referred to as _relocating a Helm chart_.
+### Wrapping Helm charts
+
+Wrapping a chart consists of packaging the chart into a tar.gz, including all container images that this chart depends on, independently of values. Everything gets wrapped together into a single file. This will include also all the subcharts and their container images. That new file, the wrap, can be distributed around in whatever way you want (e.g. USB stick) to then later be unwrapped into a destination OCI registry. This process is commonly referred to as relocating a Helm chart.
 
 Even more exciting, we don't need to download the Helm chart for wrapping it. We can point the tool to any reachable Helm chart and the tool will take care of packaging and downloading everything for us. For example:
 
@@ -91,7 +91,9 @@ helm dt wrap examples/mariadb/
  🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
 ```
 
-**Unwrapping a Helm chart** can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well. 
+### Unwrapping Helm charts
+
+Unwrapping a Helm chart can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well. 
 
 At that moment your Helm chart will be ready to be used from the target registry without any dependencies to the source. By default, the tool will run in dry-run mode and require you to confirm actions but you can speed everything up with the `--yes` parameter.
 
@@ -114,7 +116,9 @@ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
  🎉  Helm chart unwrapped successfully: You can use it now by running "helm install oci://demo.goharbor.io/helm-plugin/kibana --generate-name"
 ```
 
-That's all per the basic most powerful usage. If you're interested in some other additional goodies then we will dig next into some specific finer-grained commands. 
+## Advanced Usage
+
+That was all as per the basic most basic and powerful usage. If you're interested in some other additional goodies then we will dig next into some specific finer-grained commands. 
 
 ### Creating an images lock
 
