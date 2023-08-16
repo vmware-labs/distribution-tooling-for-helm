@@ -82,9 +82,14 @@ func readDigestsInfoFromIndex(idx v1.IndexManifest) ([]DigestInfo, error) {
 		}
 		switch img.MediaType {
 		case types.OCIManifestSchema1, types.DockerManifestSchema2:
+			platform := img.Platform
+			if platform == nil {
+				allErrors = errors.Join(allErrors, fmt.Errorf("image does not define a platform"))
+				continue
+			}
 			imgDigest := DigestInfo{
 				Digest: digest.Digest(img.Digest.String()),
-				Arch:   fmt.Sprintf("%s/%s", img.Platform.OS, img.Platform.Architecture),
+				Arch:   fmt.Sprintf("%s/%s", platform.OS, platform.Architecture),
 			}
 			digests = append(digests, imgDigest)
 		default:
