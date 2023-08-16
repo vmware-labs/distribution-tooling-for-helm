@@ -309,6 +309,82 @@ helm dt images push examples/mariadb
 
 INFO[0033] All images pushed successfully
 ```
+### Getting information about a wrapped chart
+
+It is sometimes useful to obtain information about a wrapped chart before unwrapping it. For this purpose, you can use the info command:
+
+```sh
+helm dt info wordpress-16.1.24.wrap.tgz
+ »  Wrap Information
+       Chart: wordpress
+       Version: 16.1.24
+    »  Metadata
+          - generatedBy: Distribution Tooling for Helm
+          - generatedAt: 2023-08-18T12:52:55.824345304Z
+    »  Images
+          docker.io/bitnami/apache-exporter:0.13.4-debian-11-r12 (linux/amd64, linux/arm64)
+          docker.io/bitnami/bitnami-shell:11-debian-11-r132 (linux/amd64, linux/arm64)
+          docker.io/bitnami/wordpress:6.2.2-debian-11-r26 (linux/amd64, linux/arm64)
+          docker.io/bitnami/bitnami-shell:11-debian-11-r123 (linux/amd64, linux/arm64)
+          docker.io/bitnami/mariadb:10.11.4-debian-11-r0 (linux/amd64, linux/arm64)
+          docker.io/bitnami/mysqld-exporter:0.14.0-debian-11-r125 (linux/amd64, linux/arm64)
+          docker.io/bitnami/bitnami-shell:11-debian-11-r130 (linux/amd64, linux/arm64)
+          docker.io/bitnami/memcached:1.6.21-debian-11-r4 (linux/amd64, linux/arm64)
+          docker.io/bitnami/memcached-exporter:0.13.0-debian-11-r8 (linux/amd64, linux/arm64)
+```
+
+If you are interested in getting the image digests, you can use the `--detailed` flag:
+
+```sh
+helm dt info --detailed wordpress-16.1.24.wrap.tgz
+ »  Wrap Information
+       Chart: wordpress
+       Version: 16.1.24
+    »  Metadata
+          - generatedBy: Distribution Tooling for Helm
+          - generatedAt: 2023-08-18T12:52:55.824345304Z
+    »  Images
+       »  wordpress/apache-exporter
+             Image: docker.io/bitnami/apache-exporter:0.13.4-debian-11-r12
+             Digests
+             - Arch: linux/amd64
+               Digest: sha256:0b4373c3571d5640320b68f8d296c0a4eaf7704947214640b77528bb4d79d23c
+             - Arch: linux/arm64
+               Digest: sha256:895ba569e4db3188798e445fe3be2e4da89fd85cb8ae0c5ef0bd2a67cfe4305c
+...
+       »  mariadb/bitnami-shell
+             Image: docker.io/bitnami/bitnami-shell:11-debian-11-r123
+             Digests
+             - Arch: linux/amd64
+               Digest: sha256:13d8883d4f40612e8a231c5d9fa8c4efa74d2a62f0a1991f20fc32c5debdd2b1
+             - Arch: linux/arm64
+               Digest: sha256:74579dc63b3ae7d8ec21a6ffcd47d16781582fef8dd5a28e77844fcbcb1072c1
+...
+```
+
+It is also possible to get a YAML dump if the `Images.lock` in case you need to feed it to another process:
+
+```sh
+helm dt info --yaml wordpress-16.1.24.wrap.tgz
+apiversion: v0
+kind: ImagesLock
+metadata:
+  generatedAt: "2023-08-18T12:52:55.824345304Z"
+  generatedBy: Distribution Tooling for Helm
+chart:
+  name: wordpress
+  version: 16.1.24
+images:
+  - name: apache-exporter
+    image: docker.io/bitnami/apache-exporter:0.13.4-debian-11-r12
+    chart: wordpress
+    digests:
+      - digest: sha256:0b4373c3571d5640320b68f8d296c0a4eaf7704947214640b77528bb4d79d23c
+        arch: linux/amd64
+      - digest: sha256:895ba569e4db3188798e445fe3be2e4da89fd85cb8ae0c5ef0bd2a67cfe4305c
+        arch: linux/arm64
+...
+```
 
 ### Annotating a chart (EXPERIMENTAL)
 
