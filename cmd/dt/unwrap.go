@@ -178,7 +178,7 @@ func untarChart(chartFile string, dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create sandbox directory")
 	}
-	if err := utils.Untar(chartFile, sandboxDir, 1); err != nil {
+	if err := utils.Untar(chartFile, sandboxDir, utils.TarConfig{StripComponents: 1}); err != nil {
 		return "", err
 	}
 	return sandboxDir, nil
@@ -204,7 +204,7 @@ func pushChart(chart *chartutils.Chart, pushChartURL string) error {
 		return fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
 	}
 	tempTarFile := filepath.Join(dir, fmt.Sprintf("%s.tgz", chart.Name()))
-	if err := utils.Tar(chartPath, tempTarFile, utils.TarConfiguration{
+	if err := utils.Tar(chartPath, tempTarFile, utils.TarConfig{
 		Prefix: chart.Name(),
 		Skip:   func(f string) bool { return strings.HasPrefix(f, "/images/") },
 	}); err != nil {

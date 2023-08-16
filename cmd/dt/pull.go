@@ -33,7 +33,7 @@ func pullChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
 }
 
 func compressChart(ctx context.Context, chart *chartutils.Chart, outputFile string) error {
-	return utils.TarContext(ctx, chart.RootDir(), outputFile, utils.TarConfiguration{
+	return utils.TarContext(ctx, chart.RootDir(), outputFile, utils.TarConfig{
 		Prefix: fmt.Sprintf("%s-%s", chart.Name(), chart.Metadata.Version),
 	})
 }

@@ -46,20 +46,21 @@ func tarFile(tarWriter *tar.Writer, source string, relativePath string, info os.
 	return nil
 }
 
-// TarConfiguration defines the Tar char opts
-type TarConfiguration struct {
-	Prefix string
-	Skip   func(f string) bool
+// TarConfig defines the Tar char opts
+type TarConfig struct {
+	Prefix          string
+	StripComponents int
+	Skip            func(f string) bool
 }
 
 // Tar calls TarContext with a Background context
-func Tar(sourceDir string, filename string, cfg TarConfiguration) error {
+func Tar(sourceDir string, filename string, cfg TarConfig) error {
 	return TarContext(context.Background(), sourceDir, filename, cfg)
 }
 
 // TarContext compresses the provided sourceDir directory into the .tar.gz specified in filename,
 // adding prefix to the added files.
-func TarContext(parentCtx context.Context, sourceDir string, filename string, cfg TarConfiguration) error {
+func TarContext(parentCtx context.Context, sourceDir string, filename string, cfg TarConfig) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
@@ -167,13 +168,50 @@ func untarFile(tr *tar.Reader, dest string, header *tar.Header) error {
 
 // Untar decompresses the provided filename into the outputDir
 // Simplified implementation taken from: golang.org/x/build/internal/untar (BSD license)
-func Untar(filename string, outputDir string, stripComponents int) error {
-	return UntarContext(context.Background(), filename, outputDir, stripComponents)
+func Untar(filename string, outputDir string, cfg TarConfig) error {
+	return UntarContext(context.Background(), filename, outputDir, cfg)
 }
+
+// ErrEndTarWalk allows early stopping inspecting the tar file
+var ErrEndTarWalk = errors.New("end walking tar contents")
 
 // UntarContext decompresses the provided filename into the outputDir
 // Simplified implementation taken from: golang.org/x/build/internal/untar (BSD license)
-func UntarContext(ctx context.Context, filename string, outputDir string, stripComponents int) error {
+func UntarContext(ctx context.Context, filename string, outputDir string, cfg TarConfig) error {
+	return WalkTarFile(ctx, filename, func(tr *tar.Reader, header *tar.Header) error {
+		rel := stripPathComponents(header.Name, cfg.StripComponents)
+		// nothing left after stripping
+		if rel == "" {
+			return nil
+		}
+
+		abs := filepath.Join(outputDir, rel)
+
+		return untarFile(tr, abs, header)
+	})
+}
+
+// FindFileInTar finds path in the tarFilename contents and processes it via the provided operation
+func FindFileInTar(ctx context.Context, tarFilename string, path string, operation func(tr *tar.Reader) error, cfg TarConfig) error {
+	return WalkTarFile(ctx, tarFilename, func(tr *tar.Reader, header *tar.Header) error {
+		rel := stripPathComponents(header.Name, cfg.StripComponents)
+		// nothing left after stripping
+		if rel == "" {
+			return nil
+		}
+		if rel == path {
+			if err := operation(tr); err != nil {
+				return err
+			}
+			// We already found it, erarly abort
+			return ErrEndTarWalk
+		}
+		return nil
+	})
+}
+
+// WalkTarFile iterates over the list of tar entries and applies the provided operation
+func WalkTarFile(ctx context.Context, filename string, operation func(tr *tar.Reader, header *tar.Header) error) error {
 	fh, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
@@ -200,15 +238,10 @@ Loop:
 			if err != nil {
 				return fmt.Errorf("failed to read tar file: %w", err)
 			}
-			rel := stripPathComponents(f.Name, stripComponents)
-			// nothing left after stripping
-			if rel == "" {
-				continue Loop
-			}
-
-			abs := filepath.Join(outputDir, rel)
-
-			if err := untarFile(tr, abs, f); err != nil {
+			if err := operation(tr, f); err != nil {
+				if err == ErrEndTarWalk {
+					break Loop
+				}
 				return err
 			}
 		}
