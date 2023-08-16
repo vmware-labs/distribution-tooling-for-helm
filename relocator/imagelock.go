@@ -20,7 +20,7 @@ func relocateImages(images imagelock.ImageList, prefix string) (count int, err e
 		img.Image = norm
 		count++
 	}
-	return count, nil
+	return count, allErrors
 }
 
 // RelocateLock rewrites the images urls in the provided lock using prefix
