@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,102 +9,20 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/opencontainers/go-digest"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 )
 
-func readRemoteManifest(src string) (map[string]tu.DigestData, error) {
-	o := crane.GetOptions()
-
-	ref, err := name.ParseReference(src, o.Name...)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse reference %q: %w", src, err)
-	}
-	desc, err := remote.Get(ref, o.Remote...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get remote image: %w", err)
-	}
-
-	var idx v1.IndexManifest
-	if err := json.Unmarshal(desc.Manifest, &idx); err != nil {
-		return nil, fmt.Errorf("failed to parse images data")
-	}
-	digests := make(map[string]tu.DigestData, 0)
-
-	var allErrors error
-	for _, img := range idx.Manifests {
-		// Skip attestations
-		if img.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
-			continue
-		}
-		switch img.MediaType {
-		case types.OCIManifestSchema1, types.DockerManifestSchema2:
-			if img.Platform == nil {
-				continue
-			}
-
-			arch := fmt.Sprintf("%s/%s", img.Platform.OS, img.Platform.Architecture)
-			imgDigest := tu.DigestData{
-				Digest: digest.Digest(img.Digest.String()),
-				Arch:   arch,
-			}
-			digests[arch] = imgDigest
-		default:
-			allErrors = errors.Join(allErrors, fmt.Errorf("unknown media type %q", img.MediaType))
-			continue
-		}
-	}
-	return digests, allErrors
-}
-
-func createImages(imageData *tu.ImageData, archs []string) ([]v1.Image, error) {
-	craneImgs := []v1.Image{}
-	imageName := imageData.Image
-
-	for _, plat := range archs {
-
-		img, err := crane.Image(map[string][]byte{
-			"platform.txt": []byte(fmt.Sprintf("Image: %s ; plaform: %s", imageName, plat)),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create image: %w", err)
-		}
-		parts := strings.Split(plat, "/")
-		img, err = mutate.ConfigFile(img, &v1.ConfigFile{Architecture: parts[1], OS: parts[0]})
-		if err != nil {
-			return nil, fmt.Errorf("cannot mutatle image config file: %w", err)
-		}
-
-		img, err = mutate.Canonical(img)
-		if err != nil {
-			return nil, fmt.Errorf("failed to canonicalize image: %w", err)
-		}
-
-		d, err := img.Digest()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get image digest: %w", err)
-		}
-		craneImgs = append(craneImgs, img)
-
-		imageData.Digests = append(imageData.Digests, tu.DigestData{Arch: plat, Digest: digest.Digest(d.String())})
-	}
-	return craneImgs, nil
-}
-
 func (suite *CmdSuite) TestPushCommand() {
 	t := suite.T()
+	sb := suite.sb
+	require := suite.Require()
+	assert := suite.Assert()
+
 	silentLog := log.New(io.Discard, "", 0)
 	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
 	defer s.Close()
@@ -117,8 +33,6 @@ func (suite *CmdSuite) TestPushCommand() {
 	}
 	serverURL := u.Host
 
-	sb := suite.sb
-	require := suite.Require()
 	t.Run("Handle errors", func(t *testing.T) {
 		t.Run("Handle missing Images.lock", func(t *testing.T) {
 			chartName := "test"
@@ -180,7 +94,7 @@ func (suite *CmdSuite) TestPushCommand() {
 			"linux/amd64",
 			"linux/arm",
 		}
-		craneImgs, err := createImages(&imageData, architectures)
+		craneImgs, err := tu.CreateSampleImages(&imageData, architectures)
 
 		if err != nil {
 			t.Fatal(err)
@@ -211,23 +125,21 @@ func (suite *CmdSuite) TestPushCommand() {
 			}
 		}
 
-		suite.T().Run("Push images", func(t *testing.T) {
-			suite.Require().NoError(err)
+		t.Run("Push images", func(t *testing.T) {
+			require.NoError(err)
 			dt("images", "push", chartDir).AssertSuccessMatch(t, "")
 
 			// Verify the images were pushed
 			for _, img := range images {
 				src := fmt.Sprintf("%s/%s", u.Host, img.Image)
-				remoteDigests, err := readRemoteManifest(src)
+				remoteDigests, err := tu.ReadRemoteImageManifest(src)
 				if err != nil {
 					t.Fatal(err)
 				}
 				for _, dgstData := range img.Digests {
-					suite.Assert().Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
+					assert.Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
 				}
 			}
-			//	at("images", "verify", chartDir).AssertSuccessMatch(suite.T(), "")
-
 		})
 	})
 

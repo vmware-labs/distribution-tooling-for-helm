@@ -12,13 +12,15 @@ import (
 )
 
 func (suite *CmdSuite) TestVerifyCommand() {
+	t := suite.T()
+	sb := suite.sb
+	require := suite.Require()
+
 	s, err := tu.NewTestServer()
 	suite.Require().NoError(err)
 
 	defer s.Close()
 
-	sb := suite.sb
-	require := suite.Require()
 	serverURL := s.ServerURL
 
 	renderLockedChart := func(destDir string, chartName string, scenarioName string, serverURL string, images []*tu.ImageData) string {
@@ -32,12 +34,12 @@ func (suite *CmdSuite) TestVerifyCommand() {
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
 		)
-		suite.Require().NoError(err)
-		suite.Require().NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
+		require.NoError(err)
+		require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
 		return chartDir
 	}
 
-	suite.T().Run("Handle errors", func(t *testing.T) {
+	t.Run("Handle errors", func(t *testing.T) {
 		t.Run("Non-existent Helm chart", func(t *testing.T) {
 			dt("images", "verify", sb.TempFile()).AssertErrorMatch(t, "Helm chart.*does not exist")
 		})
@@ -72,7 +74,7 @@ func (suite *CmdSuite) TestVerifyCommand() {
 		})
 		t.Run("Handle verify error", func(t *testing.T) {
 			images, err := s.LoadImagesFromFile("../../testdata/images.json")
-			suite.Require().NoError(err)
+			require.NoError(err)
 			scenarioName := "custom-chart"
 			chartName := "test"
 
@@ -86,15 +88,15 @@ func (suite *CmdSuite) TestVerifyCommand() {
 			data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 				map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
 			)
-			suite.Require().NoError(err)
-			suite.Require().NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
+			require.NoError(err)
+			require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
 			dt("images", "verify", "--insecure", chartDir).AssertErrorMatch(t, fmt.Sprintf(`.*Images.lock does not validate:
 .*Helm chart "test": image ".*%s": digests do not match:\s*.*- %s\s*\s*\+ %s.*`, images[0].Image, newDigest, oldDigest))
 		})
 	})
-	suite.T().Run("Verify Helm chart", func(t *testing.T) {
+	t.Run("Verify Helm chart", func(t *testing.T) {
 		images, err := s.LoadImagesFromFile("../../testdata/images.json")
-		suite.Require().NoError(err)
+		require.NoError(err)
 
 		scenarioName := "custom-chart"
 		chartName := "test"

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -22,7 +21,7 @@ var imagesCmd = &cobra.Command{
 func getImageLockFilePath(chartPath string) (string, error) {
 	chartRoot, err := chartutils.GetChartRoot(chartPath)
 	if err != nil {
-		return "", fmt.Errorf("cannot determine chart root for %q: %v", chartPath, err)
+		return "", err
 	}
 
 	return filepath.Join(chartRoot, imagelock.DefaultImagesLockFileName), nil

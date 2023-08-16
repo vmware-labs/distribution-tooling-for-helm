@@ -3,7 +3,6 @@ package chartutils
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,24 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	sb *tu.Sandbox
-)
-
-func TestMain(m *testing.M) {
-
-	sb = tu.NewSandbox()
-	c := m.Run()
-
-	if err := sb.Cleanup(); err != nil {
-		log.Printf("WARN: failed to cleanup test sandbox: %v", err)
-	}
-
-	os.Exit(c)
-}
-
-func TestLoadChart(t *testing.T) {
-
+func (suite *ChartUtilsTestSuite) TestLoadChart() {
+	sb := suite.sb
+	t := suite.T()
 	type rawChartData struct {
 		Dependencies []struct {
 			Name       string

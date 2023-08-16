@@ -119,10 +119,7 @@ func FromYAMLFile(file string) (*ImagesLock, error) {
 
 // GenerateFromChart creates a ImagesLock from the Chart at chartPath
 func GenerateFromChart(chartPath string, opts ...Option) (*ImagesLock, error) {
-	cfg := NewImagesLockConfig()
-	for _, opt := range opts {
-		opt(cfg)
-	}
+	cfg := NewImagesLockConfig(opts...)
 
 	chart, err := loader.Load(chartPath)
 	if err != nil {

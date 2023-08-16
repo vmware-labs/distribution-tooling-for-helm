@@ -4,18 +4,45 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
-	// tu "github.com/bitnami/gonit/testutils"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/registry"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
+
+func createLockFromImageData(images map[string][]*tu.ImageData) *ImagesLock {
+	lock := NewImagesLock()
+	for chartName, imgs := range images {
+		for _, img := range imgs {
+			chartImage := &ChartImage{
+				Chart:   chartName,
+				Image:   img.Image,
+				Name:    img.Name,
+				Digests: make([]DigestInfo, 0),
+			}
+			for _, digestInfo := range img.Digests {
+				chartImage.Digests = append(chartImage.Digests, DigestInfo{
+					Arch:   digestInfo.Arch,
+					Digest: digestInfo.Digest,
+				})
+			}
+			lock.Images = append(lock.Images, chartImage)
+		}
+	}
+	return lock
+}
 
 func initializeReferenceImages() ([]*tu.ImageData, error) {
 	var referenceImages []*tu.ImageData
@@ -110,6 +137,9 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 	chartVersion := "1.0.0"
 	serverURL := suite.testServer.ServerURL
 
+	sampleImages, err := suite.testServer.LoadImagesFromFile("../testdata/images.json")
+	suite.Require().NoError(err)
+
 	t.Run("Loads from Helm chart", func(t *testing.T) {
 
 		scenarioName := "custom-chart"
@@ -147,7 +177,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 	t.Run("Loads Helm chart with dependencies", func(t *testing.T) {
 		dest := sb.TempFile()
 		require.NoError(tu.RenderScenario("../testdata/scenarios/chart1", dest,
-			map[string]interface{}{"ServerURL": suite.testServer.ServerURL},
+			map[string]interface{}{"ServerURL": serverURL},
 		))
 
 		chartDir := filepath.Join(dest, "chart1")
@@ -164,6 +194,137 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		existingLock.Metadata["generatedAt"] = ""
 		assert.Equal(existingLock, lock)
 	})
+
+	t.Run("Retrieves only the specified platforms", func(t *testing.T) {
+		scenarioName := "custom-chart"
+		chartName := "test"
+
+		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+
+		dest := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, dest,
+			map[string]interface{}{"ServerURL": serverURL, "Images": sampleImages, "Name": chartName, "RepositoryURL": serverURL},
+		))
+		chartDir := filepath.Join(dest, scenarioName)
+
+		platforms := []string{"linux/amd64"}
+		lock, err := GenerateFromChart(chartDir, Insecure, WithPlatforms(platforms))
+		require.NoError(err, "failed to create Images.lock from Helm chart: %v", err)
+		// Not interested on this for the comparison
+		assert.Len(lock.Images, len(sampleImages))
+		for _, img := range lock.Images {
+			assert.Len(img.Digests, len(platforms))
+			// To ensure this will fail if we ever change the list of architectures
+			assert.Len(img.Digests, 1)
+			assert.Equal(img.Digests[0].Arch, platforms[0])
+		}
+	})
+	t.Run("Lock from single arch images", func(t *testing.T) {
+		silentLog := log.New(io.Discard, "", 0)
+		s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+		defer s.Close()
+
+		u, err := url.Parse(s.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverURL := u.Host
+		images := []*tu.ImageData{
+			{
+				Name:  "app1",
+				Image: fmt.Sprintf("%s/bitnami/app1:latest", serverURL),
+			},
+		}
+		for _, img := range images {
+			craneImg, err := tu.CreateSingleArchImage(img, "linux/amd64")
+			require.NoError(err)
+			require.NoError(crane.Push(craneImg, img.Image, crane.Insecure))
+		}
+		scenarioName := "custom-chart"
+		chartName := "test"
+		chartVersion := "1.0.0"
+		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+
+		dest := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, dest,
+			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": chartVersion},
+		))
+		chartDir := filepath.Join(dest, scenarioName)
+
+		expectedLock := createLockFromImageData(map[string][]*tu.ImageData{
+			chartName: images,
+		})
+		expectedLock.Chart.Name = chartName
+		expectedLock.Chart.Version = chartVersion
+		expectedLock.Metadata["generatedAt"] = ""
+
+		lock, err := GenerateFromChart(chartDir, WithInsecure(true))
+		require.NoError(err, "failed to create Images.lock from Helm chart: %v", err)
+
+		// Not interested on this for the comparison
+		lock.Metadata["generatedAt"] = ""
+
+		assert.Equal(expectedLock, lock)
+	})
+
+	t.Run("Gracefully fails when loading images without platform", func(t *testing.T) {
+		silentLog := log.New(io.Discard, "", 0)
+		s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+		defer s.Close()
+
+		u, err := url.Parse(s.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverURL := u.Host
+
+		craneImg, err := crane.Image(map[string][]byte{
+			"platform.txt": []byte("undefined"),
+		})
+		require.NoError(err)
+
+		image := fmt.Sprintf("%s/bitnami/app1:latest", serverURL)
+
+		require.NoError(crane.Push(craneImg, image, crane.Insecure))
+
+		scenarioName := "custom-chart"
+		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+
+		dest := sb.TempFile()
+		chartDir := filepath.Join(dest, scenarioName)
+
+		require.NoError(tu.RenderScenario(scenarioDir, dest,
+			map[string]interface{}{
+				"ServerURL": serverURL,
+				"Images": []*tu.ImageData{
+					{
+						Name:  "app1",
+						Image: image,
+					},
+				},
+				"Name":    "test",
+				"Version": "1.0.0"},
+		))
+
+		_, err = GenerateFromChart(chartDir, Insecure)
+		assert.ErrorContains(err, "failed to obtain image platform")
+	})
+
+	t.Run("Fails when no archs are retrieved", func(t *testing.T) {
+		dest := sb.TempFile()
+		require.NoError(tu.RenderScenario("../testdata/scenarios/chart1", dest,
+			map[string]interface{}{"ServerURL": serverURL},
+		))
+
+		chartDir := filepath.Join(dest, "chart1")
+
+		lock, err := GenerateFromChart(chartDir, Insecure, WithPlatforms([]string{"invalid"}))
+		assert.ErrorContains(err, "got empty list of digests after applying platforms filter")
+		require.Nil(lock)
+	})
+
 	t.Run("Fails when missing Helm chart dependencies", func(t *testing.T) {
 		type chartDependency struct {
 			Name       string

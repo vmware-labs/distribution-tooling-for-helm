@@ -35,8 +35,7 @@ func (suite *CmdSuite) TestRelocateCommand() {
 	serverURL := s.ServerURL
 	scenarioName := "custom-chart"
 	chartName := "test"
-	// defaultAnnotationsKey := "images"
-	// customAnnotationsKey := "artifacthub.io/images"
+
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 	renderLockedChart := func(destDir string, scenarioName string, serverURL string) string {

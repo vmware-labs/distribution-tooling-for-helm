@@ -10,7 +10,8 @@ import (
 	"regexp"
 	"testing"
 
-	tu "github.com/bitnami/gonit/testutils"
+	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -181,6 +182,20 @@ func TestRelocateImageURL(t *testing.T) {
 				includeIndentifier: true,
 			},
 			want: fmt.Sprintf("%s/bitnami/wordpress@%s", newReg, dummyDigest),
+		},
+		"Replaces full URL with single component": {
+			args: args{
+				url:    "example.com:80/foo",
+				prefix: newReg,
+			},
+			want: fmt.Sprintf("%s/foo", newReg),
+		},
+		"Replaces full URL with multiple components": {
+			args: args{
+				url:    "example.com:80/foo/bar/bitnami/app",
+				prefix: newReg,
+			},
+			want: fmt.Sprintf("%s/bitnami/app", newReg),
 		},
 		"Replaces library repositoy": {
 			args: args{
