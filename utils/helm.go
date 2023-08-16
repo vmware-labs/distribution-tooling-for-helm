@@ -81,12 +81,11 @@ func showRemoteHelmChart(chartURL string, version string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	return client.Run(cp)
 }
 
 // RemoteChartExist checks if the provided chart exists
 func RemoteChartExist(chartURL string, version string) bool {
 	_, err := showRemoteHelmChart(chartURL, version)
-	return err != nil
+	return err == nil
 }
