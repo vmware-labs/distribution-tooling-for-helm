@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	tu "github.com/bitnami/gonit/testutils"
+	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"

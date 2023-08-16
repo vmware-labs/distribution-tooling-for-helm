@@ -56,7 +56,7 @@ func AnnotateChart(chartPath string, opts ...Option) error {
 func GetChartRoot(chartPath string) (string, error) {
 	fi, err := os.Stat(chartPath)
 	if err != nil {
-		return "", fmt.Errorf("cannot access Helm chart %q: %v", chartPath, err)
+		return "", fmt.Errorf("cannot access path %q: %v", chartPath, err)
 	}
 	// we either got the path to chart dir, or to the chart yaml
 	if fi.IsDir() {

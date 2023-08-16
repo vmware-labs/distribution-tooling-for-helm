@@ -131,7 +131,7 @@ func RelocateImageURL(url string, prefix string, includeIndentifier bool) (strin
 	normalizedURL := ref.Context().Name()
 
 	// We will preserve the last past of the repository
-	re := regexp.MustCompile("^.*/([^/]+/[^/]+)$")
+	re := regexp.MustCompile("^.*?/(([^/]+/)?[^/]+)$")
 	match := re.FindStringSubmatch(normalizedURL)
 	if match == nil {
 		return "", fmt.Errorf("failed to parse normalized URL")

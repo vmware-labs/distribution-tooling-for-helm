@@ -20,12 +20,12 @@ func TestRelocateValues(t *testing.T) {
 	data, err := tu.RenderTemplateFile("../testdata/scenarios/chart1/values.yaml.tmpl", map[string]string{"ServerURL": newServerURL})
 	require.NoError(t, err)
 
-	expectedValues, err := normalizeYAML(data)
+	expectedValues, err := tu.NormalizeYAML(data)
 	require.NoError(t, err)
 
 	newValues, err := RelocateValues(chartDir, newServerURL)
 	require.NoError(t, err)
-	newValues, err = normalizeYAML(newValues)
+	newValues, err = tu.NormalizeYAML(newValues)
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedValues, newValues)

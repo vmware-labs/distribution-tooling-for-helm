@@ -7,18 +7,11 @@ import (
 	"regexp"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
-
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+
+	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-type rawImageEntry struct {
-	Name  string
-	Image string
-}
 type testImage struct {
 	Name       string
 	Registry   string
@@ -31,28 +24,12 @@ func (img *testImage) URL() string {
 	return fmt.Sprintf("%s/%s:%s", img.Registry, img.Repository, img.Tag)
 }
 
-func verifyChartAnnotations(suite *CmdSuite, chartDir string, annotationsKey string, expectedImages []testImage) *chart.Chart {
-	rawExpectedImages := make([]rawImageEntry, 0)
-	for _, img := range expectedImages {
-		rawExpectedImages = append(rawExpectedImages, rawImageEntry{
-			Name:  img.Name,
-			Image: img.URL(),
-		})
-	}
-	require := suite.Require()
-
-	c, err := loader.Load(chartDir)
-	require.NoError(err)
-
-	gotImages := make([]rawImageEntry, 0)
-	require.NoError(yaml.Unmarshal([]byte(c.Metadata.Annotations[annotationsKey]), &gotImages))
-	suite.Assert().EqualValues(rawExpectedImages, gotImages)
-	return c
-}
-
 func (suite *CmdSuite) TestAnnotateCommand() {
 	sb := suite.sb
+	t := suite.T()
 	require := suite.Require()
+	assert := suite.Assert()
+
 	serverURL := "localhost"
 	scenarioName := "plain-chart"
 	defaultAnnotationsKey := "images"
@@ -77,7 +54,7 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 		"Successfully annotates a Helm chart":                 "",
 		"Successfully annotates a Helm chart with custom key": customAnnotationsKey,
 	} {
-		suite.T().Run(title, func(t *testing.T) {
+		t.Run(title, func(t *testing.T) {
 			dest := sb.TempFile()
 			require.NoError(tu.RenderScenario(scenarioDir, dest,
 				map[string]interface{}{"ServerURL": serverURL, "ValuesImages": images},
@@ -94,10 +71,18 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 				args = []string{"charts", "--annotations-key", key, "annotate", chartDir}
 			}
 			dt(args...).AssertSuccess(t)
-			_ = verifyChartAnnotations(suite, chartDir, key, images)
+
+			expectedImages := make([]tu.AnnotationEntry, 0)
+			for _, img := range images {
+				expectedImages = append(expectedImages, tu.AnnotationEntry{
+					Name:  img.Name,
+					Image: img.URL(),
+				})
+			}
+			tu.AssertChartAnnotations(t, chartDir, key, expectedImages)
 		})
 	}
-	suite.T().Run("Corner cases", func(t *testing.T) {
+	t.Run("Corner cases", func(t *testing.T) {
 		t.Run("Handle empty image list case", func(t *testing.T) {
 			dest := sb.TempFile()
 			require.NoError(tu.RenderScenario(scenarioDir, dest,
@@ -107,8 +92,12 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 			chartDir := filepath.Join(dest, scenarioName)
 			dt("charts", "annotate", chartDir).AssertSuccess(t)
 
-			c := verifyChartAnnotations(suite, chartDir, defaultAnnotationsKey, nil)
-			suite.Assert().Equal(0, len(c.Metadata.Annotations))
+			tu.AssertChartAnnotations(t, chartDir, defaultAnnotationsKey, make([]tu.AnnotationEntry, 0))
+
+			c, err := loader.Load(chartDir)
+			require.NoError(err)
+
+			assert.Equal(0, len(c.Metadata.Annotations))
 		})
 		t.Run("Handle errors annotating", func(t *testing.T) {
 			dest := sb.TempFile()

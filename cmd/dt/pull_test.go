@@ -6,19 +6,13 @@ import (
 	"log"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/opencontainers/go-digest"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 )
 
 func (suite *CmdSuite) TestPullCommand() {
@@ -32,50 +26,12 @@ func (suite *CmdSuite) TestPullCommand() {
 	}
 
 	imageName := "test:mytag"
-	src := fmt.Sprintf("%s/%s", u.Host, imageName)
-	imageData := tu.ImageData{Name: "test", Image: "test:mytag"}
 
-	imgs := []mutate.IndexAddendum{}
-
-	for _, plat := range []string{
-		"linux/amd64",
-		"linux/arm",
-	} {
-		img, err := crane.Image(map[string][]byte{
-			"platform.txt": []byte(fmt.Sprintf("Image: %s ; plaform: %s", imageName, plat)),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		parts := strings.Split(plat, "/")
-		imgs = append(imgs, mutate.IndexAddendum{
-			Add: img,
-			Descriptor: v1.Descriptor{
-				Platform: &v1.Platform{
-					OS:           parts[0],
-					Architecture: parts[1],
-				},
-			},
-		})
-		d, err := img.Digest()
-		if err != nil {
-			t.Fatal(err)
-		}
-		imageData.Digests = append(imageData.Digests, tu.DigestData{Arch: plat, Digest: digest.Digest(d.String())})
-	}
-
-	idx := mutate.AppendManifests(empty.Index, imgs...)
-
-	ref, err := name.ParseReference(src)
+	images, err := tu.AddSampleImagesToRegistry(imageName, u.Host)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := remote.WriteIndex(ref, idx); err != nil {
-		t.Fatal(err)
-	}
-
-	images := []tu.ImageData{imageData}
 	sb := suite.sb
 	require := suite.Require()
 	serverURL := u.Host
@@ -84,15 +40,13 @@ func (suite *CmdSuite) TestPullCommand() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	suite.T().Run("Pulls images", func(t *testing.T) {
-		dest := sb.TempFile()
+	createSampleChart := func(dest string) string {
 		require.NoError(tu.RenderScenario(scenarioDir, dest,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
-
-		suite.Require().NoError(err)
-		dt("images", "pull", chartDir).AssertSuccessMatch(suite.T(), "")
+		return filepath.Join(dest, scenarioName)
+	}
+	verifyChartDir := func(chartDir string) {
 		imagesDir := filepath.Join(chartDir, "images")
 		suite.Require().DirExists(imagesDir)
 		for _, imgData := range images {
@@ -101,5 +55,31 @@ func (suite *CmdSuite) TestPullCommand() {
 				suite.Assert().FileExists(imgFile)
 			}
 		}
+	}
+	t.Run("Pulls images", func(t *testing.T) {
+		chartDir := createSampleChart(sb.TempFile())
+		dt("images", "pull", chartDir).AssertSuccessMatch(t, "")
+		verifyChartDir(chartDir)
+	})
+	t.Run("Pulls images and compress into filename", func(t *testing.T) {
+		chartDir := createSampleChart(sb.TempFile())
+		outputFile := fmt.Sprintf("%s.tar.gz", sb.TempFile())
+		dt("images", "pull", "--output-file", outputFile, chartDir).AssertSuccess(t)
+
+		tmpDir, err := sb.Mkdir(sb.TempFile(), 0755)
+		require.NoError(err)
+
+		require.NoError(utils.Untar(outputFile, tmpDir, utils.TarConfig{StripComponents: 1}))
+
+		verifyChartDir(tmpDir)
+	})
+
+	t.Run("Errors", func(t *testing.T) {
+		t.Run("Fails when Images.lock is not found", func(t *testing.T) {
+			chartDir := createSampleChart(sb.TempFile())
+			require.NoError(os.RemoveAll(filepath.Join(chartDir, "Images.lock")))
+
+			dt("images", "pull", chartDir).AssertErrorMatch(t, `(?s).*failed to read Images\.lock file.*`)
+		})
 	})
 }

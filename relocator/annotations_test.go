@@ -8,18 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
-	"gopkg.in/yaml.v3"
 )
 
-func normalizeYAML(text string) (string, error) {
-	var out interface{}
-	err := yaml.Unmarshal([]byte(text), &out)
-	if err != nil {
-		return "", err
-	}
-	data, err := yaml.Marshal(out)
-	return string(data), err
-}
 func TestRelocateAnnotations(t *testing.T) {
 	dest := sb.TempFile()
 	serverURL := "localhost"

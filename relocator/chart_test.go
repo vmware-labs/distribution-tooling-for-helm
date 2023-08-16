@@ -33,13 +33,13 @@ func TestRelocateChartDir(t *testing.T) {
 	t.Run("Values Relocated", func(t *testing.T) {
 		data, err := os.ReadFile(filepath.Join(chartDir, "values.yaml"))
 		require.NoError(t, err)
-		relocatedValues, err := normalizeYAML(string(data))
+		relocatedValues, err := tu.NormalizeYAML(string(data))
 		require.NoError(t, err)
 
 		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "values.yaml.tmpl"), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
 		require.NoError(t, err)
 
-		expectedValues, err := normalizeYAML(expectedData)
+		expectedValues, err := tu.NormalizeYAML(expectedData)
 		require.NoError(t, err)
 		assert.Equal(t, expectedValues, relocatedValues)
 	})
@@ -47,7 +47,7 @@ func TestRelocateChartDir(t *testing.T) {
 		c, err := loader.Load(chartDir)
 		require.NoError(t, err)
 
-		relocatedAnnotations, err := normalizeYAML(c.Metadata.Annotations["images"])
+		relocatedAnnotations, err := tu.NormalizeYAML(c.Metadata.Annotations["images"])
 		require.NoError(t, err)
 
 		require.NotEqual(t, relocatedAnnotations, "")
@@ -55,7 +55,7 @@ func TestRelocateChartDir(t *testing.T) {
 		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
 		require.NoError(t, err)
 
-		expectedAnnotations, err := normalizeYAML(expectedData)
+		expectedAnnotations, err := tu.NormalizeYAML(expectedData)
 		require.NoError(t, err)
 		assert.Equal(t, expectedAnnotations, relocatedAnnotations)
 	})
@@ -69,12 +69,12 @@ func TestRelocateChartDir(t *testing.T) {
 		imagesElemData, err := yaml.Marshal(lockData["images"])
 		require.NoError(t, err)
 
-		relocatedImagesData, err := normalizeYAML(string(imagesElemData))
+		relocatedImagesData, err := tu.NormalizeYAML(string(imagesElemData))
 		require.NoError(t, err)
 
 		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "lock_images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
 		require.NoError(t, err)
-		expectedData, err = normalizeYAML(expectedData)
+		expectedData, err = tu.NormalizeYAML(expectedData)
 		require.NoError(t, err)
 
 		assert.Equal(t, expectedData, relocatedImagesData)
