@@ -1,7 +1,5 @@
 # Contributing to distribution-tooling-for-helm
 
-_NOTE: This is a template document that requires editing before it is ready to use!_
-
 We welcome contributions from the community and first want to thank you for taking the time to contribute!
 
 Please familiarize yourself with the [Code of Conduct](https://github.com/vmware/.github/blob/main/CODE_OF_CONDUCT.md) before contributing.
@@ -22,12 +20,80 @@ We welcome many different types of contributions and not all of them need a Pull
 
 ## Getting started
 
-_TO BE EDITED: This section explains how to build the project from source, including Development Environment Setup, Build, Run and Test._
+First of all make sure you have read our [README](README.md) and specifically the [installation, downloading and building from source](https://github.com/vmware-labs/distribution-tooling-for-helm/tree/main#installation) sections.
 
-_Provide information about how someone can find your project, get set up, build the code, test it, and submit a pull request successfully without having to ask any questions. Also include common errors people run into, or useful scripts they should run._
+For every contribution, you will have to make sure that all the tests pass. Moreover, consider adding new tests for any new functionality. You can run all the test by executing:
 
-_List any tests that the contributor should run / or testing processes to follow before submitting. Describe any automated and manual checks performed by reviewers._
+```
+make test
+```
 
+Before sending any contribution is also a good practice to make sure that all code is formatted consistently:
+
+```
+make format
+```
+
+## Contribution Flow
+
+This is a rough outline of what a contributor's workflow looks like:
+
+- Create a topic branch from where you want to base your work
+- Make commits of logical units
+- Make sure your commit messages are in the proper format (see below)
+- Push your changes to a topic branch in your fork of the repository
+- Submit a pull request
+
+Example:
+
+``` shell
+git remote add upstream https://github.com/vmware-labs/vmware-image-builder-action.git
+git checkout -b my-new-feature main
+git commit -a
+git push origin my-new-feature
+```
+
+### Staying In Sync With Upstream
+
+When your branch gets out of sync with the vmware-labs/main branch, use the following to update:
+
+``` shell
+git checkout my-new-feature
+git fetch -a
+git pull --rebase upstream main
+git push --force-with-lease origin my-new-feature
+```
+
+### Updating pull requests
+
+If your PR fails to pass CI or needs changes based on code review, you'll most likely want to squash these changes into
+existing commits.
+
+If your pull request contains a single commit or your changes are related to the most recent commit, you can simply
+amend the commit.
+
+``` shell
+git add .
+git commit --amend
+git push --force-with-lease origin my-new-feature
+```
+
+If you need to squash changes into an earlier commit, you can use:
+
+``` shell
+git add .
+git commit --fixup <commit>
+git rebase -i --autosquash main
+git push --force-with-lease origin my-new-feature
+```
+
+Be sure to add a comment to the PR indicating your new changes are ready to review, as GitHub does not generate a
+notification when you git push.
+
+
+## Release Process
+
+All stable code is hosted at the main branch. Releases are done on demand through the Release GitHub workflow. In order to release the current HEAD, you will need to trigger this workflow passing the version being released (i.e. v0.1.0).
 
 ## Contribution Flow
 
@@ -53,23 +119,11 @@ Before submitting your pull request, we advise you to use the following:
 
 ## Reporting Bugs and Creating Issues
 
-For specifics on what to include in your report, please follow the guidelines in the issue and pull request templates when available.
-
-_TO BE EDITED: Add additional information if needed._
+For specifics on what to include in your report, please follow the guidelines in the issue and pull request templates when available. Try to roughly follow the commit message format conventions above.
 
 
 ## Ask for Help
 
-_TO BE EDITED: Provide information about the channels you use to communicate (i.e. Slack, IRC, Discord, etc)_
+The best way to reach us with a question when contributing is by creating a new issue on the [GitHub issues](https://github.com/vmware-labs/distribution-tooling-for-helm/issues) section.
 
-The best way to reach us with a question when contributing is to ask on:
-
-* The original GitHub issue
-* The developer mailing list
-* Our Slack channel
-
-
-## Additional Resources
-
-_Optional_
 
