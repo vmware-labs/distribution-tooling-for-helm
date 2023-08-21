@@ -90,25 +90,6 @@ git push --force-with-lease origin my-new-feature
 Be sure to add a comment to the PR indicating your new changes are ready to review, as GitHub does not generate a
 notification when you git push.
 
-
-## Release Process
-
-All stable code is hosted at the main branch. Releases are done on demand through the Release GitHub workflow. In order to release the current HEAD, you will need to trigger this workflow passing the version being released (i.e. v0.1.0).
-
-## Contribution Flow
-
-This is a rough outline of what a contributor's workflow looks like:
-
-* Make a fork of the repository within your GitHub account
-* Create a topic branch in your fork from where you want to base your work
-* Make commits of logical units
-* Make sure your commit messages are with the proper format, quality and descriptiveness (see below)
-* Push your changes to the topic branch in your fork
-* Create a pull request containing that commit
-
-We follow the GitHub workflow and you can find more details on the [GitHub flow documentation](https://docs.github.com/en/get-started/quickstart/github-flow).
-
-
 ### Pull Request Checklist
 
 Before submitting your pull request, we advise you to use the following:
@@ -117,13 +98,14 @@ Before submitting your pull request, we advise you to use the following:
 2. Ensure your commit messages are descriptive. We follow the conventions on [How to Write a Git Commit Message](http://chris.beams.io/posts/git-commit/). Be sure to include any related GitHub issue references in the commit message. See [GFM syntax](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown) for referencing issues and commits.
 3. Check the commits and commits messages and ensure they are free from typos.
 
+## Release Process
+
+All stable code is hosted at the main branch. Releases are done on demand through the Release GitHub workflow. In order to release the current HEAD, you will need to trigger this workflow passing the version being released (i.e. v0.1.0).
+
 ## Reporting Bugs and Creating Issues
 
 For specifics on what to include in your report, please follow the guidelines in the issue and pull request templates when available. Try to roughly follow the commit message format conventions above.
 
-
 ## Ask for Help
 
 The best way to reach us with a question when contributing is by creating a new issue on the [GitHub issues](https://github.com/vmware-labs/distribution-tooling-for-helm/issues) section.
-
-
