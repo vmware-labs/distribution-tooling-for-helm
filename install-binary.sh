@@ -4,6 +4,7 @@ PROJECT_NAME="distribution-tooling-for-helm"
 PROJECT_PLUGIN_SHORTNAME="helm-dt"
 BINARY_NAME="dt"
 PROJECT_GH="vmware-labs/$PROJECT_NAME"
+PLUGIN_MANIFEST="plugin.yaml"
 
 # Convert HELM_BIN and HELM_PLUGIN_DIR to unix if cygpath is
 # available. This is the case when using MSYS2 or Cygwin
@@ -20,8 +21,6 @@ fi
 [ -z "$HELM_HOME" ] && HELM_HOME=$(helm env | grep 'HELM_DATA_HOME' | cut -d '=' -f2 | tr -d '"')
 
 mkdir -p "$HELM_HOME"
-
-: "${HELM_PLUGIN_DIR:="$HELM_HOME/plugins/$PROJECT_PLUGIN_SHORTNAME"}"
 
 if [ "$SKIP_BIN_INSTALL" = "1" ]; then
   echo "Skipping binary install"
@@ -84,7 +83,7 @@ verifySupported() {
 
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
-  version="$(cat $HELM_PLUGIN_DIR/plugin.yaml | grep "version" | cut -d '"' -f 2)"
+  version="$(cat $HELM_PLUGIN_DIR/$PLUGIN_MANIFEST | grep "version" | cut -d '"' -f 2)"
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
     DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
   else
@@ -122,7 +121,7 @@ downloadFile() {
 # installs it.
 installFile() {
   tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
-  HELM_TMP_BIN="$HELM_TMP/$PROJECT_NAME/$BINARY_NAME"
+  HELM_TMP_BIN="$HELM_TMP/$BINARY_NAME"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
   fi
@@ -145,7 +144,7 @@ exit_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  echo "$PROJECT_NAME installed into $HELM_PLUGIN_DIR/$PROJECT_NAME"
+  echo "$PROJECT_NAME installed into $HELM_PLUGIN_DIR"
   "${HELM_PLUGIN_DIR}/bin/$BINARY_NAME" -h
   set -e
 }
