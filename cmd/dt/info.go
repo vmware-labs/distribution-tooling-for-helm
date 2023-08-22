@@ -26,17 +26,17 @@ func readLockFromWrap(chartPath string) (*imagelock.ImagesLock, error) {
 			return nil, err
 		}
 		if lock == nil {
-			return nil, fmt.Errorf("lock not found in wrap")
+			return nil, fmt.Errorf("Images.lock not found in wrap")
 		}
 		return lock, nil
 	}
 
 	f, err := getImageLockFilePath(chartPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find lock: %v", err)
+		return nil, fmt.Errorf("failed to find Images.lock: %v", err)
 	}
 	if !utils.FileExists(f) {
-		return nil, fmt.Errorf("lock file does not exist")
+		return nil, fmt.Errorf("Images.lock file does not exist")
 	}
 	return imagelock.FromYAMLFile(f)
 }
