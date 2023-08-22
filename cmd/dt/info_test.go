@@ -1,0 +1,118 @@
+package main
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+)
+
+func (suite *CmdSuite) TestInfoCommand() {
+
+	t := suite.T()
+	require := suite.Require()
+	assert := suite.Assert()
+
+	sb := suite.sb
+
+	t.Run("Get Wrap Info", func(t *testing.T) {
+		imageName := "test"
+		imageTag := "mytag"
+
+		serverURL := "localhost"
+		scenarioName := "complete-chart"
+		chartName := "test"
+		version := "1.0.0"
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+
+		dest := sb.TempFile()
+		chartDir := filepath.Join(dest, scenarioName)
+
+		images, err := writeSampleImages(imageName, imageTag, filepath.Join(chartDir, "images"))
+		require.NoError(err)
+
+		require.NoError(tu.RenderScenario(scenarioDir, dest,
+			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
+		))
+
+		tarFile := sb.TempFile()
+		if err := utils.Tar(chartDir, tarFile, utils.TarConfig{
+			Prefix: chartName,
+		}); err != nil {
+			require.NoError(err)
+		}
+		for _, inputChart := range []string{tarFile, chartDir} {
+			t.Run("Short info", func(t *testing.T) {
+				var archList []string
+				for _, digest := range images[0].Digests {
+					archList = append(archList, digest.Arch)
+				}
+
+				res := dt("info", inputChart)
+				res.AssertSuccess(t)
+				imageURL := fmt.Sprintf("%s/%s:%s", serverURL, imageName, imageTag)
+
+				imageEntryRe := fmt.Sprintf(`%s\s+\(%s\)`, imageURL, strings.Join(archList, ", "))
+				assert.Regexp(fmt.Sprintf(`(?s).*Wrap Information.*Chart:.*%s\s*.*Version:.*%s.*Metadata.*Images.*%s`, chartName, version, imageEntryRe), res.stdout)
+			})
+			t.Run("Detailed info", func(t *testing.T) {
+				res := dt("info", "--detailed", inputChart)
+				res.AssertSuccess(t)
+				imageURL := fmt.Sprintf("%s/%s:%s", serverURL, imageName, imageTag)
+
+				imgDetailedInfo := fmt.Sprintf(`%s/%s.*Image:\s+%s.*Digests.*`, chartName, imageName, imageURL)
+				for _, digest := range images[0].Digests {
+					imgDetailedInfo += fmt.Sprintf(`.*- Arch:\s+%s.*Digest:\s+%s.*`, digest.Arch, digest.Digest)
+				}
+				assert.Regexp(fmt.Sprintf(`(?s).*Wrap Information.*Chart:.*%s\s*.*Version:.*%s.*Metadata.*Images.*%s`, chartName, version, imgDetailedInfo), res.stdout)
+			})
+			t.Run("YAML format", func(t *testing.T) {
+				res := dt("info", "--yaml", inputChart)
+				res.AssertSuccess(t)
+				data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
+				)
+				require.NoError(err)
+
+				lockFileData, err := tu.NormalizeYAML(data)
+				require.NoError(err)
+				yamlInfoData, err := tu.NormalizeYAML(res.stdout)
+				require.NoError(err)
+
+				assert.Equal(lockFileData, yamlInfoData)
+
+			})
+
+		}
+	})
+	t.Run("Errors", func(t *testing.T) {
+		serverURL := "localhost"
+		scenarioName := "plain-chart"
+		chartName := "test"
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+		dest := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, dest,
+			map[string]interface{}{"ServerURL": serverURL},
+		))
+		chartDir := filepath.Join(dest, scenarioName)
+
+		tarFile := sb.TempFile()
+		if err := utils.Tar(chartDir, tarFile, utils.TarConfig{
+			Prefix: chartName,
+		}); err != nil {
+			require.NoError(err)
+		}
+		for _, inputChart := range []string{tarFile, chartDir} {
+			t.Run("Fails when missing Images.lock", func(t *testing.T) {
+				dt("info", inputChart).AssertErrorMatch(t, "failed to load Images.lock")
+			})
+		}
+		t.Run("Handles non-existent wraps", func(t *testing.T) {
+			dt("info", sb.TempFile()).AssertErrorMatch(t, `wrap file.* does not exist`)
+		})
+	})
+}
