@@ -26,14 +26,17 @@ func readLockFromWrap(chartPath string) (*imagelock.ImagesLock, error) {
 			return nil, err
 		}
 		if lock == nil {
-			return nil, fmt.Errorf("failed to find Images.lock file inside wrap")
+			return nil, fmt.Errorf("lock not found in wrap")
 		}
 		return lock, nil
 	}
 
 	f, err := getImageLockFilePath(chartPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find Images.lock file for Helm chart %q: %v", chartPath, err)
+		return nil, fmt.Errorf("failed to find lock: %v", err)
+	}
+	if !utils.FileExists(f) {
+		return nil, fmt.Errorf("lock file does not exist")
 	}
 	return imagelock.FromYAMLFile(f)
 }
@@ -60,7 +63,7 @@ func newInfoCmd() *cobra.Command {
 			}
 			lock, err := readLockFromWrap(chartPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to load Images.lock: %v", err)
 			}
 			if yamlFormat {
 				if err := lock.ToYAML(os.Stdout); err != nil {
