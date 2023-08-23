@@ -2,6 +2,24 @@
 
 `dt`, is a set of utilities available in a standalone mode and as a Helm Plugin for making offline work with Helm charts easier. It is meant to be used for creating reproducible and relocatable packages for Helm charts that can be easily moved across registries without hassles. This is particularly useful for distributing Helm charts into air-gapped environments like those used by Federal governments.
 
+## TL;DR
+
+Distribute your Helm charts with two easy commands
+
+```sh
+# Wrap 
+$ helm dt wrap oci://docker.io/bitnamicharts/mongodb
+  ...
+  🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
+
+# Unwrap
+$ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
+  ...
+  🎉  Helm chart unwrapped successfully: You can use it now by running "helm install oci://demo.goharbor.io/helm-plugin/kibana --generate-name"
+```
+
+![Helm distribution tooling demo](demo.gif)
+
 This tool builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) and the, currently proposed, [images lock file HIP (PR)](https://github.com/helm/community/pull/281) as a foundation. Hence, it does require Helm charts to contain an annotation that provides the full list of container images that a Helm chart might need for its usage independently of the bootstrapping configuration. 
 
 [Bitnami Helm charts](https://github.com/bitnami/charts) are now fully annotated to support this tooling, but you can also use this set of utilities with any other Helm charts that might use any other alternative image listing annotation, like for example, Helm charts relying on [artifact.io/images](https://artifacthub.io/docs/topics/annotations/helm/).
@@ -65,8 +83,8 @@ helm dt wrap oci://docker.io/bitnamicharts/kibana
     ✔  Images.lock file written to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock"
     »  Pulling images into "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/Users/martinpe/workspace/imagelock/kibana-10.4.8.wrap.tgz"
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/imagelock/kibana-10.4.8.wrap.tgz"
+    ✔  Helm chart wrapped to "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
+ 🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
 ```
 
 Note that depending on the number of images needed by the Helm chart (remember, a wrap has the full set of image dependencies, not only the ones set on _values.yaml_) the size of the generated wrap might be considerably large:
