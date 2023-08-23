@@ -413,3 +413,15 @@ helm dt chart annotate examples/mariadb
 
 INFO[0000] Helm chart annotated successfully
 ```
+
+## Frequently Asked Questions
+
+**How does this project relate to the [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes). Does it replace it?**
+
+Good question. Both project come from VMware and should be able to continue using [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes) if you want to. Although, our expectation is to gradually build more and more tooling around the [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) proposal as it does have a substantial number of benefits when compared to the relocation approach followed by relok8s.
+
+So as community adopts this new proposal and this plugin becomes more mature we would suggest anyone using relok8s to move its platform scripts to start using this helm plugin. We expect this move to be pretty much straightforward, and actually a great simplification for anyone using relok8s or even chart-syncer.
+
+**What about chart-syncer? Will it continue to work?**
+
+Yes, still support [chart-syncer](https://github.com/bitnami-labs/charts-syncer) and we don't have any short-term plans right now about it. But as this tool gains adoption, it becomes natural to think that it should be fairly straightforward to implement Helm chart syncing on top of it. 
