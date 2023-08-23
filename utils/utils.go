@@ -164,3 +164,23 @@ func ExecuteWithRetry(retries int, cb func(try int, prevErr error) error) error 
 	}
 	return nil
 }
+
+// TruncateStringWithEllipsis returns a truncated version of text
+func TruncateStringWithEllipsis(text string, maxLength int) string {
+	if len(text) <= maxLength {
+		return text
+	}
+	if maxLength <= 0 {
+		return ""
+	}
+
+	ellipsis := "[...]"
+
+	// If the maxLength is so small the ellipsis does not fit, just return the prefix
+	if maxLength <= len(ellipsis) {
+		return text[0:maxLength]
+	}
+	startSplit := (maxLength - len(ellipsis)) / 2
+	endSplit := len(text) - (maxLength - startSplit - len(ellipsis))
+	return text[0:startSplit] + ellipsis + text[endSplit:]
+}
