@@ -10,10 +10,9 @@ import (
 	"regexp"
 	"testing"
 
-	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 )
 
 var (
@@ -234,5 +233,43 @@ func validateError(t *testing.T, expectedErr string, err error) {
 
 	} else if err != nil {
 		t.Errorf("got error = %v but expected to succeed", err)
+	}
+}
+
+func TestTruncateStringWithEllipsis(t *testing.T) {
+
+	tests := map[string]struct {
+		text      string
+		maxLength int
+		want      string
+	}{
+		"String short enough": {
+			"hello world", 20, "hello world",
+		},
+		"Truncated string odd length": {
+			"This is a long string to truncate", 15, "This [...]ncate",
+		},
+		"Truncated string even length": {
+			"This is a long string to truncate", 20, "This is[...]truncate",
+		},
+		"Max length too small": {
+			"This is a long string to truncate", 5, "This ",
+		},
+		"Max length too small (2)": {
+			"This is a long string to truncate", 1, "T",
+		},
+		"Max length too small (3)": {
+			"This is a long string to truncate", 0, "",
+		},
+		"Negative max length too small": {
+			"This is a long string to truncate", -5, "",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := TruncateStringWithEllipsis(tt.text, tt.maxLength); got != tt.want {
+				t.Errorf("TruncateStringWithEllipsis() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
