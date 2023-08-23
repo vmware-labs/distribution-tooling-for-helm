@@ -8,7 +8,7 @@ Distribute your Helm charts with two easy commands
 
 ```sh
 # Wrap 
-$ helm dt wrap oci://docker.io/bitnamicharts/mongodb
+$ helm dt wrap oci://docker.io/bitnamicharts/kibana
   ...
   🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
 
