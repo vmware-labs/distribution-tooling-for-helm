@@ -7,6 +7,7 @@ import (
 
 	"github.com/pterm/pterm"
 	"github.com/sirupsen/logrus"
+	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 )
 
 // ProgressBar defines a ProgressBar widget
@@ -76,13 +77,18 @@ func (p *PrettyProgressBar) Warnf(fmt string, args ...interface{}) {
 	p.printMessage(&pterm.Warning, fmt, args...)
 }
 
-// UpdateTitle updates the progress bar title
-func (p *PrettyProgressBar) UpdateTitle(title string) ProgressBar {
-	minTitleLength := int(float32(p.ProgressbarPrinter.MaxWidth) * 0.6)
-	formattedTitle := fmt.Sprintf("%-*s", minTitleLength, title)
+func (p *PrettyProgressBar) formatTitle(title string) string {
 	// We prefix with a leading " " so we align with other printers, that
 	// start with a leading space
-	p.ProgressbarPrinter.UpdateTitle(" " + p.padding + formattedTitle)
+	paddedTitle := " " + p.padding + title
+	maxTitleLength := int(float32(p.ProgressbarPrinter.MaxWidth) * 0.70)
+	truncatedTitle := utils.TruncateStringWithEllipsis(paddedTitle, maxTitleLength)
+	return fmt.Sprintf("%-*s", maxTitleLength, truncatedTitle)
+}
+
+// UpdateTitle updates the progress bar title
+func (p *PrettyProgressBar) UpdateTitle(title string) ProgressBar {
+	p.ProgressbarPrinter.UpdateTitle(p.formatTitle(title))
 	return p
 }
 
