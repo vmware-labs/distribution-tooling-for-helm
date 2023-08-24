@@ -173,7 +173,7 @@ cat examples/mariadb/Images.lock
 ```
 
 ```yaml
-apiversion: v0
+apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "2023-08-04T13:36:09.398772Z"
@@ -225,7 +225,7 @@ helm dt images lock ../charts/jenkins --platform linux/amd64
 If we now look at generated `Images.lock` we will notice that it contains only `linux/amd64` digests:
 
 ```yaml
-apiversion: v0
+apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "2023-08-04T14:24:18.515082Z"
@@ -384,7 +384,7 @@ It is also possible to get a YAML dump if the `Images.lock` in case you need to 
 
 ```sh
 helm dt info --yaml wordpress-16.1.24.wrap.tgz
-apiversion: v0
+apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "2023-08-18T12:52:55.824345304Z"
@@ -432,4 +432,4 @@ So as community adopts this new proposal and this plugin becomes more mature we 
 
 **What about chart-syncer? Will it continue to work?**
 
-Yes, still support [chart-syncer](https://github.com/bitnami-labs/charts-syncer) and we don't have any short-term plans right now about it. But as this tool gains adoption, it becomes natural to think that it should be fairly straightforward to implement Helm chart syncing on top of it. 
+Yes, still support [chart-syncer](https://github.com/bitnami-labs/charts-syncer) and we don't have any short-term plans right now about it. But as this tool gains adoption, it becomes natural to think that it should be fairly straightforward to implement Helm chart syncing on top of it.
