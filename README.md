@@ -6,7 +6,7 @@
 
 Distribute your Helm charts with two easy commands
 
-```sh
+```console
 # Wrap 
 $ helm dt wrap oci://docker.io/bitnamicharts/kibana
   ...
@@ -20,7 +20,7 @@ $ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
 
 ![Helm distribution tooling demo](demo.gif)
 
-This tool builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) and the, currently proposed, [images lock file HIP (PR)](https://github.com/helm/community/pull/281) as a foundation. Hence, it does require Helm charts to contain an annotation that provides the full list of container images that a Helm chart might need for its usage independently of the bootstrapping configuration. 
+This tool builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) and the, currently proposed, [images lock file HIP (PR)](https://github.com/helm/community/pull/281) as a foundation. Hence, it does require Helm charts to contain an annotation that provides the full list of container images that a Helm chart might need for its usage independently of the bootstrapping configuration.
 
 [Bitnami Helm charts](https://github.com/bitnami/charts) are now fully annotated to support this tooling, but you can also use this set of utilities with any other Helm charts that might use any other alternative image listing annotation, like for example, Helm charts relying on [artifact.io/images](https://artifacthub.io/docs/topics/annotations/helm/).
 
@@ -30,8 +30,8 @@ This tool builds on [HIP-15](https://github.com/helm/community/blob/main/hips/hi
 
 Provided you have [Helm](https://helm.sh) then you can install this tool as a plugin:
 
-```sh
-helm plugin install https://github.com/vmware-labs/distribution-tooling-for-helm
+```console
+$ helm plugin install https://github.com/vmware-labs/distribution-tooling-for-helm
 ```
 
 ### Downloading and using standalone
@@ -44,29 +44,29 @@ Note that all the examples below use this tool as a Helm plugin but you can just
 
 You can build this tool with the following command. Golang 1.20 or above is needed to compile. [golangci-lint](https://golangci-lint.run/usage/install/) is used for linting.
 
-```sh
-make build
+```console
+$ make build
 ```
 
 You can also verify the build by running the unit tests:
 
-```sh
-make test
+```console
+$ make test
 ```
 
 ## Basic Usage
 
-The following sections list the most common commands and their usage. This tool can be used either standalone or through the Helm plugin. 
+The following sections list the most common commands and their usage. This tool can be used either standalone or through the Helm plugin.
 
 For the sake of following this guide, let's pull one of the Bitnami Helm charts into an examples folder:
 
-```sh
-git clone git@github.com:vmware-labs/distribution-tooling-for-helm.git
-cd distribution-tooling-for-helm
-bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d examples --untar" 
+```console
+$ git clone git@github.com:vmware-labs/distribution-tooling-for-helm.git
+$ cd distribution-tooling-for-helm
+$ bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d examples --untar" 
 ```
 
-The two simplest and most powerful commands on this tool are `wrap` and `unwrap`. With these two commands **you can relocate any Helm chart to any OCI registry in two steps**. 
+The two simplest and most powerful commands on this tool are `wrap` and `unwrap`. With these two commands **you can relocate any Helm chart to any OCI registry in two steps**.
 
 ### Wrapping Helm charts
 
@@ -74,9 +74,8 @@ Wrapping a chart consists of packaging the chart into a tar.gz, including all co
 
 Even more exciting, we don't need to download the Helm chart for wrapping it. We can point the tool to any reachable Helm chart and the tool will take care of packaging and downloading everything for us. For example:
 
-```sh
-helm dt wrap oci://docker.io/bitnamicharts/kibana
-
+```console
+$ helm dt wrap oci://docker.io/bitnamicharts/kibana
  »  Wrapping Helm chart "oci://docker.io/bitnamicharts/kibana"
     ✔  Helm chart downloaded to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana"
     ✔  Images.lock file "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock" does not exist
@@ -89,17 +88,15 @@ helm dt wrap oci://docker.io/bitnamicharts/kibana
 
 Note that depending on the number of images needed by the Helm chart (remember, a wrap has the full set of image dependencies, not only the ones set on _values.yaml_) the size of the generated wrap might be considerably large:
 
-```sh
-ls -l kibana-10.4.8.wrap.tgz
-
+```console
+$ ls -l kibana-10.4.8.wrap.tgz
 -rw-r--r--  1 martinpe  staff  731200979 Aug  4 15:17 kibana-10.4.8.wrap.tgz
 ```
 
-If you want to make changes on the Helm chart, you can and pass a directory to the wrap command. For example, if we wanted to wrap the previously pulled mariadb Helm chart, we could just do:
+If you want to make changes on the Helm chart, you can pass a directory to the wrap command. For example, if we wanted to wrap the previously pulled mariadb Helm chart, we could just do:
 
-```sh
-helm dt wrap examples/mariadb/
-
+```console
+$ helm dt wrap examples/mariadb/
  »  Wrapping Helm chart "examples/mariadb/"
     ✔  Images.lock file "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock" does not exist
     ✔  Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
@@ -111,12 +108,12 @@ helm dt wrap examples/mariadb/
 
 ### Unwrapping Helm charts
 
-Unwrapping a Helm chart can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well. 
+Unwrapping a Helm chart can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well.
 
 At that moment your Helm chart will be ready to be used from the target registry without any dependencies to the source. By default, the tool will run in dry-run mode and require you to confirm actions but you can speed everything up with the `--yes` parameter.
 
-```sh
-helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
+```console
+$ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
  »  Unwrapping Helm chart "kibana-10.4.8.wrap.tgz"
     ✔  Helm chart uncompressed to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-586072428/at-wrap2428431258"
     ✔  Helm chart relocated successfully
@@ -136,7 +133,7 @@ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
 
 ## Advanced Usage
 
-That was all as per the basic most basic and powerful usage. If you're interested in some other additional goodies then we will dig next into some specific finer-grained commands. 
+That was all as per the basic most basic and powerful usage. If you're interested in some other additional goodies then we will dig next into some specific finer-grained commands.
 
 ### Creating an images lock
 
@@ -144,9 +141,11 @@ An images lock file, a.k.a. `Images.lock` is a new file that gets created inside
 
 So, for example, the mariadb Helm chart that we downloaded earlier, has an `images` annotation like this:
 
-```yaml
-cat examples/mariadb/Chart.yaml | head -n 10
+```console
+$ cat examples/mariadb/Chart.yaml | head -n 10
+```
 
+```yaml
 annotations:
     category: Database
     images: |
@@ -158,18 +157,18 @@ annotations:
           name: os-shell
     licenses: Apache-2.0
 ```
+
 We can run the following command to create the `Images.lock` for the above Helm chart:
 
-```sh
-helm dt images lock examples/mariadb
-
+```console
+$ helm dt images lock examples/mariadb
 INFO[0005] Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
 ```
 
 And it should look similar to this:
 
-```sh
-cat examples/mariadb/Images.lock
+```console
+$ cat examples/mariadb/Images.lock
 ```
 
 ```yaml
@@ -210,16 +209,16 @@ images:
 
 By default `Images.lock` creation expects an `images` annotation in your Helm chart. However, this can be overridden by the `annotations-key` flag. This is useful for example when dealing with Helm charts that rely on a different annotation like `artifacthub.io/images` which has existed for a while. You can use this flag with most of the commands in this guide.
 
-```sh
-helm dt images lock ../charts/jenkins --annotations-key artifacthub.io/images
+```console
+$ helm dt images lock ../charts/jenkins --annotations-key artifacthub.io/images
 ```
 
 ### Targetting specific architectures
 
 The above `lock` command can be constrained to specific architectures. This is pretty useful to create lighter wraps as many of the images will be dropped when wrapping.
 
-```sh
-helm dt images lock ../charts/jenkins --platform linux/amd64
+```console
+$ helm dt images lock ../charts/jenkins --platform linux/amd64
 ```
 
 If we now look at generated `Images.lock` we will notice that it contains only `linux/amd64` digests:
@@ -260,9 +259,8 @@ The `verify` command can be used to validate the integrity of an `Images.lock` f
 
 With this command, you can make sure that when you distribute a Helm chart with its corresponding `Images.lock` then any customer will be able to validate that just exactly the images defined in the lock will be pulled. Note that this is exactly part of what the `unwrap` command does, to make sure that only exactly what was wrapped gets into the target registry. Signing and other types of provenance are out of the scope of this tool for the time being and need to be added manually with external tooling. This is an area that we are very eager to improve soon.
 
-```sh
-helm dt images verify examples/mariadb
-
+```console
+$ helm dt images verify examples/mariadb
 INFO[0004] Helm chart "examples/mariadb" lock is valid
 ```
 
@@ -270,9 +268,8 @@ INFO[0004] Helm chart "examples/mariadb" lock is valid
 
 Based on the `Images.lock` file, this command downloads all listed images into the `images/` subfolder.
 
-```sh
-helm dt images pull examples/mariadb
-
+```console
+$ helm dt images pull examples/mariadb
 INFO[0000] Pulling images into "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/images"
 INFO[0022] All images pulled successfully
 INFO[0022] Success
@@ -280,9 +277,8 @@ INFO[0022] Success
 
 Then, in the `images` folder we should have something like
 
-```sh
-ls -1 examples/mariadb/images
-
+```console
+$ ls -1 examples/mariadb/images
 232ca2da59e508978543c8b113675c239a581938c88cbfa1ff17e9b6e504dc1a.tar
 3ec78b7c97020ca2340189b75eba4a92ccb0d858ee62dd89c6a9826fb20048c9.tar
 6f257cc719f5bbde118c15ad610dc27d773f80216adabf10e315fbcaff078615.tar
@@ -295,18 +291,20 @@ e0c141706fd1ce9ec5276627ae53994343ec2719aba606c1dc228f9290698fc1.tar
 
 This command will relocate a Helm chart rewriting the `Images.lock` and all of its subchart dependencies locks as well. Additionally, it will change the `Chart.yaml` annotations, and any images used inside `values.yaml` (and all those on subchart dependencies as well).
 
-For example 
+For example
 
-```sh
-helm dt charts relocate examples/mariadb acme.com/federal
+```console
+$ helm dt charts relocate examples/mariadb acme.com/federal
 INFO[0000] Helm chart relocated successfully
 ```
 
 And we can check that references have indeed changed:
 
-```sh
-cat examples/mariadb/Images.lock |grep image
+```console
+$ cat examples/mariadb/Images.lock |grep image
+```
 
+```yaml
 images:
     image: acme.com/federal/bitnami/mariadb:11.0.2-debian-11-r2
     image: acme.com/federal/bitnami/mysqld-exporter:0.15.0-debian-11-r5
@@ -315,24 +313,24 @@ images:
 
 ### Pushing images
 
-Based on the `Images.lock` file, this command pushes all images (that must have been previously pulled into the `images/` folder) into their respective registries. Note that this command does not relocate anything. It will just simply try to push the images to wherever they are pointing to. 
+Based on the `Images.lock` file, this command pushes all images (that must have been previously pulled into the `images/` folder) into their respective registries. Note that this command does not relocate anything. It will simply try to push the images to wherever they are pointing.
 
 Obviously, this command only makes sense when used after having pulled the images and executed the `relocate` command.
 
-```sh
+```console
 # .. should have pulled images first ..
 # .. then relocate to a target registry ..
 # and now...
-helm dt images push examples/mariadb
-
+$ helm dt images push examples/mariadb
 INFO[0033] All images pushed successfully
 ```
+
 ### Getting information about a wrapped chart
 
 It is sometimes useful to obtain information about a wrapped chart before unwrapping it. For this purpose, you can use the info command:
 
-```sh
-helm dt info wordpress-16.1.24.wrap.tgz
+```console
+$ helm dt info wordpress-16.1.24.wrap.tgz
  »  Wrap Information
        Chart: wordpress
        Version: 16.1.24
@@ -353,8 +351,8 @@ helm dt info wordpress-16.1.24.wrap.tgz
 
 If you are interested in getting the image digests, you can use the `--detailed` flag:
 
-```sh
-helm dt info --detailed wordpress-16.1.24.wrap.tgz
+```console
+$ helm dt info --detailed wordpress-16.1.24.wrap.tgz
  »  Wrap Information
        Chart: wordpress
        Version: 16.1.24
@@ -382,8 +380,11 @@ helm dt info --detailed wordpress-16.1.24.wrap.tgz
 
 It is also possible to get a YAML dump if the `Images.lock` in case you need to feed it to another process:
 
-```sh
-helm dt info --yaml wordpress-16.1.24.wrap.tgz
+```console
+$ helm dt info --yaml wordpress-16.1.24.wrap.tgz
+```
+
+```yaml
 apiVersion: v0
 kind: ImagesLock
 metadata:
@@ -408,28 +409,28 @@ images:
 
 `Images.lock` creation relies on the existence of the special images annotation inside `Chart.yaml`. If you have a Helm chart that does not contain any annotations, this command can be used to guess and generate an annotation with a tentative list of images. It's important to note that this list is a **best-effort** as the list of images is obtained from the `values.yaml` file and this is always an unreliable, often incomplete, and error-prone source as the configuration in `values.yaml` is very variable.
 
-```sh
-helm dt chart annotate examples/mariadb
-
+```console
+$ helm dt chart annotate examples/mariadb
 INFO[0000] Helm chart annotated successfully
 ```
 
 ## Frequently Asked Questions
 
-**I cannot install the plugin due to "Error: Unable to update repository: exit status 1"**
+### I cannot install the plugin due to `Error: Unable to update repository: exit status 1`
 
-This can happen when somehow the plugin process installation or removal breaks and the Helm plugins cache gets corrupted. Try removing the plugin from the cache and reinstalling. For example on MAC OSX it would be:
-```sh
-rm -rf $HOME/Library/Caches/helm/plugins/https-github.com-vmware-labs-distribution-tooling-for-helm
-helm plugin install https://github.com/vmware-labs/distribution-tooling-for-helm
+This can happen when somehow the plugin process installation or removal breaks and the Helm plugin's cache gets corrupted. Try removing the plugin from the cache and reinstalling it. For example on MAC OSX it would be:
+
+```console
+$ rm -rf $HOME/Library/Caches/helm/plugins/https-github.com-vmware-labs-distribution-tooling-for-helm
+$ helm plugin install https://github.com/vmware-labs/distribution-tooling-for-helm
 ```
 
-**How does this project relate to the [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes). Does it replace it?**
+### How does this project relate to the [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes)? Does it replace it?
 
-Good question. Both project come from VMware and should be able to continue using [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes) if you want to. Although, our expectation is to gradually build more and more tooling around the [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) proposal as it does have a substantial number of benefits when compared to the relocation approach followed by relok8s.
+Good question. Both projects come from VMware and should be able to continue using [relok8s](https://github.com/vmware-tanzu/asset-relocation-tool-for-kubernetes) if you want to. Although, our expectation is to gradually build more and more tooling around the [HIP-15](https://github.com/helm/community/blob/main/hips/hip-0015.md) proposal as it does have a substantial number of benefits when compared to the relocation approach followed by relok8s.
 
-So as community adopts this new proposal and this plugin becomes more mature we would suggest anyone using relok8s to move its platform scripts to start using this helm plugin. We expect this move to be pretty much straightforward, and actually a great simplification for anyone using relok8s or even chart-syncer.
+So as the community adopts this new proposal and this plugin becomes more mature we would suggest anyone using relok8s to move its platform scripts to start using this helm plugin. We expect this move to be pretty much straightforward, and actually a great simplification for anyone using relok8s or even chart-syncer.
 
-**What about chart-syncer? Will it continue to work?**
+### What about chart-syncer? Will it continue to work?
 
 Yes, still support [chart-syncer](https://github.com/bitnami-labs/charts-syncer) and we don't have any short-term plans right now about it. But as this tool gains adoption, it becomes natural to think that it should be fairly straightforward to implement Helm chart syncing on top of it.
