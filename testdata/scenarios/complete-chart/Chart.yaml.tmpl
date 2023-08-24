@@ -5,7 +5,7 @@ annotations:
     licenses: Apache-2.0
     {{if .AnnotationsKey}}{{.AnnotationsKey}}{{else}}images{{end}}: |
 {{- include "images.partial.tmpl" . | indent 6 }}
-appVersion: 6.2.2
+appVersion: {{if .AppVersion}}{{.AppVersion}}{{else}}6.2.2{{end}}
 {{if .Dependencies }}
 {{if gt (len .Dependencies) 0 }}
 dependencies:

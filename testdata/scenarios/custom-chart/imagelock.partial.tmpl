@@ -1,4 +1,4 @@
-apiversion: v0
+apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "2023-07-13T16:30:33.284125307Z"
@@ -6,6 +6,7 @@ metadata:
 chart:
   name: {{.Name}}
   version: 1.0.0
+  appVersion: {{if .AppVersion}}{{.AppVersion}}{{else}}6.2.2{{end}}
 images:
 {{- $p := . -}}
 {{- range $idx, $elem := .Images}}

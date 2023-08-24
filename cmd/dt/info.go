@@ -74,6 +74,7 @@ func newInfoCmd() *cobra.Command {
 				_ = l.Section("Wrap Information", func(l log.SectionLogger) error {
 					l.Printf("Chart: %s", lock.Chart.Name)
 					l.Printf("Version: %s", lock.Chart.Version)
+					l.Printf("App Version: %s", lock.Chart.AppVersion)
 					_ = l.Section("Metadata", func(l log.SectionLogger) error {
 						for k, v := range lock.Metadata {
 							l.Printf("- %s: %s", k, v)
