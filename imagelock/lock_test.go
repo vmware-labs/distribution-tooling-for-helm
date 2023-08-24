@@ -135,6 +135,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 	chartName := "wordpress"
 	chartVersion := "1.0.0"
+	appVersion := "6.7.8"
 	serverURL := suite.testServer.ServerURL
 
 	sampleImages, err := suite.testServer.LoadImagesFromFile("../testdata/images.json")
@@ -149,6 +150,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 		referenceLock.Chart.Name = chartName
 		referenceLock.Chart.Version = chartVersion
+		referenceLock.Chart.AppVersion = appVersion
 
 		imgs, err := suite.getCustomizedReferenceImages(referenceLock.Chart.Name,
 			"wordpress", "bitnami-shell", "apache-exporter")
@@ -161,7 +163,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 		require.NoError(tu.RenderScenario(scenarioDir, dest,
 			map[string]interface{}{
-				"ServerURL": serverURL, "Images": imgs, "Name": chartName, "Version": chartVersion,
+				"ServerURL": serverURL, "Images": imgs, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion,
 			},
 		))
 
@@ -244,12 +246,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		scenarioName := "custom-chart"
 		chartName := "test"
 		chartVersion := "1.0.0"
+		appVersion := "2.2.0"
 		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
 
 		dest := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, dest,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": chartVersion},
+			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion},
 		))
 		chartDir := filepath.Join(dest, scenarioName)
 
@@ -258,6 +261,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		})
 		expectedLock.Chart.Name = chartName
 		expectedLock.Chart.Version = chartVersion
+		expectedLock.Chart.AppVersion = appVersion
 		expectedLock.Metadata["generatedAt"] = ""
 
 		lock, err := GenerateFromChart(chartDir, WithInsecure(true))
@@ -452,7 +456,7 @@ func (suite *ImageLockTestSuite) TestYAML() {
 		},
 	}
 
-	expected := fmt.Sprintf(`apiversion: v0
+	expected := fmt.Sprintf(`apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "%s"
@@ -460,6 +464,7 @@ metadata:
 chart:
   name: test
   version: 1.0.0
+  appVersion: ""
 images:
   - name: test
     image: ""
