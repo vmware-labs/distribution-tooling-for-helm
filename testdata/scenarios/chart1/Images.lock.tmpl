@@ -1,4 +1,4 @@
-apiversion: v0
+apiVersion: v0
 kind: ImagesLock
 metadata:
   generatedAt: "2023-07-13T16:30:33.284125307Z"
@@ -6,5 +6,6 @@ metadata:
 chart:
   name: wordpress
   version: 1.0.0
+  appVersion: ""
 images:
 {{include "lock_images.partial.tmpl" . | indent 2 }}

@@ -26,6 +26,7 @@ func (suite *CmdSuite) TestInfoCommand() {
 		scenarioName := "complete-chart"
 		chartName := "test"
 		version := "1.0.0"
+		appVersion := "2.3.4"
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 		dest := sb.TempFile()
@@ -35,7 +36,7 @@ func (suite *CmdSuite) TestInfoCommand() {
 		require.NoError(err)
 
 		require.NoError(tu.RenderScenario(scenarioDir, dest,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
+			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "AppVersion": appVersion, "RepositoryURL": serverURL},
 		))
 
 		tarFile := sb.TempFile()
@@ -56,7 +57,7 @@ func (suite *CmdSuite) TestInfoCommand() {
 				imageURL := fmt.Sprintf("%s/%s:%s", serverURL, imageName, imageTag)
 
 				imageEntryRe := fmt.Sprintf(`%s\s+\(%s\)`, imageURL, strings.Join(archList, ", "))
-				assert.Regexp(fmt.Sprintf(`(?s).*Wrap Information.*Chart:.*%s\s*.*Version:.*%s.*Metadata.*Images.*%s`, chartName, version, imageEntryRe), res.stdout)
+				assert.Regexp(fmt.Sprintf(`(?s).*Wrap Information.*Chart:.*%s\s*.*Version:.*%s.*%s\s*.*Metadata.*Images.*%s`, chartName, version, appVersion, imageEntryRe), res.stdout)
 			})
 			t.Run("Detailed info", func(t *testing.T) {
 				res := dt("info", "--detailed", inputChart)
@@ -73,7 +74,7 @@ func (suite *CmdSuite) TestInfoCommand() {
 				res := dt("info", "--yaml", inputChart)
 				res.AssertSuccess(t)
 				data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
-					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "AppVersion": appVersion},
 				)
 				require.NoError(err)
 

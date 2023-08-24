@@ -26,13 +26,14 @@ const DefaultAnnotationsKey = "images"
 
 // ImagesLock represents the lock file containing information about the included images.
 type ImagesLock struct {
-	APIVersion string            // The version of the API used for the lock file.
+	APIVersion string            `yaml:"apiVersion"` // The version of the API used for the lock file.
 	Kind       string            // The type of object represented by the lock file.
 	Metadata   map[string]string // Additional metadata associated with the lock file.
 
 	Chart struct {
-		Name    string // The name of the chart.
-		Version string // The version of the chart.
+		Name       string // The name of the chart.
+		Version    string // The version of the chart.
+		AppVersion string `yaml:"appVersion"` // The version of the app contained in the chart
 	} // Information about the chart associated with the lock file.
 
 	Images ImageList // List of included images
@@ -130,6 +131,7 @@ func GenerateFromChart(chartPath string, opts ...Option) (*ImagesLock, error) {
 
 	imgLock.Chart.Name = chart.Name()
 	imgLock.Chart.Version = chart.Metadata.Version
+	imgLock.Chart.AppVersion = chart.Metadata.AppVersion
 
 	if err := populateImagesFromChart(imgLock, chart, cfg); err != nil {
 		return nil, err
