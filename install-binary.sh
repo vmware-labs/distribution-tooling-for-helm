@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 
 PROJECT_NAME="distribution-tooling-for-helm"
-PROJECT_PLUGIN_SHORTNAME="helm-dt"
 BINARY_NAME="dt"
 PROJECT_GH="vmware-labs/$PROJECT_NAME"
 PLUGIN_MANIFEST="plugin.yaml"
@@ -83,7 +82,7 @@ verifySupported() {
 
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
-  version="$(cat $HELM_PLUGIN_DIR/$PLUGIN_MANIFEST | grep "version" | cut -d '"' -f 2)"
+  version="$(< "$HELM_PLUGIN_DIR/$PLUGIN_MANIFEST" grep "version" | cut -d '"' -f 2)"
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
     DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
   else
@@ -136,7 +135,7 @@ exit_trap() {
   rmTempDir
   if [ "$result" != "0" ]; then
     echo "Failed to install $PROJECT_NAME"
-    printf '\tFor support, go to https://github.com/$PROJECT_GH.\n'
+    printf "\tFor support, go to https://github.com/%s.\n" "$PROJECT_GH"
   fi
   exit $result
 }
