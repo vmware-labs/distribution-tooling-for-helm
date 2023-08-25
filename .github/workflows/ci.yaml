@@ -32,6 +32,9 @@ jobs:
       - name: Set Golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.53.3
 
+      - name: Set Shellcheck
+        run: sudo apt-get -qq update && sudo apt-get install -y shellcheck && shellcheck install-binary.sh
+
       - name: Build
         run: make build
 
