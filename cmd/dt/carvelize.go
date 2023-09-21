@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
+	carvel "github.com/vmware-labs/distribution-tooling-for-helm/chartutils/carvel"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
-	"github.com/vmware-tanzu/carvel-imgpkg/pkg/imgpkg/lockconfig"
 )
 
 var carvelizeCmd = newCarvelizeCmd()
@@ -105,66 +104,21 @@ func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
 		return fmt.Errorf("wrap file %q does not exist", chartPath)
 	}
 
-	bundleMetadata := chartutils.NewCarvelBundle()
-
-	chart, err := chartutils.LoadChart(chartPath)
+	bundleMetadata, err := carvel.PrepareBundleMetadata(chartPath, lock)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return fmt.Errorf("failed to prepare Carvel bundle: %w", err)
 	}
 
-	for _, maintainer := range chart.Metadata.Maintainers {
-		author := chartutils.Author{
-			Name: maintainer.Name,
-		}
-		if maintainer.Email != "" {
-			author.Email = maintainer.Email
-		}
-		bundleMetadata.Authors = append(bundleMetadata.Authors, author)
-	}
-	for _, source := range chart.Metadata.Sources {
-		website := chartutils.Website{
-			URL: source,
-		}
-		bundleMetadata.Websites = append(bundleMetadata.Websites, website)
-	}
-
-	bundleMetadata.Metadata["name"] = lock.Chart.Name
-	for key, value := range chart.Metadata.Annotations {
-		if key != "images" {
-			bundleMetadata.Metadata[key] = value
-		}
-	}
-
-	imagesLock := lockconfig.ImagesLock{
-		LockVersion: lockconfig.LockVersion{
-			APIVersion: lockconfig.ImagesLockAPIVersion,
-			Kind:       lockconfig.ImagesLockKind,
-		},
-	}
-	for _, img := range lock.Images {
-		// Carvel does not seem to support multi-arch. Grab amd64 digest
-		name := img.Image
-		i := strings.LastIndex(img.Image, ":")
-		if i > -1 {
-			name = img.Image[0:i]
-
-		}
-		for _, digest := range img.Digests {
-			if digest.Arch == "linux/amd64" {
-				name = name + "@" + digest.Digest.String()
-				break
-			}
-		}
-		imageRef := lockconfig.ImageRef{
-			Image: name,
-			Annotations: map[string]string{
-				"kbld.carvel.dev/id": img.Image,
-			},
-		}
-		imagesLock.AddImageRef(imageRef)
+	imagesLock, err := carvel.PrepareImagesLock(lock)
+	if err != nil {
+		return fmt.Errorf("failed to prepare Carvel images lock: %w", err)
 	}
 	l.Infof("Validating Carvel images lock")
-	imagesLock.Validate()
+
+	err = imagesLock.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate Carvel images lock: %w", err)
+	}
 
 	path := imgPkgPath + "/images.yml"
 	err = imagesLock.WriteToPath(path)

@@ -6,7 +6,11 @@ metadata:
   licenses: Apache-2.0
   name: {{or .Name "WordPress"}}
 authors:
-  - name: VMware, Inc.
-    email: "dt@vmware.com"
+{{- range .Authors}}
+  - name: {{.Name}}
+    email: {{.Email}}
+{{end -}}
 websites:
-  - url: https://github.com/bitnami/charts/tree/main/bitnami/wordpress
+{{- range .Websites}}
+  - url: {{.URL}}
+{{end -}}
