@@ -62,6 +62,7 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		}
 		l.Infof("Images.lock file written to %q", lockFile)
 	}
+
 	if outputFile == "" {
 		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Metadata.Version)
 		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
@@ -84,6 +85,26 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		return err
 	}
 
+	carvelize, err := flags.GetBool("add-carvel-bundle")
+	if err != nil {
+		return fmt.Errorf("failed to retrieve add-carvel-bundle flag: %w", err)
+	}
+
+	if carvelize {
+		if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
+			if err := generateCarvelBundle(
+				chartPath,
+				chartutils.WithLog(childLog),
+			); err != nil {
+				return childLog.Failf("%v", err)
+			}
+			return nil
+		}); err != nil {
+			return l.Failf("%w", err)
+		}
+		l.Infof("Carvel bundle created successfully")
+	}
+
 	if err := l.ExecuteStep(
 		"Compressing Helm chart...",
 		func() error {
@@ -104,6 +125,7 @@ func newWrapCommand() *cobra.Command {
 	var outputFile string
 	var version string
 	var platforms []string
+	var carvelize bool
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
@@ -140,6 +162,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when wrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
+	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 
 	return cmd
 }

@@ -39,6 +39,7 @@ func newRelocateCmd() *cobra.Command {
 				return fmt.Errorf("repository cannot be empty")
 			}
 			l := getLogger()
+
 			if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", chartPath, repository), func() error {
 				return relocateChart(chartPath, repository, relocator.WithLog(l))
 			}); err != nil {
