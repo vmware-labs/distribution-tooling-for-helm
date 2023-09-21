@@ -36,7 +36,7 @@ func RelocateLock(lock *imagelock.ImagesLock, prefix string) (*RelocationResult,
 	return &RelocationResult{Data: buff.Bytes(), Count: count}, nil
 }
 
-// RelocateLockFile reloactes images urls in the provided Images.lock using prefix
+// RelocateLockFile relocates images urls in the provided Images.lock using prefix
 func RelocateLockFile(file string, prefix string) error {
 	lock, err := imagelock.FromYAMLFile(file)
 	if err != nil {
