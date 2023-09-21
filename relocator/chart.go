@@ -130,11 +130,13 @@ func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, prefix string) (*Relo
 		return nil, fmt.Errorf("failed to relocate Carvel images lock file: %v", err)
 	}
 
-	if buff, err := lock.AsBytes(); err != nil {
+	buff, err := lock.AsBytes()
+	if err != nil {
 		return nil, fmt.Errorf("failed to write Images.lock file: %v", err)
-	} else {
-		return &RelocationResult{Data: buff, Count: count}, nil
 	}
+
+	return &RelocationResult{Data: buff, Count: count}, nil
+
 }
 
 func relocateCarvelImages(images []lockconfig.ImageRef, prefix string) (count int, err error) {

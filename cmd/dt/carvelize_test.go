@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	carvel "github.com/vmware-labs/distribution-tooling-for-helm/chartutils/carvel"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"gopkg.in/yaml.v3"
 )
@@ -25,34 +26,29 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 	serverURL := s.ServerURL
 	scenarioName := "custom-chart"
 	chartName := "test"
+	authors := []carvel.Author{{
+		Name:  "VMware, Inc.",
+		Email: "dt@vmware.com",
+	}}
+	websites := []carvel.Website{{
+		URL: "https://github.com/bitnami/charts/tree/main/bitnami/wordpress",
+	}}
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 	t := suite.T()
 
-	type author struct {
-		Name  string
-		Email string
-	}
-	type website struct {
-		Url string
-	}
-
 	dest := sb.TempFile()
 	require.NoError(tu.RenderScenario(scenarioDir, dest,
 		map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL,
-			"Authors": []author{{
-				Name:  "VMware, Inc.",
-				Email: "dt@vmware.com",
-			}},
-			"Websites": []website{{
-				Url: "https://github.com/bitnami/charts/tree/main/bitnami/wordpress",
-			}},
+			"Authors": authors, "Websites": websites,
 		},
 	))
 	chartDir := filepath.Join(dest, scenarioName)
 
 	bundleData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, ".imgpkg/bundle.yml.tmpl"),
-		map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
+		map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName,
+			"Authors": authors, "Websites": websites,
+		},
 	)
 
 	require.NoError(err)
