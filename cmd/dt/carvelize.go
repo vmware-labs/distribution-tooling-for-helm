@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	carvel "github.com/vmware-labs/distribution-tooling-for-helm/chartutils/carvel"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 )
@@ -63,6 +64,7 @@ func newCarvelizeCmd() *cobra.Command {
 			if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
 				if err := generateCarvelBundle(
 					chartPath,
+					chartutils.WithAnnotationsKey(getAnnotationsKey()),
 					chartutils.WithLog(childLog),
 				); err != nil {
 					return childLog.Failf("%v", err)
@@ -82,7 +84,6 @@ func newCarvelizeCmd() *cobra.Command {
 }
 
 func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
-
 	cfg := chartutils.NewConfiguration(opts...)
 	l := cfg.Log
 
@@ -91,7 +92,7 @@ func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
 
-	imgPkgPath := chartPath + "/.imgpkg"
+	imgPkgPath := filepath.Join(chartPath, ".imgpkg")
 	if !utils.FileExists(imgPkgPath) {
 		err := os.Mkdir(imgPkgPath, os.FileMode(0755))
 		if err != nil {
@@ -99,29 +100,24 @@ func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
 		}
 	}
 
-	_, _ = chartPath, l
-	if !utils.FileExists(chartPath) {
-		return fmt.Errorf("wrap file %q does not exist", chartPath)
-	}
-
-	bundleMetadata, err := carvel.PrepareBundleMetadata(chartPath, lock)
+	bundleMetadata, err := carvel.CreateBundleMetadata(chartPath, lock, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to prepare Carvel bundle: %w", err)
 	}
 
-	imagesLock, err := carvel.PrepareImagesLock(lock)
+	carvelImagesLock, err := carvel.CreateImagesLock(lock)
 	if err != nil {
 		return fmt.Errorf("failed to prepare Carvel images lock: %w", err)
 	}
 	l.Infof("Validating Carvel images lock")
 
-	err = imagesLock.Validate()
+	err = carvelImagesLock.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate Carvel images lock: %w", err)
 	}
 
-	path := imgPkgPath + "/images.yml"
-	err = imagesLock.WriteToPath(path)
+	path := filepath.Join(imgPkgPath, "images.yml")
+	err = carvelImagesLock.WriteToPath(path)
 	if err != nil {
 		return fmt.Errorf("Could not write image lock: %v", err)
 	}

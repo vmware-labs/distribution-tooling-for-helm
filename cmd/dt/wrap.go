@@ -94,6 +94,7 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
 			if err := generateCarvelBundle(
 				chartPath,
+				chartutils.WithAnnotationsKey(annotationsKey),
 				chartutils.WithLog(childLog),
 			); err != nil {
 				return childLog.Failf("%v", err)

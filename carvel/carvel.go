@@ -1,10 +1,9 @@
-// Package chartutils implements helper functions to manipulate helm Charts
-package chartutils
+// Package carvel implements experimental Carvel support
+package carvel
 
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
@@ -13,6 +12,14 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// CarvelBundleFilePath represents the usual bundle file for Carvel packaging
+const CarvelBundleFilePath = ".imgpkg/bundle.yml"
+
+// CarvelImagesFilePath represents the usual images file for Carvel packaging
+const CarvelImagesFilePath = ".imgpkg/images.yml"
+
+const carvelID = "kbld.carvel.dev/id"
 
 // Somehow there is no data structure for a bundle in Carvel. Copying some basics from the describe command.
 
@@ -55,38 +62,8 @@ func (il *Metadata) ToYAML(w io.Writer) error {
 	return enc.Encode(il)
 }
 
-// CarvelBundleFromYAMLFile Deserializes a string into a Metadata struct
-func CarvelBundleFromYAMLFile(file string) (*Metadata, error) {
-	fh, err := os.Open(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open Images.lock file: %v", err)
-	}
-	defer fh.Close()
-	return CarvelBundleFromYAML(fh)
-}
-
-// CarvelBundleFromYAML reads a Carvel metadata bundled from the YAML read from r
-func CarvelBundleFromYAML(r io.Reader) (*Metadata, error) {
-	metadata := &Metadata{
-		Version: BundleVersion{
-			APIVersion: BundleAPIVersion,
-			Kind:       BundleKind,
-		},
-		Metadata: map[string]string{},
-		Authors:  []Author{},
-		Websites: []Website{},
-	}
-	dec := yaml.NewDecoder(r)
-	if err := dec.Decode(metadata); err != nil {
-		return nil, fmt.Errorf("failed to load Carvel bundle: %v", err)
-	}
-
-	return metadata, nil
-}
-
 // NewCarvelBundle returns a new carvel bundle Metadata instance
 func NewCarvelBundle() *Metadata {
-
 	return &Metadata{
 		Version: BundleVersion{
 			APIVersion: BundleAPIVersion,
@@ -98,9 +75,8 @@ func NewCarvelBundle() *Metadata {
 	}
 }
 
-// PrepareBundleMetadata builds and sets a new Carvel bundle struct
-func PrepareBundleMetadata(chartPath string, lock *imagelock.ImagesLock) (*Metadata, error) {
-
+// CreateBundleMetadata builds and sets a new Carvel bundle struct
+func CreateBundleMetadata(chartPath string, lock *imagelock.ImagesLock, cfg *chartutils.Configuration) (*Metadata, error) {
 	bundleMetadata := NewCarvelBundle()
 
 	chart, err := chartutils.LoadChart(chartPath)
@@ -112,9 +88,7 @@ func PrepareBundleMetadata(chartPath string, lock *imagelock.ImagesLock) (*Metad
 		author := Author{
 			Name: maintainer.Name,
 		}
-		if maintainer.Email != "" {
-			author.Email = maintainer.Email
-		}
+		author.Email = maintainer.Email
 		bundleMetadata.Authors = append(bundleMetadata.Authors, author)
 	}
 	for _, source := range chart.Metadata.Sources {
@@ -126,16 +100,19 @@ func PrepareBundleMetadata(chartPath string, lock *imagelock.ImagesLock) (*Metad
 
 	bundleMetadata.Metadata["name"] = lock.Chart.Name
 	for key, value := range chart.Metadata.Annotations {
-		if key != "images" {
+		annotationsKey := cfg.AnnotationsKey
+		if annotationsKey == "" {
+			annotationsKey = imagelock.DefaultAnnotationsKey
+		}
+		if key != annotationsKey {
 			bundleMetadata.Metadata[key] = value
 		}
 	}
 	return bundleMetadata, nil
 }
 
-// PrepareImagesLock builds and set a new Carvel images lock struct
-func PrepareImagesLock(lock *imagelock.ImagesLock) (lockconfig.ImagesLock, error) {
-
+// CreateImagesLock builds and set a new Carvel images lock struct
+func CreateImagesLock(lock *imagelock.ImagesLock) (lockconfig.ImagesLock, error) {
 	imagesLock := lockconfig.ImagesLock{
 		LockVersion: lockconfig.LockVersion{
 			APIVersion: lockconfig.ImagesLockAPIVersion,
@@ -144,25 +121,36 @@ func PrepareImagesLock(lock *imagelock.ImagesLock) (lockconfig.ImagesLock, error
 	}
 	for _, img := range lock.Images {
 		// Carvel does not seem to support multi-arch. Grab amd64 digest
+
 		name := img.Image
 		i := strings.LastIndex(img.Image, ":")
 		if i > -1 {
 			name = img.Image[0:i]
-
 		}
-		for _, digest := range img.Digests {
-			if digest.Arch == "linux/amd64" {
-				name = name + "@" + digest.Digest.String()
-				break
-			}
+		//TODO: Clarify with Carvel community their multi-arch support
+		//for the time being we stick to amd64
+		imageWithDigest := getIntelImageWithDigest(name, img)
+		if imageWithDigest == "" {
+			// See above. Skip
+			break
 		}
 		imageRef := lockconfig.ImageRef{
-			Image: name,
+			Image: imageWithDigest,
 			Annotations: map[string]string{
-				"kbld.carvel.dev/id": img.Image,
+				carvelID: img.Image,
 			},
 		}
 		imagesLock.AddImageRef(imageRef)
 	}
 	return imagesLock, nil
+}
+
+func getIntelImageWithDigest(name string, img *imagelock.ChartImage) string {
+
+	for _, digest := range img.Digests {
+		if digest.Arch == "linux/amd64" {
+			return fmt.Sprintf("%s@%s", name, digest.Digest.String())
+		}
+	}
+	return ""
 }
