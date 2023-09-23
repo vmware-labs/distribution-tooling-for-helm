@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	carvel "github.com/vmware-labs/distribution-tooling-for-helm/chartutils/carvel"
+	carvel "github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"gopkg.in/yaml.v3"
 )
@@ -68,7 +68,7 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 	res.AssertSuccess(t)
 
 	t.Run("Generates Carvel bundle", func(t *testing.T) {
-		newBundleData, err := os.ReadFile(filepath.Join(chartDir, ".imgpkg/bundle.yml"))
+		newBundleData, err := os.ReadFile(filepath.Join(chartDir, carvel.CarvelBundleFilePath))
 		require.NoError(err)
 		var newBundle map[string]interface{}
 		require.NoError(yaml.Unmarshal(newBundleData, &newBundle))
@@ -77,7 +77,7 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 	})
 
 	t.Run("Generates Carvel images", func(t *testing.T) {
-		newImagesData, err := os.ReadFile(filepath.Join(chartDir, ".imgpkg/images.yml"))
+		newImagesData, err := os.ReadFile(filepath.Join(chartDir, carvel.CarvelImagesFilePath))
 		require.NoError(err)
 		var newImagesLock map[string]interface{}
 		require.NoError(yaml.Unmarshal(newImagesData, &newImagesLock))

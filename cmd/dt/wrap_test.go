@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 	"gopkg.in/yaml.v3"
@@ -102,9 +103,9 @@ func (suite *CmdSuite) TestWrapCommand() {
 		assert.FileExists(lockFile)
 
 		if generateCarvelBundle {
-			carvelBundleFile := filepath.Join(tmpDir, ".imgpkg/bundle.yml")
+			carvelBundleFile := filepath.Join(tmpDir, carvel.CarvelBundleFilePath)
 			assert.FileExists(carvelBundleFile)
-			carvelImagesLockFile := filepath.Join(tmpDir, ".imgpkg/images.yml")
+			carvelImagesLockFile := filepath.Join(tmpDir, carvel.CarvelImagesFilePath)
 			assert.FileExists(carvelImagesLockFile)
 		}
 
