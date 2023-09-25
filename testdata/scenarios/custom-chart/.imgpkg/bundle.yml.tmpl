@@ -1,0 +1,16 @@
+version:
+  apiversion: imgpkg.carvel.dev/v1alpha1
+  kind: Bundle
+metadata:
+  category: CMS
+  licenses: Apache-2.0
+  name: {{or .Name "WordPress"}}
+authors:
+{{- range .Authors}}
+  - name: {{.Name}}
+    email: {{.Email}}
+{{end -}}
+websites:
+{{- range .Websites}}
+  - url: {{.URL}}
+{{end -}}

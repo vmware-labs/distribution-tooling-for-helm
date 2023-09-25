@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 	"gopkg.in/yaml.v3"
@@ -59,7 +60,8 @@ func (suite *CmdSuite) TestWrapCommand() {
 		}
 		return chartDir
 	}
-	testWrap := func(t *testing.T, inputChart string, outputFile string, expectedLock map[string]interface{}) {
+	testWrap := func(t *testing.T, inputChart string, outputFile string, expectedLock map[string]interface{},
+		generateCarvelBundle bool) {
 		// Setup a working directory to look for the wrap when not providing a output-filename
 		currentDir, err := os.Getwd()
 		require.NoError(err)
@@ -77,6 +79,9 @@ func (suite *CmdSuite) TestWrapCommand() {
 			args = append(args, "--output-file", expectedWrapFile)
 		} else {
 			expectedWrapFile = filepath.Join(workingDir, fmt.Sprintf("%s-%v.wrap.tgz", chartName, version))
+		}
+		if generateCarvelBundle {
+			args = append(args, "--add-carvel-bundle")
 		}
 		res := dt(args...)
 		res.AssertSuccess(t)
@@ -97,6 +102,13 @@ func (suite *CmdSuite) TestWrapCommand() {
 		lockFile := filepath.Join(tmpDir, "Images.lock")
 		assert.FileExists(lockFile)
 
+		if generateCarvelBundle {
+			carvelBundleFile := filepath.Join(tmpDir, carvel.CarvelBundleFilePath)
+			assert.FileExists(carvelBundleFile)
+			carvelImagesLockFile := filepath.Join(tmpDir, carvel.CarvelImagesFilePath)
+			assert.FileExists(carvelImagesLockFile)
+		}
+
 		newData, err := os.ReadFile(lockFile)
 		require.NoError(err)
 		var newLock map[string]interface{}
@@ -107,7 +119,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		assert.Equal(expectedLock, newLock)
 
 	}
-	testSampleWrap := func(t *testing.T, withLock bool, outputFile string) {
+	testSampleWrap := func(t *testing.T, withLock bool, outputFile string, generateCarvelBundle bool) {
 		dest := sb.TempFile()
 		chartDir := createSampleChart(dest, withLock)
 
@@ -121,14 +133,14 @@ func (suite *CmdSuite) TestWrapCommand() {
 		// Clear the timestamp
 		expectedLock["metadata"] = nil
 
-		testWrap(t, chartDir, outputFile, expectedLock)
+		testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle)
 	}
 
 	t.Run("Wrap Chart without exiting lock", func(t *testing.T) {
-		testSampleWrap(t, withoutLock, "")
+		testSampleWrap(t, withoutLock, "", false)
 	})
 	t.Run("Wrap Chart with exiting lock", func(t *testing.T) {
-		testSampleWrap(t, withLock, "")
+		testSampleWrap(t, withLock, "", false)
 	})
 	t.Run("Wrap Chart From compressed tgz", func(t *testing.T) {
 		dest := sb.TempFile()
@@ -149,7 +161,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		require.NoError(utils.Tar(chartDir, tarFilename, utils.TarConfig{}))
 		require.FileExists(tarFilename)
 
-		testWrap(t, tarFilename, "", expectedLock)
+		testWrap(t, tarFilename, "", expectedLock, false)
 	})
 
 	t.Run("Wrap Chart From oci", func(t *testing.T) {
@@ -185,13 +197,18 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 		require.NoError(utils.PushChart(tarFilename, pushChartURL))
 
-		testWrap(t, fullChartURL, "", expectedLock)
+		testWrap(t, fullChartURL, "", expectedLock, false)
 	})
 
 	t.Run("Wrap Chart with custom output filename", func(t *testing.T) {
 		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
-		testSampleWrap(t, withLock, tempFilename)
+		testSampleWrap(t, withLock, tempFilename, false)
 		// This should already be handled by testWrap, but make sure it is there
 		suite.Assert().FileExists(tempFilename)
+	})
+
+	t.Run("Wrap Chart and generate carvel bundle", func(t *testing.T) {
+		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
+		testSampleWrap(t, withLock, tempFilename, true) // triggers the Carvel checks
 	})
 }

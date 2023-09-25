@@ -16,3 +16,20 @@ dependencies:
 {{end -}}
 {{end}}
 {{end}}
+{{if .Authors }}
+{{if gt (len .Authors) 0 }}
+maintainers:
+{{- range .Authors}}
+    - name: {{.Name}}
+      email: {{.Email}}
+{{end -}}
+{{end}}
+{{end}}
+{{if .Websites }}
+{{if gt (len .Websites) 0 }}
+sources:
+{{- range .Websites}}
+    - {{.URL}}
+{{end -}}
+{{end}}
+{{end}}

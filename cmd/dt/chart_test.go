@@ -12,6 +12,7 @@ func (suite *CmdSuite) TestChartsHelp() {
 		res.AssertSuccess(t)
 		for _, reStr := range []string{
 			`annotate\s+Annotates a Helm chart`,
+			`carvelize\s+Adds a Carvel bundle to the Helm chart`,
 			`relocate\s+Relocates a Helm chart`,
 		} {
 			res.AssertSuccessMatch(t, fmt.Sprintf(`(?s).*Available Commands:.*\n\s*%s.*`, reStr))

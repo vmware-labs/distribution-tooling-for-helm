@@ -15,5 +15,5 @@ var chartCmd = &cobra.Command{
 }
 
 func init() {
-	chartCmd.AddCommand(relocateCmd, annotateCmd)
+	chartCmd.AddCommand(relocateCmd, annotateCmd, carvelizeCmd)
 }
