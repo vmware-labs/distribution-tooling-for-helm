@@ -100,7 +100,7 @@ Before submitting your pull request, we advise you to use the following:
 
 ## Release Process
 
-All stable code is hosted at the main branch. Releases are done on demand through the Release GitHub workflow. In order to release the current HEAD, you will need to trigger this workflow passing the version being released (i.e. v0.1.0).
+All stable code is hosted at the main branch. Releases are done on demand through the Release GitHub workflow. In order to release the current HEAD, you will need to trigger this workflow passing the version being released (i.e. v0.2.0).
 
 ## Reporting Bugs and Creating Issues
 

@@ -416,7 +416,7 @@ INFO[0000] Helm chart annotated successfully
 
 ### Converting a Helm chart into a Carvel bundle (EXPERIMENTAL)
 
-From `dt` 0.1.1 we have introduced a new command to create a [Carvel bundle](https://carvel.dev/imgpkg/docs/v0.37.x/resources/#bundle) from any Helm chart. 
+From `dt` v0.2.0 we have introduced a new command to create a [Carvel bundle](https://carvel.dev/imgpkg/docs/v0.37.x/resources/#bundle) from any Helm chart. 
 
 
 ```console
