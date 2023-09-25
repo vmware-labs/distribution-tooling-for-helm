@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	cu "github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-tanzu/carvel-imgpkg/pkg/imgpkg/lockconfig"
 )
 
 // RelocationResult describes the result of performing a relocation
@@ -78,6 +81,13 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 	if err != nil {
 		return err
 	}
+	if utils.FileExists(filepath.Join(chartPath, carvel.CarvelImagesFilePath)) {
+		err = relocateCarvelBundle(chartPath, prefix)
+
+		if err != nil {
+			return err
+		}
+	}
 
 	var allErrors error
 
@@ -89,6 +99,58 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 		}
 	}
 	return allErrors
+}
+
+func relocateCarvelBundle(chartRoot string, prefix string) error {
+
+	//TODO: Do better detection here, imgpkg probably has something
+	carvelImagesFile := filepath.Join(chartRoot, carvel.CarvelImagesFilePath)
+	lock, err := lockconfig.NewImagesLockFromPath(carvelImagesFile)
+	if err != nil {
+		return fmt.Errorf("failed to load Carvel images lock: %v", err)
+	}
+	result, err := RelocateCarvelImagesLock(&lock, prefix)
+	if err != nil {
+		return err
+	}
+	if result.Count == 0 {
+		return nil
+	}
+	if err := utils.SafeWriteFile(carvelImagesFile, result.Data, 0600); err != nil {
+		return fmt.Errorf("failed to overwrite Carvel images lock file: %v", err)
+	}
+	return nil
+}
+
+// RelocateCarvelImagesLock rewrites the images urls in the provided lock using prefix
+func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, prefix string) (*RelocationResult, error) {
+
+	count, err := relocateCarvelImages(lock.Images, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to relocate Carvel images lock file: %v", err)
+	}
+
+	buff, err := lock.AsBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to write Images.lock file: %v", err)
+	}
+
+	return &RelocationResult{Data: buff, Count: count}, nil
+
+}
+
+func relocateCarvelImages(images []lockconfig.ImageRef, prefix string) (count int, err error) {
+	var allErrors error
+	for i, img := range images {
+		norm, err := utils.RelocateImageURL(img.Image, prefix, true)
+		if err != nil {
+			allErrors = errors.Join(allErrors, err)
+			continue
+		}
+		images[i].Image = norm
+		count++
+	}
+	return count, allErrors
 }
 
 func normalizeRelocateURL(url string) string {

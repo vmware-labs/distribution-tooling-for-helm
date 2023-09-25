@@ -21,7 +21,7 @@ const (
 	terminalSpacer = ""
 )
 
-// Global falgs
+// Global flags
 var (
 	insecure       bool
 	annotationsKey string = imagelock.DefaultAnnotationsKey

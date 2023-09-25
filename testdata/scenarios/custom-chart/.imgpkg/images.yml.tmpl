@@ -1,0 +1,15 @@
+apiVersion: imgpkg.carvel.dev/v1alpha1
+images:
+{{- $p := . -}}
+{{- range $idx, $elem := .Images}}
+{{ $imageParts := split ":" $elem.Image }}
+{{ $img := $imageParts._0 }}
+{{- range .Digests}}
+{{- if eq .Arch "linux/amd64"}}
+- annotations:
+    kbld.carvel.dev/id: {{$p.ServerURL}}/{{$elem.Image}}
+  image: {{$p.ServerURL}}/{{$img}}@{{.Digest}}
+{{- end }}
+{{- end}}
+{{- end}}
+kind: ImagesLock
