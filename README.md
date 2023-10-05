@@ -410,7 +410,7 @@ images:
 `Images.lock` creation relies on the existence of the special images annotation inside `Chart.yaml`. If you have a Helm chart that does not contain any annotations, this command can be used to guess and generate an annotation with a tentative list of images. It's important to note that this list is a **best-effort** as the list of images is obtained from the `values.yaml` file and this is always an unreliable, often incomplete, and error-prone source as the configuration in `values.yaml` is very variable.
 
 ```console
-$ helm dt chart annotate examples/mariadb
+$ helm dt charts annotate examples/mariadb
 INFO[0000] Helm chart annotated successfully
 ```
 
@@ -420,7 +420,7 @@ From `dt` v0.2.0 we have introduced a new command to create a [Carvel bundle](ht
 
 
 ```console
-$ helm dt chart carvelize examples/postgresql
+$ helm dt charts carvelize examples/postgresql
  ✔  Helm chart "examples/postgresql" lock is valid
  »  Generating Carvel bundle for Helm chart "examples/postgresql"
     ✔  Validating Carvel images lock
