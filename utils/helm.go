@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -10,8 +12,68 @@ import (
 	"helm.sh/helm/v3/pkg/registry"
 )
 
-// FetchRemoteChart retrieves the specified chart
-func FetchRemoteChart(chartURL, version string, destDir string) (string, error) {
+// RegistryClientConfig defines how the client communicates with the remote server
+type RegistryClientConfig struct {
+	UsePlainHTTP     bool
+	UseInsecureHTTPS bool
+}
+
+// Option defines a RegistryClientConfig setting
+type Option func(*RegistryClientConfig)
+
+// Insecure asks the tool to allow insecure HTTPS connections to the remote server.
+func Insecure(c *RegistryClientConfig) {
+	c.UseInsecureHTTPS = true
+}
+
+// WithInsecure configures the InsecureMode of the Config
+func WithInsecure(insecure bool) func(c *RegistryClientConfig) {
+	return func(c *RegistryClientConfig) {
+		c.UseInsecureHTTPS = insecure
+	}
+}
+
+// WithPlainHTTP configures the InsecureMode of the Config
+func WithPlainHTTP(usePlain bool) func(c *RegistryClientConfig) {
+	return func(c *RegistryClientConfig) {
+		c.UsePlainHTTP = usePlain
+	}
+}
+
+// NewRegistryClientConfig returns a new RegistryClientConfig with default values
+func NewRegistryClientConfig(opts ...Option) *RegistryClientConfig {
+	cfg := &RegistryClientConfig{
+		UsePlainHTTP:     false,
+		UseInsecureHTTPS: false,
+	}
+
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
+
+func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
+	opts := []registry.ClientOption{}
+	if cfg.UsePlainHTTP {
+		opts = append(opts, registry.ClientOptPlainHTTP())
+	} else {
+		if cfg.UseInsecureHTTPS { // #nosec G402
+			httpClient := &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true,
+					},
+				},
+			}
+			opts = append(opts, registry.ClientOptHTTPClient(httpClient))
+		}
+	}
+	return registry.NewClient(opts...)
+}
+
+// PullChart retrieves the specified chart
+func PullChart(chartURL, version string, destDir string, opts ...Option) (string, error) {
 	dir, err := os.MkdirTemp(destDir, "chart-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
@@ -22,10 +84,12 @@ func FetchRemoteChart(chartURL, version string, destDir string) (string, error) 
 	client.Settings = cli.New()
 	client.DestDir = dir
 	client.Untar = true
-	reg, err := registry.NewClient()
+
+	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
 	if err != nil {
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
+
 	client.SetRegistryClient(reg)
 	client.Version = version
 	_, err = client.Run(chartURL)
@@ -47,10 +111,9 @@ func FetchRemoteChart(chartURL, version string, destDir string) (string, error) 
 }
 
 // PushChart pushes the local chart tarFile to the remote URL provided
-func PushChart(tarFile string, pushChartURL string) error {
+func PushChart(tarFile string, pushChartURL string, opts ...Option) error {
 	cfg := &action.Configuration{}
-
-	reg, err := registry.NewClient()
+	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
 	if err != nil {
 		return fmt.Errorf("missing registry client: %w", err)
 	}
@@ -66,11 +129,9 @@ func PushChart(tarFile string, pushChartURL string) error {
 	return nil
 }
 
-func showRemoteHelmChart(chartURL string, version string) (string, error) {
-	cfg := &action.Configuration{}
-
-	client := action.NewShowWithConfig(action.ShowChart, cfg)
-	reg, err := registry.NewClient()
+func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientConfig) (string, error) {
+	client := action.NewShowWithConfig(action.ShowChart, &action.Configuration{})
+	reg, err := getRegistryClient(cfg)
 	if err != nil {
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
@@ -85,7 +146,7 @@ func showRemoteHelmChart(chartURL string, version string) (string, error) {
 }
 
 // RemoteChartExist checks if the provided chart exists
-func RemoteChartExist(chartURL string, version string) bool {
-	_, err := showRemoteHelmChart(chartURL, version)
+func RemoteChartExist(chartURL string, version string, opts ...Option) bool {
+	_, err := showRemoteHelmChart(chartURL, version, NewRegistryClientConfig(opts...))
 	return err == nil
 }
