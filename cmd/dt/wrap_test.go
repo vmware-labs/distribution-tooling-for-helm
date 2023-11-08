@@ -73,7 +73,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		require.NoError(os.Chdir(workingDir))
 
 		var expectedWrapFile string
-		args := []string{"wrap", inputChart}
+		args := []string{"wrap", inputChart, "--use-plain-http"}
 		if outputFile != "" {
 			expectedWrapFile = outputFile
 			args = append(args, "--output-file", expectedWrapFile)

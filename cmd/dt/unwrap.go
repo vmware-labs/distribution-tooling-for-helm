@@ -210,7 +210,7 @@ func pushChart(chart *chartutils.Chart, pushChartURL string) error {
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
-	return utils.PushChart(tempTarFile, pushChartURL)
+	return utils.PushChart(tempTarFile, pushChartURL, utils.WithInsecure(insecure), utils.WithPlainHTTP(usePlainHTTP))
 }
 
 func init() {

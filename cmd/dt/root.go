@@ -24,6 +24,7 @@ const (
 // Global flags
 var (
 	insecure       bool
+	usePlainHTTP   bool
 	annotationsKey string = imagelock.DefaultAnnotationsKey
 	logLevel              = "info"
 	usePlainLog           = false
@@ -37,7 +38,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().BoolVar(&insecure, "insecure", insecure, "skip TLS verification")
-
+	cmd.PersistentFlags().BoolVar(&usePlainHTTP, "use-plain-http", usePlainHTTP, "use plain HTTP when pulling and pushing charts")
 	cmd.PersistentFlags().StringVar(&annotationsKey, "annotations-key", annotationsKey, "annotation key used to define the list of included images")
 
 	cmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "set log level: (debug, info, warn, error, fatal, panic)")
