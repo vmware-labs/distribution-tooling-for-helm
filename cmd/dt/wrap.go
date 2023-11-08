@@ -207,7 +207,7 @@ func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.F
 	return chartPath, nil
 }
 func fetchRemoteChart(chartURL string, version string, dir string) (string, error) {
-	return utils.FetchRemoteChart(chartURL, version, dir)
+	return utils.PullChart(chartURL, version, dir, utils.WithInsecure(insecure), utils.WithPlainHTTP(usePlainHTTP))
 }
 
 func init() {
