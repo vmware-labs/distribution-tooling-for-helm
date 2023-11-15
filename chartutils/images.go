@@ -1,6 +1,7 @@
 package chartutils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 )
@@ -25,11 +27,21 @@ func getNumberOfArtifacts(images imagelock.ImageList) int {
 	return n
 }
 
+func getArtifactsDir(defaultValue string, cfg *Configuration) string {
+	if cfg.ArtifactsDir != "" {
+		return cfg.ArtifactsDir
+	}
+	return defaultValue
+}
+
 // PullImages downloads the list of images specified in the provided ImagesLock
 func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) error {
 
 	cfg := NewConfiguration(opts...)
 	ctx := cfg.Context
+
+	artifactsDir := getArtifactsDir(filepath.Join(imagesDir, "artifacts"), cfg)
+
 	o := crane.GetOptions(crane.WithContext(ctx))
 
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
@@ -70,7 +82,28 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				}
 			}
 		}
-
+		if cfg.FetchArtifacts {
+			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s signature", imgDesc.Chart, imgDesc.Name))
+			if err := artifacts.PullImageSignatures(context.Background(), imgDesc, artifactsDir, artifacts.Config{}); err != nil {
+				if err == artifacts.ErrTagDoesNotExist {
+					l.Debugf("image %q does not have an associated signature", imgDesc.Image)
+				} else {
+					return fmt.Errorf("failed to fetch image signatures: %w", err)
+				}
+			} else {
+				l.Debugf("image %q signature fetched", imgDesc.Image)
+			}
+			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s metadata", imgDesc.Chart, imgDesc.Name))
+			if err := artifacts.PullImageMetadata(context.Background(), imgDesc, artifactsDir, artifacts.Config{}); err != nil {
+				if err == artifacts.ErrTagDoesNotExist {
+					l.Debugf("image %q does not have an associated metadata artifact", imgDesc.Image)
+				} else {
+					return fmt.Errorf("failed to fetch image metadata: %w", err)
+				}
+			} else {
+				l.Debugf("image %q metadata fetched", imgDesc.Image)
+			}
+		}
 	}
 	return nil
 }
@@ -82,13 +115,15 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 
 	ctx := cfg.Context
 
+	artifactsDir := getArtifactsDir(filepath.Join(imagesDir, "artifacts"), cfg)
+
 	p, _ := cfg.ProgressBar.WithTotal(len(lock.Images)).UpdateTitle("Pushing Images").Start()
 	defer p.Stop()
 
 	o := crane.GetOptions(crane.WithContext(ctx))
-
 	maxRetries := cfg.MaxRetries
 	for _, imgData := range lock.Images {
+
 		select {
 		// Early abort if the context is done
 		case <-ctx.Done():
@@ -105,7 +140,29 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					l.Debugf("Failed to push image: %v", prevErr)
 					p.Warnf("Failed to push image: retrying %d/%d", try, maxRetries)
 				}
-				return pushImage(imgData, imagesDir, o)
+				if err := pushImage(imgData, imagesDir, o); err != nil {
+					return err
+				}
+				if err := artifacts.PushImageSignatures(context.Background(), imgData, artifactsDir, artifacts.Config{}); err != nil {
+					if err == artifacts.ErrLocalArtifactNotExist {
+						l.Debugf("image %q does not have a local signature stored", imgData.Image)
+					} else {
+						return fmt.Errorf("failed to push image signatures: %w", err)
+					}
+				} else {
+					p.UpdateTitle(fmt.Sprintf("Pushed image %q signature", imgData.Image))
+				}
+
+				if err := artifacts.PushImageMetadata(context.Background(), imgData, artifactsDir, artifacts.Config{}); err != nil {
+					if err == artifacts.ErrLocalArtifactNotExist {
+						l.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)
+					} else {
+						return fmt.Errorf("failed to push image metadata: %w", err)
+					}
+				} else {
+					p.UpdateTitle(fmt.Sprintf("Pushed image %q metadata", imgData.Image))
+				}
+				return nil
 			})
 			if err != nil {
 				return fmt.Errorf("failed to push image %q: %w", imgData.Name, err)
@@ -174,7 +231,6 @@ func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o cr
 	if err != nil {
 		return "", fmt.Errorf("parsing reference %q: %w", src, err)
 	}
-
 	rmt, err := remote.Get(ref, o.Remote...)
 	if err != nil {
 		return "", err

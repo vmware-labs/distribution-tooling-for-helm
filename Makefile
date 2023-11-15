@@ -2,7 +2,8 @@
 SHELL      = /usr/bin/env bash
 
 BINDIR      := $(CURDIR)/bin
-BINNAME     ?= dt
+TOOL        := dt
+BINNAME     ?= $(TOOL)
 
 PROJECT_PLUGIN_SHORTNAME := helm-dt
 
@@ -55,7 +56,7 @@ all: build
 build: $(BINDIR)/$(BINNAME)
 
 $(BINDIR)/$(BINNAME): $(SRC)
-	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) go build $(GOFLAGS) -trimpath -tags '$(TAGS)' -ldflags '$(LDFLAGS)' -o '$(BINDIR)'/$(BINNAME) ./cmd/$(BINNAME)
+	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) go build $(GOFLAGS) -trimpath -tags '$(TAGS)' -ldflags '$(LDFLAGS)' -o '$(BINDIR)'/$(BINNAME) ./cmd/$(TOOL)
 
 # ------------------------------------------------------------------------------
 #  install

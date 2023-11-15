@@ -1,11 +1,13 @@
-package utils
+package artifacts
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
@@ -78,7 +80,6 @@ func PullChart(chartURL, version string, destDir string, opts ...Option) (string
 	if err != nil {
 		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
 	}
-
 	cfg := &action.Configuration{}
 	client := action.NewPullWithOpts(action.WithConfig(cfg))
 	client.Settings = cli.New()
@@ -89,7 +90,6 @@ func PullChart(chartURL, version string, destDir string, opts ...Option) (string
 	if err != nil {
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
-
 	client.SetRegistryClient(reg)
 	client.Version = version
 	_, err = client.Run(chartURL)
@@ -126,6 +126,7 @@ func PushChart(tarFile string, pushChartURL string, opts ...Option) error {
 	if _, err := client.Run(tarFile, pushChartURL); err != nil {
 		return fmt.Errorf("failed to push Helm chart: %w", err)
 	}
+
 	return nil
 }
 
@@ -149,4 +150,16 @@ func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientCon
 func RemoteChartExist(chartURL string, version string, opts ...Option) bool {
 	_, err := showRemoteHelmChart(chartURL, version, NewRegistryClientConfig(opts...))
 	return err == nil
+}
+
+// FetchChartMetadata retrieves the chart metadata artifact from the registry
+func FetchChartMetadata(ctx context.Context, url string, destination string) error {
+	reference := strings.TrimPrefix(url, "oci://")
+	return pullAssetMetadata(ctx, reference, destination, Config{DontResolveReference: true})
+}
+
+// PushChartMetadata pushes the chart metadata artifact to the registry
+func PushChartMetadata(ctx context.Context, url string, chartDir string) error {
+	reference := strings.TrimPrefix(url, "oci://")
+	return pushAssetMetadata(ctx, reference, chartDir, Config{DontResolveReference: true})
 }

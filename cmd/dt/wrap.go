@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
@@ -71,10 +72,13 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		}
 	}
 	if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
+		fetchArtifacts, _ := flags.GetBool("fetch-artifacts")
 		if err := pullChartImages(
 			chart,
 			chartutils.WithLog(childLog),
 			chartutils.WithContext(ctx),
+			chartutils.WithFetchArtifacts(fetchArtifacts),
+			chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 			chartutils.WithProgressBar(childLog.ProgressBar()),
 		); err != nil {
 			return childLog.Failf("%v", err)
@@ -126,6 +130,7 @@ func newWrapCommand() *cobra.Command {
 	var outputFile string
 	var version string
 	var platforms []string
+	var fetchArtifacts bool
 	var carvelize bool
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
@@ -164,6 +169,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
+	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 
 	return cmd
 }
@@ -182,7 +188,7 @@ func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.F
 			if err != nil {
 				return fmt.Errorf("failed to retrieve version flag: %w", err)
 			}
-			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir)
+			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir, flags)
 			if err != nil {
 				return err
 			}
@@ -206,8 +212,31 @@ func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.F
 
 	return chartPath, nil
 }
-func fetchRemoteChart(chartURL string, version string, dir string) (string, error) {
-	return utils.PullChart(chartURL, version, dir, utils.WithInsecure(insecure), utils.WithPlainHTTP(usePlainHTTP))
+
+func fetchRemoteChart(chartURL string, version string, dir string, flags *pflag.FlagSet) (string, error) {
+	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(insecure), artifacts.WithPlainHTTP(usePlainHTTP))
+	if err != nil {
+		return "", err
+	}
+	fetchArtifacts, err := flags.GetBool("fetch-artifacts")
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve fetch-artifacts flag: %w", err)
+	}
+	if fetchArtifacts {
+		if version == "" {
+			chart, err := chartutils.LoadChart(chartPath)
+			if err != nil {
+				return chartPath, fmt.Errorf("failed to load Helm chart %q: %w", chartPath, err)
+			}
+			version = chart.Metadata.Version
+		}
+		if err := artifacts.FetchChartMetadata(context.Background(), fmt.Sprintf("%s:%s", chartURL, version), filepath.Join(chartPath, artifacts.HelmChartArtifactMetadataDir)); err != nil {
+			if err != artifacts.ErrTagDoesNotExist {
+				return "", err
+			}
+		}
+	}
+	return chartPath, nil
 }
 
 func init() {

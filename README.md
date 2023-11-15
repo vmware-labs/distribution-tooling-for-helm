@@ -106,6 +106,25 @@ $ helm dt wrap examples/mariadb/
  🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
 ```
 
+If your chart and docker images include artifacts such as signatures or metadata, you can also include them in the wrap using the `--fetch-artifacts` flag:
+
+```console
+$ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana
+ ...
+ 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz"
+
+$ tar -tzf "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz" | grep artifacts
+kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.sig
+kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata
+kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata.sig
+...
+```
+
+> **Warning:** Signatures
+>
+> Chart signatures are not bundled as they would be invalidated at chart unwrap because of the rellocation. Bundled images signatures will be valid if all the images mentioned in the signed manifest are wrapped.
+
+
 ### Unwrapping Helm charts
 
 Unwrapping a Helm chart can be done either to a local folder or to a target OCI registry, being the latter the most powerful option. By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container images into the target registry that you have specified, relocate the references from the Helm chart to the provided registry and finally push the relocated Helm chart to the registry as well.
@@ -130,6 +149,8 @@ $ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
 
  🎉  Helm chart unwrapped successfully: You can use it now by running "helm install oci://demo.goharbor.io/helm-plugin/kibana --generate-name"
 ```
+
+If your wrap includes bundled artifacts (if you wrapped it using the `--fetch-artifacts` flag), they will be also pushed to the remote registry.
 
 ## Advanced Usage
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	cu "github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
 	"github.com/vmware-tanzu/carvel-imgpkg/pkg/imgpkg/lockconfig"
 )
@@ -52,7 +51,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 		}
 	}
 
-	lockFile := chart.AbsFilePath(imagelock.DefaultImagesLockFileName)
+	lockFile := chart.LockFilePath()
 	if utils.FileExists(lockFile) {
 		err = RelocateLockFile(lockFile, prefix)
 		if err != nil {
