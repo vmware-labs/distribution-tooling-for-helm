@@ -24,7 +24,10 @@ GOBIN         = $(shell go env GOBIN)
 ifeq ($(GOBIN),)
 GOBIN         = $(shell go env GOPATH)/bin
 endif
+
 GOIMPORTS     = $(GOBIN)/goimports
+GOLANGCILINT  = $(GOBIN)/golangci-lint
+
 ARCH          = $(shell uname -p)
 
 TAGS        :=
@@ -91,8 +94,8 @@ test-coverage:
 	GO111MODULE=on go tool cover -html=$(BUILD_DIR)/cover.out -o=$(BUILD_DIR)/coverage.html
 
 .PHONY: test-style
-test-style:
-	GO111MODULE=on golangci-lint run
+test-style: $(GOLANGCILINT)
+	GO111MODULE=on $(GOLANGCILINT) run
 
 .PHONY: format
 format: $(GOIMPORTS)
@@ -101,6 +104,9 @@ format: $(GOIMPORTS)
 
 # ------------------------------------------------------------------------------
 #  dependencies
+
+$(GOLANGCILINT):
+	(cd /; GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2)
 
 $(GOIMPORTS):
 	(cd /; GO111MODULE=on go install golang.org/x/tools/cmd/goimports@latest)
