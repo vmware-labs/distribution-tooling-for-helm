@@ -84,7 +84,7 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 		}
 		if cfg.FetchArtifacts {
 			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s signature", imgDesc.Chart, imgDesc.Name))
-			if err := artifacts.PullImageSignatures(context.Background(), imgDesc, artifactsDir, artifacts.Config{}); err != nil {
+			if err := artifacts.PullImageSignatures(context.Background(), imgDesc, artifactsDir); err != nil {
 				if err == artifacts.ErrTagDoesNotExist {
 					l.Debugf("image %q does not have an associated signature", imgDesc.Image)
 				} else {
@@ -94,7 +94,7 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				l.Debugf("image %q signature fetched", imgDesc.Image)
 			}
 			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s metadata", imgDesc.Chart, imgDesc.Name))
-			if err := artifacts.PullImageMetadata(context.Background(), imgDesc, artifactsDir, artifacts.Config{}); err != nil {
+			if err := artifacts.PullImageMetadata(context.Background(), imgDesc, artifactsDir); err != nil {
 				if err == artifacts.ErrTagDoesNotExist {
 					l.Debugf("image %q does not have an associated metadata artifact", imgDesc.Image)
 				} else {
@@ -143,7 +143,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				if err := pushImage(imgData, imagesDir, o); err != nil {
 					return err
 				}
-				if err := artifacts.PushImageSignatures(context.Background(), imgData, artifactsDir, artifacts.Config{}); err != nil {
+				if err := artifacts.PushImageSignatures(context.Background(), imgData, artifactsDir); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local signature stored", imgData.Image)
 					} else {
@@ -153,7 +153,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					p.UpdateTitle(fmt.Sprintf("Pushed image %q signature", imgData.Image))
 				}
 
-				if err := artifacts.PushImageMetadata(context.Background(), imgData, artifactsDir, artifacts.Config{}); err != nil {
+				if err := artifacts.PushImageMetadata(context.Background(), imgData, artifactsDir); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)
 					} else {

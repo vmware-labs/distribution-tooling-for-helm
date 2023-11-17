@@ -250,10 +250,10 @@ func (suite *CmdSuite) TestWrapCommand() {
 	}
 
 	t.Run("Wrap Chart without exiting lock", func(t *testing.T) {
-		testSampleWrap(t, withoutLock, "", false, false)
+		testSampleWrap(t, withoutLock, "", false, WithoutArtifacts)
 	})
 	t.Run("Wrap Chart with exiting lock", func(t *testing.T) {
-		testSampleWrap(t, withLock, "", false, false)
+		testSampleWrap(t, withLock, "", false, WithoutArtifacts)
 	})
 	t.Run("Wrap Chart From compressed tgz", func(t *testing.T) {
 		dest := sb.TempFile()
@@ -274,7 +274,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		require.NoError(utils.Tar(chartDir, tarFilename, utils.TarConfig{}))
 		require.FileExists(tarFilename)
 
-		testWrap(t, tarFilename, "", expectedLock, false, false)
+		testWrap(t, tarFilename, "", expectedLock, false, WithoutArtifacts)
 	})
 
 	t.Run("Wrap Chart From oci", func(t *testing.T) {
@@ -318,13 +318,13 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 	t.Run("Wrap Chart with custom output filename", func(t *testing.T) {
 		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
-		testSampleWrap(t, withLock, tempFilename, false, false)
+		testSampleWrap(t, withLock, tempFilename, false, WithoutArtifacts)
 		// This should already be handled by testWrap, but make sure it is there
 		suite.Assert().FileExists(tempFilename)
 	})
 
 	t.Run("Wrap Chart and generate carvel bundle", func(t *testing.T) {
 		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
-		testSampleWrap(t, withLock, tempFilename, true, false) // triggers the Carvel checks
+		testSampleWrap(t, withLock, tempFilename, true, WithoutArtifacts) // triggers the Carvel checks
 	})
 }

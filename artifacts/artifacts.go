@@ -39,7 +39,26 @@ var (
 
 // Config defines the configuration when pulling/pushing artifacts to a registry
 type Config struct {
-	DontResolveReference bool
+	ResolveReference bool
+}
+
+// Option defines a Config option
+type Option func(*Config)
+
+// WithResolveReference configures the ResolveReference setting
+func WithResolveReference(v bool) func(cfg *Config) {
+	return func(cfg *Config) {
+		cfg.ResolveReference = v
+	}
+}
+
+// NewConfig creates a new Config
+func NewConfig(opts ...Option) *Config {
+	cfg := &Config{ResolveReference: true}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
 }
 
 func getImageTagAndDigest(image string) (string, string, error) {
@@ -82,11 +101,12 @@ func getImageArtifactsDir(image *imagelock.ChartImage, destDir string, suffix st
 	return filepath.Join(destDir, image.Chart, image.Name, fmt.Sprintf("%s.%s", imgTag, suffix)), nil
 }
 
-func pushArtifact(ctx context.Context, image string, dest string, tagSuffix string, cfg Config) (string, error) {
+func pushArtifact(ctx context.Context, image string, dest string, tagSuffix string, opts ...Option) (string, error) {
+	cfg := NewConfig(opts...)
 	if !utils.FileExists(dest) {
 		return "", ErrLocalArtifactNotExist
 	}
-	opts := []crane.Option{crane.WithContext(ctx)}
+	craneOpts := []crane.Option{crane.WithContext(ctx)}
 	repo, err := getImageRepository(image)
 	if err != nil {
 		return "", fmt.Errorf("failed to get image repository: %w", err)
@@ -98,13 +118,11 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 	}
 
 	var tag string
-	if cfg.DontResolveReference {
-		tag = fmt.Sprintf("%s-%s", imgTag, tagSuffix)
-	} else {
+	if cfg.ResolveReference {
 		tag = fmt.Sprintf("sha256-%s.%s", hex, tagSuffix)
-
+	} else {
+		tag = fmt.Sprintf("%s-%s", imgTag, tagSuffix)
 	}
-
 	img, err := loadImage(dest)
 	if err != nil {
 		return "", err
@@ -114,14 +132,14 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 
 	switch t := img.(type) {
 	case v1.Image:
-		return tag, crane.Push(t, newImg, opts...)
+		return tag, crane.Push(t, newImg, craneOpts...)
 	default:
 		return "", fmt.Errorf("unsupported image type %T", t)
 	}
 }
 
-func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, cfg Config) error {
-	tag, err := pushArtifact(ctx, imageRef, destDir, "metadata", cfg)
+func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, opts ...Option) error {
+	tag, err := pushArtifact(ctx, imageRef, destDir, "metadata", opts...)
 	if err != nil {
 		return err
 	}
@@ -134,8 +152,7 @@ func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, cfg
 	metadataSigDir := fmt.Sprintf("%s.sig", destDir)
 	// For the metadata pull, we may want to not resolve the tag to the shasum, but for the signature, we need to do it,
 	// so we enfoce it here
-	cfg.DontResolveReference = false
-	_, err = pushArtifact(ctx, metadataImg, metadataSigDir, "sig", cfg)
+	_, err = pushArtifact(ctx, metadataImg, metadataSigDir, "sig", append(opts, WithResolveReference(true))...)
 	if err != nil {
 		return err
 	}
@@ -143,7 +160,7 @@ func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, cfg
 }
 
 // PushImageMetadata pushes a oci-layout directory to the registry as the image metadata
-func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, cfg Config) error {
+func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 
 	dir, err := getImageArtifactsDir(image, destDir, "metadata")
@@ -151,17 +168,17 @@ func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
 
-	return pushAssetMetadata(ctx, imageRef, dir, cfg)
+	return pushAssetMetadata(ctx, imageRef, dir, opts...)
 }
 
 // PushImageSignatures pushes a oci-layout directory to the registry as the image signature
-func PushImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, cfg Config) error {
+func PushImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 	dir, err := getImageArtifactsDir(image, destDir, "sig")
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
-	_, err = pushArtifact(ctx, imageRef, dir, "sig", cfg)
+	_, err = pushArtifact(ctx, imageRef, dir, "sig", opts...)
 	if err != nil {
 		return err
 	}
@@ -176,7 +193,9 @@ func getImageRepository(image string) (string, error) {
 	return ref.Context().Name(), nil
 }
 
-func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix string, cfg Config) (string, error) {
+func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix string, opts ...Option) (string, error) {
+	cfg := NewConfig(opts...)
+
 	craneOpts := []crane.Option{crane.WithContext(ctx)}
 	o := crane.GetOptions(craneOpts...)
 
@@ -191,12 +210,12 @@ func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix s
 		return "", err
 	}
 
-	if cfg.DontResolveReference {
-		tag = fmt.Sprintf("%s-%s", imgTag, tagSuffix)
-	} else {
+	if cfg.ResolveReference {
 		tag = fmt.Sprintf("sha256-%s.%s", hex, tagSuffix)
-
+	} else {
+		tag = fmt.Sprintf("%s-%s", imgTag, tagSuffix)
 	}
+
 	exist, err := TagExist(ctx, repo, tag, o)
 	if err != nil {
 		return "", fmt.Errorf("failed to check tag %q: %w", tag, err)
@@ -221,7 +240,7 @@ func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix s
 }
 
 // PullImageMetadata pulls the image metadata and stores it locally as an oci-layout
-func PullImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, cfg Config) error {
+func PullImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 
 	dir, err := getImageArtifactsDir(image, destDir, "metadata")
@@ -229,11 +248,11 @@ func PullImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
 
-	return pullAssetMetadata(ctx, imageRef, dir, cfg)
+	return pullAssetMetadata(ctx, imageRef, dir, opts...)
 }
 
-func pullAssetMetadata(ctx context.Context, imageRef string, dir string, cfg Config) error {
-	tag, err := pullArtifact(ctx, imageRef, dir, "metadata", cfg)
+func pullAssetMetadata(ctx context.Context, imageRef string, dir string, opts ...Option) error {
+	tag, err := pullArtifact(ctx, imageRef, dir, "metadata", opts...)
 	if err != nil {
 		return err
 	}
@@ -245,9 +264,8 @@ func pullAssetMetadata(ctx context.Context, imageRef string, dir string, cfg Con
 
 	// For the metadata pull, we may want to not resolve the tag to the shasum, but for the signature, we need to do it,
 	// so we enfoce it here
-	cfg.DontResolveReference = false
 	metadataSigDir := fmt.Sprintf("%s.sig", dir)
-	_, err = pullArtifact(ctx, metadataImg, metadataSigDir, "sig", cfg)
+	_, err = pullArtifact(ctx, metadataImg, metadataSigDir, "sig", append(opts, WithResolveReference(true))...)
 	if err != nil {
 		return err
 	}
@@ -255,13 +273,13 @@ func pullAssetMetadata(ctx context.Context, imageRef string, dir string, cfg Con
 }
 
 // PullImageSignatures pulls the image signature and stores it locally as an oci-layout
-func PullImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, cfg Config) error {
+func PullImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 	dir, err := getImageArtifactsDir(image, destDir, "sig")
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
-	_, err = pullArtifact(ctx, imageRef, dir, "sig", cfg)
+	_, err = pullArtifact(ctx, imageRef, dir, "sig", opts...)
 	if err != nil {
 		return err
 	}

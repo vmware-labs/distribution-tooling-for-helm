@@ -20,8 +20,8 @@ type RegistryClientConfig struct {
 	UseInsecureHTTPS bool
 }
 
-// Option defines a RegistryClientConfig setting
-type Option func(*RegistryClientConfig)
+// RegistryClientOption defines a RegistryClientConfig setting
+type RegistryClientOption func(*RegistryClientConfig)
 
 // Insecure asks the tool to allow insecure HTTPS connections to the remote server.
 func Insecure(c *RegistryClientConfig) {
@@ -43,7 +43,7 @@ func WithPlainHTTP(usePlain bool) func(c *RegistryClientConfig) {
 }
 
 // NewRegistryClientConfig returns a new RegistryClientConfig with default values
-func NewRegistryClientConfig(opts ...Option) *RegistryClientConfig {
+func NewRegistryClientConfig(opts ...RegistryClientOption) *RegistryClientConfig {
 	cfg := &RegistryClientConfig{
 		UsePlainHTTP:     false,
 		UseInsecureHTTPS: false,
@@ -75,7 +75,7 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 }
 
 // PullChart retrieves the specified chart
-func PullChart(chartURL, version string, destDir string, opts ...Option) (string, error) {
+func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
 	dir, err := os.MkdirTemp(destDir, "chart-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
@@ -111,7 +111,7 @@ func PullChart(chartURL, version string, destDir string, opts ...Option) (string
 }
 
 // PushChart pushes the local chart tarFile to the remote URL provided
-func PushChart(tarFile string, pushChartURL string, opts ...Option) error {
+func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
 	cfg := &action.Configuration{}
 	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
 	if err != nil {
@@ -147,7 +147,7 @@ func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientCon
 }
 
 // RemoteChartExist checks if the provided chart exists
-func RemoteChartExist(chartURL string, version string, opts ...Option) bool {
+func RemoteChartExist(chartURL string, version string, opts ...RegistryClientOption) bool {
 	_, err := showRemoteHelmChart(chartURL, version, NewRegistryClientConfig(opts...))
 	return err == nil
 }
@@ -155,11 +155,11 @@ func RemoteChartExist(chartURL string, version string, opts ...Option) bool {
 // FetchChartMetadata retrieves the chart metadata artifact from the registry
 func FetchChartMetadata(ctx context.Context, url string, destination string) error {
 	reference := strings.TrimPrefix(url, "oci://")
-	return pullAssetMetadata(ctx, reference, destination, Config{DontResolveReference: true})
+	return pullAssetMetadata(ctx, reference, destination, WithResolveReference(false))
 }
 
 // PushChartMetadata pushes the chart metadata artifact to the registry
 func PushChartMetadata(ctx context.Context, url string, chartDir string) error {
 	reference := strings.TrimPrefix(url, "oci://")
-	return pushAssetMetadata(ctx, reference, chartDir, Config{DontResolveReference: true})
+	return pushAssetMetadata(ctx, reference, chartDir, WithResolveReference(false))
 }
