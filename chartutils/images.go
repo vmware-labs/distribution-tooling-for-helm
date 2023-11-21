@@ -117,7 +117,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 
 	artifactsDir := getArtifactsDir(filepath.Join(imagesDir, "artifacts"), cfg)
 
-	p, _ := cfg.ProgressBar.WithTotal(len(lock.Images)).UpdateTitle("Pushing Images").Start()
+	p, _ := cfg.ProgressBar.WithTotal(len(lock.Images)).UpdateTitle("Pushing images").Start()
 	defer p.Stop()
 
 	o := crane.GetOptions(crane.WithContext(ctx))

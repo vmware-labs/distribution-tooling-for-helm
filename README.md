@@ -106,7 +106,14 @@ $ helm dt wrap examples/mariadb/
  🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
 ```
 
-If your chart and docker images include artifacts such as signatures or metadata, you can also include them in the wrap using the `--fetch-artifacts` flag:
+If your chart and docker images include artifacts such as signatures or metadata, you can also include them in the wrap using the `--fetch-artifacts` flag.
+
+Currently, `dt` supports moving artifacts that follow certain conventions. That is:
+
+- Cosign keys that are associated to the digest with a .sig suffix
+- Metadata entries stored in a `sha256-digest.metadata` OCI entry
+
+For example:
 
 ```console
 $ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana
@@ -120,9 +127,9 @@ kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata.sig
 ...
 ```
 
-> **Warning:** Signatures
+> **Note:** Signatures
 >
-> Chart signatures are not bundled as they would be invalidated at chart unwrap because of the rellocation. Bundled images signatures will be valid if all the images mentioned in the signed manifest are wrapped.
+> Chart signatures are not bundled as they would be invalidated at chart unwrap because of the relocation. All the container images wrapped will maintain their signatures and metadata.
 
 
 ### Unwrapping Helm charts
