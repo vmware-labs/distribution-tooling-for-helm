@@ -5,8 +5,8 @@ import (
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
 // Configuration defines configuration settings used in chartutils functions

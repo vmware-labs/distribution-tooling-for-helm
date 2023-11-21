@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	carvel "github.com/vmware-labs/distribution-tooling-for-helm/carvel"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	carvel "github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,13 +37,13 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 	t := suite.T()
 
-	dest := sb.TempFile()
-	require.NoError(tu.RenderScenario(scenarioDir, dest,
+	chartDir := sb.TempFile()
+
+	require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 		map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL,
 			"Authors": authors, "Websites": websites,
 		},
 	))
-	chartDir := filepath.Join(dest, scenarioName)
 
 	bundleData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, ".imgpkg/bundle.yml.tmpl"),
 		map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName,

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
 func (suite *CmdSuite) TestVerifyCommand() {
@@ -23,13 +23,12 @@ func (suite *CmdSuite) TestVerifyCommand() {
 
 	serverURL := s.ServerURL
 
-	renderLockedChart := func(destDir string, chartName string, scenarioName string, serverURL string, images []*tu.ImageData) string {
+	renderLockedChart := func(chartDir string, chartName string, scenarioName string, serverURL string, images []*tu.ImageData) string {
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		require.NoError(tu.RenderScenario(scenarioDir, destDir,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(destDir, scenarioName)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
@@ -47,28 +46,28 @@ func (suite *CmdSuite) TestVerifyCommand() {
 			chartName := "test"
 			scenarioName := "plain-chart"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{
 					"ServerURL": serverURL, "Images": nil,
 					"Name": chartName, "RepositoryURL": serverURL,
 				},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			dt("images", "verify", chartDir).AssertErrorMatch(t, "failed to open Images.lock file")
 		})
 		t.Run("Handle malformed Images.lock", func(t *testing.T) {
 			chartName := "test"
 			scenarioName := "plain-chart"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{
 					"ServerURL": serverURL, "Images": nil,
 					"Name": chartName, "RepositoryURL": serverURL,
 				},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			require.NoError(os.WriteFile(filepath.Join(chartDir, imagelock.DefaultImagesLockFileName), []byte("malformed lock"), 0644))
 			dt("images", "verify", chartDir).AssertErrorMatch(t, "failed to load Images.lock")
 		})

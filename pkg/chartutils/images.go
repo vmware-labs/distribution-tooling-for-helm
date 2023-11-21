@@ -14,9 +14,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 func getNumberOfArtifacts(images imagelock.ImageList) int {

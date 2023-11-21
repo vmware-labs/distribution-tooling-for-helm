@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -55,11 +54,11 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 		"Successfully annotates a Helm chart with custom key": customAnnotationsKey,
 	} {
 		t.Run(title, func(t *testing.T) {
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{"ServerURL": serverURL, "ValuesImages": images},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			var args []string
 			if key == "" || key == defaultAnnotationsKey {
 				// enforce it if empty
@@ -84,12 +83,12 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 	}
 	t.Run("Corner cases", func(t *testing.T) {
 		t.Run("Handle empty image list case", func(t *testing.T) {
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{"ServerURL": serverURL},
 			))
 
-			chartDir := filepath.Join(dest, scenarioName)
 			dt("charts", "annotate", chartDir).AssertSuccess(t)
 
 			tu.AssertChartAnnotations(t, chartDir, defaultAnnotationsKey, make([]tu.AnnotationEntry, 0))
@@ -100,11 +99,11 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 			assert.Equal(0, len(c.Metadata.Annotations))
 		})
 		t.Run("Handle errors annotating", func(t *testing.T) {
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{"ServerURL": serverURL, "ValuesImages": images},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			require.NoError(os.Chmod(chartDir, os.FileMode(0555)))
 			// Make sure the sandbox can be cleaned
 			defer os.Chmod(chartDir, os.FileMode(0755))

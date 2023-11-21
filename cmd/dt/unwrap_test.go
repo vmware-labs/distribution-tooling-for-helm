@@ -16,9 +16,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 )
 
 type unwrapOpts struct {
@@ -156,40 +156,53 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 	t.Run("Unwrap Chart", func(t *testing.T) {
 		require := suite.Require()
 		assert := suite.Assert()
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
 
-		images, err := writeSampleImages(imageName, imageTag, filepath.Join(chartDir, "images"))
-		require.NoError(err)
+		for title, useLegacy := range map[string]bool{
+			"New format":    false,
+			"Legacy format": true,
+		} {
+			t.Run(title, func(t *testing.T) {
+				wrapDir := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
-		))
+				chartDir := filepath.Join(wrapDir, "chart")
 
-		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
-		)
-		require.NoError(err)
-		require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
+				dirToUnwrap := wrapDir
 
-		targetRegistry := newUniqueTargetRegistry()
-		dt("unwrap", "--plain", "--yes", chartDir, targetRegistry).AssertSuccessMatch(suite.T(), "")
+				// In legacy bundles, the images directory is inside the chart. Unwrap should still support it
+				if useLegacy {
+					dirToUnwrap = chartDir
+				}
+				images, err := writeSampleImages(imageName, imageTag, filepath.Join(dirToUnwrap, "images"))
+				require.NoError(err)
 
-		// Verify the images were pushed
-		for _, img := range images {
-			src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
-			remoteDigests, err := tu.ReadRemoteImageManifest(src)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, dgstData := range img.Digests {
-				assert.Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
-			}
+				require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
+				))
+
+				data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
+				)
+				require.NoError(err)
+				require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
+				targetRegistry := newUniqueTargetRegistry()
+				dt("unwrap", "--plain", "--yes", dirToUnwrap, targetRegistry).AssertSuccessMatch(suite.T(), "")
+				// Verify the images were pushed
+				for _, img := range images {
+					src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
+					remoteDigests, err := tu.ReadRemoteImageManifest(src)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, dgstData := range img.Digests {
+						assert.Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
+					}
+				}
+				assert.True(
+					artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, chartName), version),
+					"chart should exist in the repository",
+				)
+			})
 		}
-		assert.True(
-			artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, chartName), version),
-			"chart should exist in the repository",
-		)
 	})
 }
 func (suite *CmdSuite) TestEndToEnd() {
@@ -221,8 +234,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 	}
 	t.Run("Wrap and unwrap Chart", func(t *testing.T) {
 		require := suite.Require()
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
+		chartDir := sb.TempFile()
 
 		srcRegistryNamespace := "wrap-unwrap-test"
 		srcRegistry := newTargetRegistry(srcRegistryNamespace)
@@ -252,7 +264,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 			require.NoError(err)
 		}
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": srcRegistry, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": srcRegistry},
 		))
 

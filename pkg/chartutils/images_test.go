@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
 func (suite *ChartUtilsTestSuite) TestPullImages() {
@@ -41,14 +41,14 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 	scenarioName := "complete-chart"
 	chartName := "test"
 
-	scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 	suite.T().Run("Pulls images", func(t *testing.T) {
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 		imagesDir := filepath.Join(chartDir, "images")
 
 		require.NoError(err)
@@ -89,7 +89,7 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 		scenarioName := "complete-chart"
 		chartName := "test"
 
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 		imageName := "test:mytag"
 
 		imageData := tu.ImageData{Name: "test", Image: "test:mytag"}
@@ -106,15 +106,15 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 		require.Equal(len(architectures), len(imageData.Digests))
 
 		images := []tu.ImageData{imageData}
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{
 				"ServerURL": serverURL, "Images": images,
 				"Name": chartName, "RepositoryURL": serverURL,
 			},
 		))
 
-		chartDir := filepath.Join(dest, scenarioName)
 		imagesDir := filepath.Join(chartDir, "images")
 		require.NoError(os.MkdirAll(imagesDir, 0755))
 		for _, img := range craneImgs {

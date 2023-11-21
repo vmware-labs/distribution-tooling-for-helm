@@ -1,7 +1,6 @@
 package relocator
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,13 +10,13 @@ import (
 
 func TestRelocateValues(t *testing.T) {
 
-	dest := sb.TempFile()
+	chartDir := sb.TempFile()
 	serverURL := "localhost"
-	require.NoError(t, tu.RenderScenario("../testdata/scenarios/chart1", dest, map[string]interface{}{"ServerURL": serverURL}))
-	chartDir := filepath.Join(dest, "chart1")
+
+	require.NoError(t, tu.RenderScenario("../../testdata/scenarios/chart1", chartDir, map[string]interface{}{"ServerURL": serverURL}))
 
 	newServerURL := "test.example.com"
-	data, err := tu.RenderTemplateFile("../testdata/scenarios/chart1/values.yaml.tmpl", map[string]string{"ServerURL": newServerURL})
+	data, err := tu.RenderTemplateFile("../../testdata/scenarios/chart1/values.yaml.tmpl", map[string]string{"ServerURL": newServerURL})
 	require.NoError(t, err)
 
 	expectedValues, err := tu.NormalizeYAML(data)

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 func relocateImages(images imagelock.ImageList, prefix string) (count int, err error) {

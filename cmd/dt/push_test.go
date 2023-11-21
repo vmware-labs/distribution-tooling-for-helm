@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
 func (suite *CmdSuite) TestPushCommand() {
@@ -38,14 +38,14 @@ func (suite *CmdSuite) TestPushCommand() {
 			chartName := "test"
 			scenarioName := "plain-chart"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{
 					"ServerURL": serverURL, "Images": nil,
 					"Name": chartName, "RepositoryURL": serverURL,
 				},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			dt("images", "push", chartDir).AssertErrorMatch(t, regexp.MustCompile(`failed to open Images.lock file:.*no such file or directory`))
 		})
 		t.Run("Handle malformed Helm chart", func(t *testing.T) {
@@ -55,14 +55,14 @@ func (suite *CmdSuite) TestPushCommand() {
 			chartName := "test"
 			scenarioName := "plain-chart"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{
 					"ServerURL": serverURL, "Images": nil,
 					"Name": chartName, "RepositoryURL": serverURL,
 				},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			require.NoError(os.WriteFile(filepath.Join(chartDir, imagelock.DefaultImagesLockFileName), []byte("malformed lock"), 0644))
 			dt("images", "push", chartDir).AssertErrorMatch(t, regexp.MustCompile(`failed to load Images.lock`))
 		})
@@ -71,14 +71,14 @@ func (suite *CmdSuite) TestPushCommand() {
 			scenarioName := "chart1"
 			serverURL := "example.com"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{
 					"ServerURL": serverURL, "Images": nil,
 					"Name": chartName, "RepositoryURL": serverURL,
 				},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 			dt("images", "push", chartDir).AssertErrorMatch(t, regexp.MustCompile(`(?i)failed to push images`))
 		})
 	})
@@ -103,15 +103,15 @@ func (suite *CmdSuite) TestPushCommand() {
 		require.Equal(len(architectures), len(imageData.Digests))
 
 		images := []tu.ImageData{imageData}
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{
 				"ServerURL": serverURL, "Images": images,
 				"Name": chartName, "RepositoryURL": serverURL,
 			},
 		))
 
-		chartDir := filepath.Join(dest, scenarioName)
 		imagesDir := filepath.Join(chartDir, "images")
 		require.NoError(os.MkdirAll(imagesDir, 0755))
 		for _, img := range craneImgs {

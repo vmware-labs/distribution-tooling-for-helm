@@ -3,19 +3,49 @@ package main
 import (
 	"context"
 	"fmt"
+	glog "log"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
 var wrapCmd = newWrapCommand()
+
+func createWrap(chartPath string) (wrapping.Wrap, error) {
+	tmpDir, err := getGlobalTempWorkDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"))
+}
+
+func shouldCarvelize(flags *pflag.FlagSet) bool {
+	carvelize, err := flags.GetBool("add-carvel-bundle")
+	if err != nil {
+		glog.Fatalf("failed to retrieve add-carvel-bundle flag: %v", err)
+	}
+	return carvelize
+}
+
+func shouldFetchChartArtifacts(inputChart string, flags *pflag.FlagSet) bool {
+	if isRemoteChart(inputChart) {
+		fetchArtifacts, err := flags.GetBool("fetch-artifacts")
+		if err != nil {
+			glog.Fatalf("failed to retrieve fetch-artifacts flag: %v", err)
+		}
+		return fetchArtifacts
+	}
+	return false
+}
 
 func wrapChart(ctx context.Context, inputPath string, outputFile string, platforms []string, flags *pflag.FlagSet) error {
 	parentLog := getLogger()
@@ -24,61 +54,71 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 	silentLog := log.SilentLog
 
 	l := parentLog.StartSection(fmt.Sprintf("Wrapping Helm chart %q", inputPath))
+
 	chartPath, err := resolveInputChartPath(inputPath, l, flags)
 	if err != nil {
 		return err
 	}
 
-	chart, err := chartutils.LoadChart(chartPath)
+	wrap, err := createWrap(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load Helm chart: %w", err)
+		return l.Failf("failed to create wrap: %v", err)
 	}
-	chartRoot := chart.RootDir()
 
-	lockFile, err := getImageLockFilePath(chartPath)
-	if err != nil {
-		return fmt.Errorf("failed to determine Images.lock file location: %w", err)
+	chart := wrap.Chart()
+
+	if shouldFetchChartArtifacts(inputPath, flags) {
+		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
+		if err := artifacts.FetchChartMetadata(
+			context.Background(), chartURL,
+			filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir),
+		); err != nil && err != artifacts.ErrTagDoesNotExist {
+			return fmt.Errorf("failed to fetch chart remote metadata: %w", err)
+		}
 	}
+
+	chartRoot := chart.RootDir()
+	lockFile := wrap.LockFilePath()
+
 	if utils.FileExists(lockFile) {
 		if err := l.ExecuteStep("Verifying Images.lock", func() error {
-			return verifyLock(chartPath, lockFile)
+			return verifyLock(chartRoot, lockFile)
 		}); err != nil {
 			return l.Failf("Failed to verify lock: %w", err)
 		}
-		l.Infof("Helm chart %q lock is valid", chartPath)
-
+		l.Infof("Helm chart %q lock is valid", chartRoot)
 	} else {
-		err := l.ExecuteStep(
+		if err := l.ExecuteStep(
 			"Images.lock file does not exist. Generating it from annotations...",
 			func() error {
-				return createImagesLock(chartPath,
+				return createImagesLock(chartRoot,
 					lockFile, silentLog,
 					imagelock.WithPlatforms(platforms),
 					imagelock.WithContext(ctx),
 				)
 			},
-		)
-		if err != nil {
+		); err != nil {
 			return l.Failf("Failed to generate lock: %w", err)
 		}
 		l.Infof("Images.lock file written to %q", lockFile)
 	}
 
 	if outputFile == "" {
-		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Metadata.Version)
+		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Version())
 		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
 			l.Debugf("failed to normalize output file: %v", err)
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}
 	}
+
 	if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
 		fetchArtifacts, _ := flags.GetBool("fetch-artifacts")
 		if err := pullChartImages(
-			chart,
+			wrap,
 			chartutils.WithLog(childLog),
 			chartutils.WithContext(ctx),
 			chartutils.WithFetchArtifacts(fetchArtifacts),
-			chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
+			chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 			chartutils.WithProgressBar(childLog.ProgressBar()),
 		); err != nil {
 			return childLog.Failf("%v", err)
@@ -89,21 +129,13 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		return err
 	}
 
-	carvelize, err := flags.GetBool("add-carvel-bundle")
-	if err != nil {
-		return fmt.Errorf("failed to retrieve add-carvel-bundle flag: %w", err)
-	}
-
-	if carvelize {
+	if shouldCarvelize(flags) {
 		if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
-			if err := generateCarvelBundle(
-				chartPath,
+			return generateCarvelBundle(
+				chartRoot,
 				chartutils.WithAnnotationsKey(annotationsKey),
 				chartutils.WithLog(childLog),
-			); err != nil {
-				return childLog.Failf("%v", err)
-			}
-			return nil
+			)
 		}); err != nil {
 			return l.Failf("%w", err)
 		}
@@ -113,7 +145,7 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 	if err := l.ExecuteStep(
 		"Compressing Helm chart...",
 		func() error {
-			return compressChart(ctx, chart, outputFile)
+			return compressChart(ctx, wrap.RootDir(), fmt.Sprintf("%s-%s", chart.Name(), chart.Version()), outputFile)
 		},
 	); err != nil {
 		return l.Failf("failed to wrap Helm chart: %w", err)
@@ -174,6 +206,10 @@ This command will pull all the container images and wrap it into a single tarbal
 	return cmd
 }
 
+func isRemoteChart(path string) bool {
+	return strings.HasPrefix(path, "oci://")
+}
+
 func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.FlagSet) (string, error) {
 	var chartPath string
 
@@ -182,13 +218,13 @@ func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.F
 		return "", err
 	}
 
-	if strings.HasPrefix(inputPath, "oci://") {
+	if isRemoteChart(inputPath) {
 		if err := l.ExecuteStep("Fetching remote Helm chart", func() error {
 			version, err := flags.GetString("version")
 			if err != nil {
 				return fmt.Errorf("failed to retrieve version flag: %w", err)
 			}
-			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir, flags)
+			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir)
 			if err != nil {
 				return err
 			}
@@ -213,28 +249,10 @@ func resolveInputChartPath(inputPath string, l log.SectionLogger, flags *pflag.F
 	return chartPath, nil
 }
 
-func fetchRemoteChart(chartURL string, version string, dir string, flags *pflag.FlagSet) (string, error) {
+func fetchRemoteChart(chartURL string, version string, dir string) (string, error) {
 	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(insecure), artifacts.WithPlainHTTP(usePlainHTTP))
 	if err != nil {
 		return "", err
-	}
-	fetchArtifacts, err := flags.GetBool("fetch-artifacts")
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve fetch-artifacts flag: %w", err)
-	}
-	if fetchArtifacts {
-		if version == "" {
-			chart, err := chartutils.LoadChart(chartPath)
-			if err != nil {
-				return chartPath, fmt.Errorf("failed to load Helm chart %q: %w", chartPath, err)
-			}
-			version = chart.Metadata.Version
-		}
-		if err := artifacts.FetchChartMetadata(context.Background(), fmt.Sprintf("%s:%s", chartURL, version), filepath.Join(chartPath, artifacts.HelmChartArtifactMetadataDir)); err != nil {
-			if err != artifacts.ErrTagDoesNotExist {
-				return "", err
-			}
-		}
 	}
 	return chartPath, nil
 }

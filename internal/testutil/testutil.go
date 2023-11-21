@@ -91,12 +91,11 @@ func RenderScenario(origin string, destDir string, data map[string]interface{}) 
 		return fmt.Errorf("faled to list template partials")
 	}
 	for _, p := range matches {
-		rootDir := filepath.Dir(filepath.Clean(p))
 		err := filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
 			if strings.HasSuffix(path, partialExtension) {
 				return nil
 			}
-			relative, _ := filepath.Rel(rootDir, path)
+			relative, _ := filepath.Rel(p, path)
 			destFile := filepath.Join(destDir, relative)
 
 			if info.Mode().IsRegular() {

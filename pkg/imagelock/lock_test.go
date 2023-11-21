@@ -47,7 +47,7 @@ func createLockFromImageData(images map[string][]*tu.ImageData) *ImagesLock {
 func initializeReferenceImages() ([]*tu.ImageData, error) {
 	var referenceImages []*tu.ImageData
 
-	fh, err := os.Open("../testdata/images.json")
+	fh, err := os.Open("../../testdata/images.json")
 	if err != nil {
 		return nil, err
 	}
@@ -138,13 +138,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 	appVersion := "6.7.8"
 	serverURL := suite.testServer.ServerURL
 
-	sampleImages, err := suite.testServer.LoadImagesFromFile("../testdata/images.json")
+	sampleImages, err := suite.testServer.LoadImagesFromFile("../../testdata/images.json")
 	suite.Require().NoError(err)
 
 	t.Run("Loads from Helm chart", func(t *testing.T) {
 
 		scenarioName := "custom-chart"
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 		referenceLock := NewImagesLock()
 
@@ -158,10 +158,9 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 		referenceLock.Images = imgs
 
-		dest := sb.TempFile()
-		chartRoot := filepath.Join(dest, scenarioName)
+		chartRoot := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartRoot,
 			map[string]interface{}{
 				"ServerURL": serverURL, "Images": imgs, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion,
 			},
@@ -177,12 +176,11 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		assert.Equal(referenceLock, lock)
 	})
 	t.Run("Loads Helm chart with dependencies", func(t *testing.T) {
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario("../testdata/scenarios/chart1", dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario("../../testdata/scenarios/chart1", chartDir,
 			map[string]interface{}{"ServerURL": serverURL},
 		))
-
-		chartDir := filepath.Join(dest, "chart1")
 
 		lock, err := GenerateFromChart(chartDir, Insecure)
 		assert.NoError(err, "failed to create Images.lock from Helm chart: %v", err)
@@ -201,14 +199,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		scenarioName := "custom-chart"
 		chartName := "test"
 
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		dest := sb.TempFile()
+		chartDir := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": sampleImages, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 
 		platforms := []string{"linux/amd64"}
 		lock, err := GenerateFromChart(chartDir, Insecure, WithPlatforms(platforms))
@@ -247,14 +244,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		chartName := "test"
 		chartVersion := "1.0.0"
 		appVersion := "2.2.0"
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		dest := sb.TempFile()
+		chartDir := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 
 		expectedLock := createLockFromImageData(map[string][]*tu.ImageData{
 			chartName: images,
@@ -294,12 +290,11 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		require.NoError(crane.Push(craneImg, image, crane.Insecure))
 
 		scenarioName := "custom-chart"
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
+		chartDir := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{
 				"ServerURL": serverURL,
 				"Images": []*tu.ImageData{
@@ -317,12 +312,11 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 	})
 
 	t.Run("Fails when no archs are retrieved", func(t *testing.T) {
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario("../testdata/scenarios/chart1", dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario("../../testdata/scenarios/chart1", chartDir,
 			map[string]interface{}{"ServerURL": serverURL},
 		))
-
-		chartDir := filepath.Join(dest, "chart1")
 
 		lock, err := GenerateFromChart(chartDir, Insecure, WithPlatforms([]string{"invalid"}))
 		assert.ErrorContains(err, "got empty list of digests after applying platforms filter")
@@ -337,12 +331,11 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		}
 
 		scenarioName := "custom-chart"
-		scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		dest := sb.TempFile()
-		chartRoot := filepath.Join(dest, scenarioName)
+		chartRoot := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest, map[string]interface{}{"ServerURL": serverURL,
+		require.NoError(tu.RenderScenario(scenarioDir, chartRoot, map[string]interface{}{"ServerURL": serverURL,
 			"Dependencies": []chartDependency{{
 				Name: "wordpress", Version: "1.0.0",
 				Repository: "oci://registry-1.docker.io/bitnamicharts",
