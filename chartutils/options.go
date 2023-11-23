@@ -15,7 +15,23 @@ type Configuration struct {
 	Log            log.Logger
 	Context        context.Context
 	ProgressBar    widgets.ProgressBar
+	ArtifactsDir   string
+	FetchArtifacts bool
 	MaxRetries     int
+}
+
+// WithArtifactsDir configures the ArtifactsDir
+func WithArtifactsDir(dir string) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.ArtifactsDir = dir
+	}
+}
+
+// WithFetchArtifacts configures the FetchArtifacts setting
+func WithFetchArtifacts(fetch bool) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.FetchArtifacts = fetch
+	}
 }
 
 // WithContext provides an execution context
@@ -45,7 +61,10 @@ func NewConfiguration(opts ...Option) *Configuration {
 		AnnotationsKey: imagelock.DefaultAnnotationsKey,
 		Context:        context.Background(),
 		ProgressBar:    widgets.NewSilentProgressBar(),
+		ArtifactsDir:   "",
+		FetchArtifacts: false,
 		MaxRetries:     3,
+		Log:            log.NewSilentLogger(),
 	}
 	for _, opt := range opts {
 		opt(cfg)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
@@ -14,14 +13,11 @@ import (
 
 var pushCmd = newPushCmd()
 
-func pushChartImages(chartPath string, opts ...chartutils.Option) error {
-	chartRoot, err := chartutils.GetChartRoot(chartPath)
-	if err != nil {
-		return fmt.Errorf("cannot determine Helm chart root for %q: %v", chartPath, err)
-	}
-	imagesDir := filepath.Join(chartRoot, "images")
+func pushChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
 
-	lockFile := filepath.Join(chartRoot, imagelock.DefaultImagesLockFileName)
+	imagesDir := chart.ImagesDir()
+
+	lockFile := chart.LockFilePath()
 
 	fh, err := os.Open(lockFile)
 	if err != nil {
@@ -55,12 +51,18 @@ func newPushCmd() *cobra.Command {
 			defer cancel()
 			l := getLogger()
 
+			chart, err := chartutils.LoadChart(chartPath)
+			if err != nil {
+				return fmt.Errorf("failed to load chart: %w", err)
+			}
+
 			if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
 				if err := pushChartImages(
-					chartPath,
+					chart,
 					chartutils.WithLog(log.SilentLog),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
+					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 				); err != nil {
 					return subLog.Failf("Failed to push images: %w", err)
 				}

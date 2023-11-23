@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 
 	"helm.sh/helm/v3/pkg/chart"
@@ -21,6 +22,16 @@ type Chart struct {
 // RootDir returns the Chart root directory
 func (c *Chart) RootDir() string {
 	return c.rootDir
+}
+
+// LockFilePath returns the absolute path to the chart Images.lock
+func (c *Chart) LockFilePath() string {
+	return c.AbsFilePath(imagelock.DefaultImagesLockFileName)
+}
+
+// ImageArtifactsDir returns the imags artifacts directory
+func (c *Chart) ImageArtifactsDir() string {
+	return filepath.Join(c.RootDir(), artifacts.HelmArtifactsFolder, "images")
 }
 
 // ImagesDir returns the images directory inside the chart root directory

@@ -41,7 +41,7 @@ func newRootCmd() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&usePlainHTTP, "use-plain-http", usePlainHTTP, "use plain HTTP when pulling and pushing charts")
 	cmd.PersistentFlags().StringVar(&annotationsKey, "annotations-key", annotationsKey, "annotation key used to define the list of included images")
 
-	cmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "set log level: (debug, info, warn, error, fatal, panic)")
+	cmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "set log level: (trace, debug, info, warn, error, fatal, panic)")
 	cmd.PersistentFlags().BoolVar(&usePlainLog, "plain", usePlainLog, "suppress the progress bar and symbols in messages and display only plain log messages")
 	cmd.PersistentFlags().BoolVar(&keepArtifacts, "keep-artifacts", keepArtifacts, "keep temporary artifacts created during the tool execution")
 

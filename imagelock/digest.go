@@ -20,7 +20,13 @@ type DigestInfo struct {
 }
 
 func fetchImageDigests(r string, cfg *Config) ([]DigestInfo, error) {
-	desc, err := getRemoteDescriptor(r, cfg)
+	opts := make([]crane.Option, 0)
+	if cfg.InsecureMode {
+		opts = append(opts, crane.Insecure)
+	}
+	opts = append(opts, crane.WithContext(cfg.Context))
+
+	desc, err := GetImageRemoteDescriptor(r, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get descriptor: %v", err)
 	}
@@ -53,19 +59,14 @@ func fetchImageDigests(r string, cfg *Config) ([]DigestInfo, error) {
 	}
 }
 
-func getRemoteDescriptor(r string, cfg *Config) (*remote.Descriptor, error) {
-	opts := make([]crane.Option, 0)
-	if cfg.InsecureMode {
-		opts = append(opts, crane.Insecure)
-	}
-	opts = append(opts, crane.WithContext(cfg.Context))
-
+// GetImageRemoteDescriptor returns the image descriptor
+func GetImageRemoteDescriptor(image string, opts ...crane.Option) (*remote.Descriptor, error) {
 	o := crane.GetOptions(opts...)
 
-	ref, err := name.ParseReference(r, o.Name...)
+	ref, err := name.ParseReference(image, o.Name...)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse reference %q: %w", r, err)
+		return nil, fmt.Errorf("failed to parse reference %q: %w", image, err)
 	}
 	return remote.Get(ref, o.Remote...)
 }

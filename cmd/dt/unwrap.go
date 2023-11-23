@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
@@ -47,7 +48,6 @@ func newUnwrapCommand() *cobra.Command {
 			}
 
 			parentLog := getLogger()
-
 			ctx, cancel := contextWithSigterm(context.Background())
 			defer cancel()
 
@@ -82,7 +82,7 @@ func newUnwrapCommand() *cobra.Command {
 
 			if lenImages > 0 && (sayYes || widgets.ShowYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"))) {
 				if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
-					return pushChartImagesAndVerify(ctx, chartPath, subLog)
+					return pushChartImagesAndVerify(ctx, chart, subLog)
 				}); err != nil {
 					return l.Failf("Failed to push images: %w", err)
 				}
@@ -102,11 +102,12 @@ func newUnwrapCommand() *cobra.Command {
 						if try > 0 {
 							l.Debugf("Failed to push Helm chart: %v", prevErr)
 						}
-						return pushChart(chart, pushChartURL)
+						return pushChart(ctx, chart, pushChartURL)
 					})
 				}); err != nil {
 					return l.Failf("Failed to push Helm chart: %w", err)
 				}
+
 				l.Infof("Helm chart successfully pushed")
 
 				successMessage = fmt.Sprintf(`%s: You can use it now by running "helm install %s --generate-name"`, successMessage, fullChartURL)
@@ -127,34 +128,33 @@ func newUnwrapCommand() *cobra.Command {
 	return cmd
 }
 
-func pushChartImagesAndVerify(ctx context.Context, chartPath string, l log.SectionLogger) error {
-	lockFile, err := getImageLockFilePath(chartPath)
-	if err != nil {
-		return fmt.Errorf("failed to determine Images.lock file location: %w", err)
-	}
+func pushChartImagesAndVerify(ctx context.Context, chart *chartutils.Chart, l log.SectionLogger) error {
+	lockFile := chart.LockFilePath()
+
 	if !utils.FileExists(lockFile) {
 		return fmt.Errorf("lock file %q does not exist", lockFile)
 	}
 	if err := pushChartImages(
-		chartPath,
+		chart,
 		chartutils.WithLog(log.SilentLog),
 		chartutils.WithContext(ctx),
+		chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
 	); err != nil {
 		return err
 	}
 	l.Infof("All images pushed successfully")
 	if err := l.ExecuteStep("Verifying Images.lock", func() error {
-		return verifyLock(chartPath, lockFile)
+		return verifyLock(chart.RootDir(), lockFile)
 	}); err != nil {
 		return fmt.Errorf("failed to verify Helm chart Images.lock: %w", err)
 	}
-	l.Infof("Chart %q lock is valid", chartPath)
+	l.Infof("Chart %q lock is valid", chart.RootDir())
 	return nil
 }
 
 func showImagesSummary(chart *chartutils.Chart, l log.SectionLogger) int {
-	lock, err := imagelock.FromYAMLFile(filepath.Join(chart.RootDir(), imagelock.DefaultImagesLockFileName))
+	lock, err := imagelock.FromYAMLFile(chart.LockFilePath())
 	if err != nil {
 		l.Debugf("failed to load list of images: failed to load lock file: %v", err)
 		return 0
@@ -192,7 +192,7 @@ func normalizeOCIURL(url string) string {
 	return url
 }
 
-func pushChart(chart *chartutils.Chart, pushChartURL string) error {
+func pushChart(ctx context.Context, chart *chartutils.Chart, pushChartURL string) error {
 	chartPath := chart.RootDir()
 	tmpDir, err := getGlobalTempWorkDir()
 	if err != nil {
@@ -206,11 +206,27 @@ func pushChart(chart *chartutils.Chart, pushChartURL string) error {
 	tempTarFile := filepath.Join(dir, fmt.Sprintf("%s.tgz", chart.Name()))
 	if err := utils.Tar(chartPath, tempTarFile, utils.TarConfig{
 		Prefix: chart.Name(),
-		Skip:   func(f string) bool { return strings.HasPrefix(f, "/images/") },
+		Skip: func(f string) bool {
+			for _, folder := range []string{"/images", fmt.Sprintf("/%s", artifacts.HelmArtifactsFolder)} {
+				if strings.HasPrefix(f, fmt.Sprintf("%s/", folder)) || f == folder {
+					return true
+				}
+			}
+			return false
+		},
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
-	return utils.PushChart(tempTarFile, pushChartURL, utils.WithInsecure(insecure), utils.WithPlainHTTP(usePlainHTTP))
+	if err := artifacts.PushChart(tempTarFile, pushChartURL, artifacts.WithInsecure(insecure), artifacts.WithPlainHTTP(usePlainHTTP)); err != nil {
+		return err
+	}
+	fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chart.Name())
+
+	metadataArtifactDir := filepath.Join(chart.RootDir(), artifacts.HelmChartArtifactMetadataDir)
+	if utils.FileExists(metadataArtifactDir) {
+		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Metadata.Version), metadataArtifactDir)
+	}
+	return nil
 }
 
 func init() {
