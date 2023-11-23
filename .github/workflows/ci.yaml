@@ -32,7 +32,7 @@ jobs:
           go-version: 1.21
 
       - name: Set Golangci-lint
-        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.53.3
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
 
       - name: Set Shellcheck
         run: sudo apt-get -qq update && sudo apt-get install -y shellcheck && shellcheck install-binary.sh

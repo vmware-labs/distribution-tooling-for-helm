@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -143,6 +144,7 @@ func createSampleImages(imageName string, server string) (map[string]sampleImage
 	images := make(map[string]sampleImageData, 0)
 	src := fmt.Sprintf("%s/%s", server, imageName)
 	imageData := ImageData{Name: "test", Image: imageName}
+	base := mutate.IndexMediaType(empty.Index, types.DockerManifestList)
 
 	addendums := []mutate.IndexAddendum{}
 
@@ -156,8 +158,19 @@ func createSampleImages(imageName string, server string) (map[string]sampleImage
 		if err != nil {
 			return nil, fmt.Errorf("failed to create image: %v", err)
 		}
-
 		parts := strings.Split(plat, "/")
+
+		img, err = mutate.ConfigFile(img, &v1.ConfigFile{Architecture: parts[1], OS: parts[0]})
+		if err != nil {
+			return nil, fmt.Errorf("cannot mutatle image config file: %w", err)
+		}
+
+		img, err = mutate.Canonical(img)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to canonicalize image: %w", err)
+		}
+
 		addendums = append(addendums, mutate.IndexAddendum{
 			Add: img,
 			Descriptor: v1.Descriptor{
@@ -174,14 +187,47 @@ func createSampleImages(imageName string, server string) (map[string]sampleImage
 		imageData.Digests = append(imageData.Digests, DigestData{Arch: plat, Digest: digest.Digest(d.String())})
 	}
 
-	idx := mutate.AppendManifests(empty.Index, addendums...)
+	idx := mutate.AppendManifests(base, addendums...)
 
 	images[src] = sampleImageData{Index: idx, ImageData: imageData}
 	return images, nil
 }
 
+// Config defines multiple test util options
+type Config struct {
+	SignKey     string
+	MetadataDir string
+}
+
+// NewConfig returns a new Config
+func NewConfig(opts ...Option) *Config {
+	cfg := &Config{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
+
+// Option defines a Config option
+type Option func(*Config)
+
+// WithSignKey sets a signing key to be used while pushing images
+func WithSignKey(key string) Option {
+	return func(cfg *Config) {
+		cfg.SignKey = key
+	}
+}
+
+// WithMetadataDir sets a signing key to be used while pushing images
+func WithMetadataDir(dir string) Option {
+	return func(cfg *Config) {
+		cfg.MetadataDir = dir
+	}
+}
+
 // AddSampleImagesToRegistry adds a set of sample images to the provided registry
-func AddSampleImagesToRegistry(imageName string, server string) ([]ImageData, error) {
+func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) ([]ImageData, error) {
+	cfg := NewConfig(opts...)
 	images := make([]ImageData, 0)
 	samples, err := createSampleImages(imageName, server)
 	if err != nil {
@@ -197,6 +243,32 @@ func AddSampleImagesToRegistry(imageName string, server string) ([]ImageData, er
 			return nil, fmt.Errorf("failed to write index: %v", err)
 		}
 		images = append(images, data.ImageData)
+		if cfg.SignKey != "" {
+			if err := CosignImage(src, cfg.SignKey); err != nil {
+				return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
+			}
+		}
+		if cfg.MetadataDir != "" {
+			newDir := fmt.Sprintf("%s.layout", cfg.MetadataDir)
+			if err := CreateOCILayout(context.Background(), cfg.MetadataDir, newDir); err != nil {
+				return nil, fmt.Errorf("failed to serialize metadata as OCI layout: %v", err)
+			}
+			imgDigest, err := data.Index.Digest()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get image digest: %v", err)
+			}
+			metadataImg := fmt.Sprintf("%s:sha256-%s.metadata", ref.Context().Name(), imgDigest.Hex)
+
+			if err := pushArtifact(context.Background(), metadataImg, newDir); err != nil {
+				return nil, fmt.Errorf("failed to push metadata: %v", err)
+			}
+			if cfg.SignKey != "" {
+				if err := CosignImage(metadataImg, cfg.SignKey); err != nil {
+					return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
+				}
+			}
+
+		}
 	}
 	return images, nil
 }

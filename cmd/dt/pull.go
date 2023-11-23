@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
@@ -16,9 +14,8 @@ import (
 var pullCmd = newPullCommand()
 
 func pullChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
-	chartRoot := chart.RootDir()
 	imagesDir := chart.ImagesDir()
-	lockFile := filepath.Join(chartRoot, imagelock.DefaultImagesLockFileName)
+	lockFile := chart.LockFilePath()
 
 	lock, err := imagelock.FromYAMLFile(lockFile)
 	if err != nil {
@@ -68,6 +65,7 @@ func newPullCommand() *cobra.Command {
 					chartutils.WithLog(childLog),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(childLog.ProgressBar()),
+					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 				); err != nil {
 					return childLog.Failf("%v", err)
 				}

@@ -135,7 +135,3 @@ func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
 	l.Infof("Carvel metadata written to %q", path)
 	return nil
 }
-
-func init() {
-	rootCmd.AddCommand(infoCmd)
-}

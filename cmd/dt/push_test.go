@@ -49,7 +49,7 @@ func (suite *CmdSuite) TestPushCommand() {
 			dt("images", "push", chartDir).AssertErrorMatch(t, regexp.MustCompile(`failed to open Images.lock file:.*no such file or directory`))
 		})
 		t.Run("Handle malformed Helm chart", func(t *testing.T) {
-			dt("images", "push", sb.TempFile()).AssertErrorMatch(t, regexp.MustCompile(`cannot determine Helm chart root`))
+			dt("images", "push", sb.TempFile()).AssertErrorMatch(t, regexp.MustCompile(`failed to load Helm chart`))
 		})
 		t.Run("Handle malformed Images.lock", func(t *testing.T) {
 			chartName := "test"
