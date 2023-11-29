@@ -72,11 +72,6 @@ func (w *wrap) Chart() *chartutils.Chart {
 
 // Load loads a directory containing a wrapped chart and returns a Wrap
 func Load(dir string, opts ...chartutils.Option) (Wrap, error) {
-	if !utils.FileExists(filepath.Join(dir, "chart")) {
-		// This does not seem a wrap bundle, it may be a legacy wrapped chart. Lets try to load it
-		return chartutils.LoadChart(dir, opts...)
-	}
-
 	chartDir := filepath.Join(dir, "chart")
 	chart, err := chartutils.LoadChart(chartDir, opts...)
 	if err != nil {

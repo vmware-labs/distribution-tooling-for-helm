@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
@@ -71,12 +70,6 @@ func newUnwrapCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			/*
-				chart, err := chartutils.LoadChart(chartPath)
-				if err != nil {
-					return l.Failf("failed to load Helm chart %q: %w", chartPath, err)
-				}
-			*/
 			if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", wrap.ChartDir(), registryURL), func() error {
 				return relocateChart(wrap.ChartDir(), registryURL, relocator.WithLog(l))
 			}); err != nil {
@@ -211,24 +204,10 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string) err
 		return fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
 	}
 
-	tarCfg := utils.TarConfig{
-		Prefix: chart.Name(),
-	}
-
-	if _, isLegacyBundle := wrap.(*chartutils.Chart); isLegacyBundle {
-		// If we are unwrapping a legacy bundle, the chart directory contains the artifacts/ and images/
-		// folders so we have to skip them
-		tarCfg.Skip = func(f string) bool {
-			for _, folder := range []string{"/images", fmt.Sprintf("/%s", artifacts.HelmArtifactsFolder)} {
-				if strings.HasPrefix(f, fmt.Sprintf("%s/", folder)) || f == folder {
-					return true
-				}
-			}
-			return false
-		}
-	}
 	tempTarFile := filepath.Join(dir, fmt.Sprintf("%s.tgz", chart.Name()))
-	if err := utils.Tar(chartPath, tempTarFile, tarCfg); err != nil {
+	if err := utils.Tar(chartPath, tempTarFile, utils.TarConfig{
+		Prefix: chart.Name(),
+	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
 	if err := artifacts.PushChart(tempTarFile, pushChartURL, artifacts.WithInsecure(insecure), artifacts.WithPlainHTTP(usePlainHTTP)); err != nil {
