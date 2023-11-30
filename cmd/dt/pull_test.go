@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 func (suite *CmdSuite) TestPullCommand() {
@@ -40,11 +40,11 @@ func (suite *CmdSuite) TestPullCommand() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	createSampleChart := func(dest string) string {
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+	createSampleChart := func(chartDir string) string {
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		return filepath.Join(dest, scenarioName)
+		return chartDir
 	}
 	verifyChartDir := func(chartDir string) {
 		imagesDir := filepath.Join(chartDir, "images")

@@ -16,9 +16,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 )
 
 type unwrapOpts struct {
@@ -156,13 +156,15 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 	t.Run("Unwrap Chart", func(t *testing.T) {
 		require := suite.Require()
 		assert := suite.Assert()
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
 
-		images, err := writeSampleImages(imageName, imageTag, filepath.Join(chartDir, "images"))
+		wrapDir := sb.TempFile()
+
+		chartDir := filepath.Join(wrapDir, "chart")
+
+		images, err := writeSampleImages(imageName, imageTag, filepath.Join(wrapDir, "images"))
 		require.NoError(err)
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
 		))
 
@@ -171,10 +173,8 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 		)
 		require.NoError(err)
 		require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
-
 		targetRegistry := newUniqueTargetRegistry()
-		dt("unwrap", "--plain", "--yes", chartDir, targetRegistry).AssertSuccessMatch(suite.T(), "")
-
+		dt("unwrap", "--plain", "--yes", wrapDir, targetRegistry).AssertSuccessMatch(suite.T(), "")
 		// Verify the images were pushed
 		for _, img := range images {
 			src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
@@ -221,8 +221,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 	}
 	t.Run("Wrap and unwrap Chart", func(t *testing.T) {
 		require := suite.Require()
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
+		chartDir := sb.TempFile()
 
 		srcRegistryNamespace := "wrap-unwrap-test"
 		srcRegistry := newTargetRegistry(srcRegistryNamespace)
@@ -252,7 +251,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 			require.NoError(err)
 		}
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": srcRegistry, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": srcRegistry},
 		))
 

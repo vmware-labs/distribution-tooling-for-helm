@@ -7,7 +7,7 @@ import (
 
 	"github.com/pterm/pterm"
 	"github.com/sirupsen/logrus"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 // ProgressBar defines a ProgressBar widget

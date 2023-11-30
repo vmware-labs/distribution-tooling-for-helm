@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"gopkg.in/yaml.v3"
 
 	"helm.sh/helm/v3/pkg/chart"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/relocator"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/relocator"
 )
 
 var relocateCmd = newRelocateCmd()

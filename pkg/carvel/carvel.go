@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-tanzu/carvel-imgpkg/pkg/imgpkg/lockconfig"
 
 	"gopkg.in/yaml.v3"
@@ -84,14 +84,14 @@ func CreateBundleMetadata(chartPath string, lock *imagelock.ImagesLock, cfg *cha
 		return nil, fmt.Errorf("failed to load chart: %w", err)
 	}
 
-	for _, maintainer := range chart.Metadata.Maintainers {
+	for _, maintainer := range chart.Metadata().Maintainers {
 		author := Author{
 			Name: maintainer.Name,
 		}
 		author.Email = maintainer.Email
 		bundleMetadata.Authors = append(bundleMetadata.Authors, author)
 	}
-	for _, source := range chart.Metadata.Sources {
+	for _, source := range chart.Metadata().Sources {
 		website := Website{
 			URL: source,
 		}
@@ -99,7 +99,7 @@ func CreateBundleMetadata(chartPath string, lock *imagelock.ImagesLock, cfg *cha
 	}
 
 	bundleMetadata.Metadata["name"] = lock.Chart.Name
-	for key, value := range chart.Metadata.Annotations {
+	for key, value := range chart.Metadata().Annotations {
 		annotationsKey := cfg.AnnotationsKey
 		if annotationsKey == "" {
 			annotationsKey = imagelock.DefaultAnnotationsKey

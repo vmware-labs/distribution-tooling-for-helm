@@ -30,11 +30,11 @@ func (suite *CmdSuite) TestLockCommand() {
 	t := suite.T()
 
 	t.Run("Generate lock file", func(t *testing.T) {
-		dest := sb.TempFile()
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		chartDir := sb.TempFile()
+
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
@@ -66,11 +66,11 @@ func (suite *CmdSuite) TestLockCommand() {
 			scenarioName := "plain-chart"
 			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-			dest := sb.TempFile()
-			require.NoError(tu.RenderScenario(scenarioDir, dest,
+			chartDir := sb.TempFile()
+
+			require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 				map[string]interface{}{},
 			))
-			chartDir := filepath.Join(dest, scenarioName)
 
 			require.NoError(os.Chmod(chartDir, os.FileMode(0555)))
 			defer os.Chmod(chartDir, os.FileMode(0755))

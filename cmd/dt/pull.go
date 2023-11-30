@@ -5,15 +5,16 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
 var pullCmd = newPullCommand()
 
-func pullChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
+func pullChartImages(chart wrapping.Lockable, opts ...chartutils.Option) error {
 	imagesDir := chart.ImagesDir()
 	lockFile := chart.LockFilePath()
 
@@ -29,9 +30,9 @@ func pullChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
 	return nil
 }
 
-func compressChart(ctx context.Context, chart *chartutils.Chart, outputFile string) error {
-	return utils.TarContext(ctx, chart.RootDir(), outputFile, utils.TarConfig{
-		Prefix: fmt.Sprintf("%s-%s", chart.Name(), chart.Metadata.Version),
+func compressChart(ctx context.Context, dir, prefix, outputFile string) error {
+	return utils.TarContext(ctx, dir, outputFile, utils.TarConfig{
+		Prefix: prefix,
 	})
 }
 
@@ -79,7 +80,7 @@ func newPullCommand() *cobra.Command {
 				if err := l.ExecuteStep(
 					fmt.Sprintf("Compressing chart into %q", outputFile),
 					func() error {
-						return compressChart(ctx, chart, outputFile)
+						return compressChart(ctx, chart.RootDir(), fmt.Sprintf("%s-%s", chart.Name(), chart.Version()), outputFile)
 					},
 				); err != nil {
 					return l.Failf("failed to compress chart: %w", err)

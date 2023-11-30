@@ -46,11 +46,10 @@ func (suite *ChartUtilsTestSuite) TestLoadChart() {
 	}
 
 	t.Run("Working Scenarios", func(t *testing.T) {
-		dest := sb.TempFile()
-		//serverURL :=	suite.testServer.ServerURL
+		chartDir := sb.TempFile()
 		serverURL := "localhost"
-		require.NoError(t, tu.RenderScenario("../testdata/scenarios/chart1", dest, map[string]interface{}{"ServerURL": serverURL}))
-		chartDir := filepath.Join(dest, "chart1")
+
+		require.NoError(t, tu.RenderScenario("../../testdata/scenarios/chart1", chartDir, map[string]interface{}{"ServerURL": serverURL}))
 		t.Run("Fail Scenarios", func(t *testing.T) {
 			t.Run("Fails to load non existing chart", func(t *testing.T) {
 				_, err := LoadChart(sb.TempFile())

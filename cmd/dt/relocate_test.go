@@ -38,11 +38,11 @@ func (suite *CmdSuite) TestRelocateCommand() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	renderLockedChart := func(destDir string, scenarioName string, serverURL string) string {
-		require.NoError(tu.RenderScenario(scenarioDir, destDir,
+	renderLockedChart := func(chartDir string, scenarioName string, serverURL string) string {
+
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(destDir, scenarioName)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName},
