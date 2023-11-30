@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 func (suite *CmdSuite) TestInfoCommand() {
@@ -29,13 +29,12 @@ func (suite *CmdSuite) TestInfoCommand() {
 		appVersion := "2.3.4"
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
+		chartDir := sb.TempFile()
 
 		images, err := writeSampleImages(imageName, imageTag, filepath.Join(chartDir, "images"))
 		require.NoError(err)
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "AppVersion": appVersion, "RepositoryURL": serverURL},
 		))
 
@@ -94,12 +93,11 @@ func (suite *CmdSuite) TestInfoCommand() {
 		scenarioName := "plain-chart"
 		chartName := "test"
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-		dest := sb.TempFile()
+		chartDir := sb.TempFile()
 
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 
 		tarFile := sb.TempFile()
 		if err := utils.Tar(chartDir, tarFile, utils.TarConfig{

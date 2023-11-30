@@ -1,7 +1,6 @@
 package relocator
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,13 +10,13 @@ import (
 )
 
 func TestRelocateAnnotations(t *testing.T) {
-	dest := sb.TempFile()
+	chartDir := sb.TempFile()
 	serverURL := "localhost"
-	require.NoError(t, tu.RenderScenario("../testdata/scenarios/chart1", dest, map[string]interface{}{"ServerURL": serverURL}))
-	chartDir := filepath.Join(dest, "chart1")
+
+	require.NoError(t, tu.RenderScenario("../../testdata/scenarios/chart1", chartDir, map[string]interface{}{"ServerURL": serverURL}))
 
 	newServerURL := "test.example.com"
-	expectedAnnotations, err := tu.RenderTemplateFile("../testdata/scenarios/chart1/images.partial.tmpl", map[string]string{"ServerURL": newServerURL})
+	expectedAnnotations, err := tu.RenderTemplateFile("../../testdata/scenarios/chart1/images.partial.tmpl", map[string]string{"ServerURL": newServerURL})
 	require.NoError(t, err)
 
 	expectedAnnotations = strings.TrimSpace(expectedAnnotations)

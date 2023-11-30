@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"gopkg.in/yaml.v2"
 
 	"helm.sh/helm/v3/pkg/chart/loader"

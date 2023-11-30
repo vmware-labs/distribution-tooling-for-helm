@@ -6,18 +6,19 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
 var pushCmd = newPushCmd()
 
-func pushChartImages(chart *chartutils.Chart, opts ...chartutils.Option) error {
+func pushChartImages(wrap wrapping.Wrap, opts ...chartutils.Option) error {
 
-	imagesDir := chart.ImagesDir()
+	imagesDir := wrap.ImagesDir()
 
-	lockFile := chart.LockFilePath()
+	lockFile := wrap.LockFilePath()
 
 	fh, err := os.Open(lockFile)
 	if err != nil {

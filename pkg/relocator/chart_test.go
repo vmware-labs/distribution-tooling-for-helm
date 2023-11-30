@@ -16,12 +16,12 @@ import (
 
 func TestRelocateChartDir(t *testing.T) {
 	scenarioName := "chart1"
-	scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	dest := sb.TempFile()
+	chartDir := sb.TempFile()
 	serverURL := "localhost"
-	require.NoError(t, tu.RenderScenario(scenarioDir, dest, map[string]interface{}{"ServerURL": serverURL}))
-	chartDir := filepath.Join(dest, scenarioName)
+
+	require.NoError(t, tu.RenderScenario(scenarioDir, chartDir, map[string]interface{}{"ServerURL": serverURL}))
 
 	newServerURL := "test.example.com"
 	repositoryPrefix := "airgap"

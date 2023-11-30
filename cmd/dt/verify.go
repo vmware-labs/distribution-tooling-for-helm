@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 var verifyCmd = newVerifyCmd()
@@ -32,6 +32,7 @@ func verifyLock(chartPath string, lockFile string) error {
 		imagelock.WithContext(context.Background()),
 		imagelock.WithInsecure(insecure),
 	)
+
 	if err != nil {
 		return fmt.Errorf("failed to re-create Images.lock from Helm chart %q: %v", chartPath, err)
 	}

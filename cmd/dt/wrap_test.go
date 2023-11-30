@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
-	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,10 +53,10 @@ func verifyArtifactsContents(t *testing.T, sb *tu.Sandbox, dir string, artifacts
 	}
 }
 
-func verifyChartWrappedArtifacts(t *testing.T, sb *tu.Sandbox, chartDir string, images []tu.ImageData, artifactsData map[string][]byte) {
-	chart, err := chartutils.LoadChart(chartDir)
+func verifyChartWrappedArtifacts(t *testing.T, sb *tu.Sandbox, wrapDir string, images []tu.ImageData, artifactsData map[string][]byte) {
+	wrap, err := wrapping.Load(wrapDir)
 	require.NoError(t, err)
-	artifactsDir := filepath.Join(chartDir, artifacts.HelmArtifactsFolder)
+	artifactsDir := filepath.Join(wrapDir, artifacts.HelmArtifactsFolder)
 	require.DirExists(t, artifactsDir)
 	require.DirExists(t, filepath.Join(artifactsDir, "images"))
 	for _, imgData := range images {
@@ -65,7 +65,7 @@ func verifyChartWrappedArtifacts(t *testing.T, sb *tu.Sandbox, chartDir string, 
 		if idx != -1 {
 			imageTag = imgData.Image[idx+1:]
 		}
-		imageArtifactDir := filepath.Join(artifactsDir, fmt.Sprintf("images/%s/%s", chart.Metadata.Name, imgData.Name))
+		imageArtifactDir := filepath.Join(artifactsDir, fmt.Sprintf("images/%s/%s", wrap.Chart().Name(), imgData.Name))
 		require.DirExists(t, imageArtifactDir)
 		for _, dir := range []string{"sig", "metadata", "metadata.sig"} {
 			imageArtifactDir := filepath.Join(imageArtifactDir, fmt.Sprintf("%s.%s", imageTag, dir))
@@ -112,7 +112,6 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 		args = append(args, "--fetch-artifacts")
 	}
 	dt(args...).AssertSuccess(t)
-
 	require.FileExists(t, expectedWrapFile)
 
 	tmpDir := sb.TempFile()
@@ -126,13 +125,14 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 			assert.FileExists(t, imgFile)
 		}
 	}
-	lockFile := filepath.Join(tmpDir, "Images.lock")
+	wrappedChartDir := filepath.Join(tmpDir, "chart")
+	lockFile := filepath.Join(wrappedChartDir, "Images.lock")
 	assert.FileExists(t, lockFile)
 
 	if cfg.GenerateCarvelBundle {
-		carvelBundleFile := filepath.Join(tmpDir, carvel.CarvelBundleFilePath)
+		carvelBundleFile := filepath.Join(wrappedChartDir, carvel.CarvelBundleFilePath)
 		assert.FileExists(t, carvelBundleFile)
-		carvelImagesLockFile := filepath.Join(tmpDir, carvel.CarvelImagesFilePath)
+		carvelImagesLockFile := filepath.Join(wrappedChartDir, carvel.CarvelImagesFilePath)
 		assert.FileExists(t, carvelImagesLockFile)
 	}
 
@@ -209,11 +209,10 @@ func (suite *CmdSuite) TestWrapCommand() {
 	scenarioDir, err := filepath.Abs(fmt.Sprintf("../../testdata/scenarios/%s", scenarioName))
 	require.NoError(err)
 
-	createSampleChart := func(dest string, withLock bool) string {
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+	createSampleChart := func(chartDir string, withLock bool) string {
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
 		))
-		chartDir := filepath.Join(dest, scenarioName)
 		if !withLock {
 			// We do not want the lock file to be present, wrap should take care of it
 			require.NoError(os.RemoveAll(filepath.Join(chartDir, "Images.lock")))
@@ -233,8 +232,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		})
 	}
 	testSampleWrap := func(t *testing.T, withLock bool, outputFile string, generateCarvelBundle bool, fetchArtifacts bool) {
-		dest := sb.TempFile()
-		chartDir := createSampleChart(dest, withLock)
+		chartDir := createSampleChart(sb.TempFile(), withLock)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
@@ -256,8 +254,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		testSampleWrap(t, withLock, "", false, WithoutArtifacts)
 	})
 	t.Run("Wrap Chart From compressed tgz", func(t *testing.T) {
-		dest := sb.TempFile()
-		chartDir := createSampleChart(dest, withLock)
+		chartDir := createSampleChart(sb.TempFile(), withLock)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
@@ -287,8 +284,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 		}
 		ociServerURL := u.Host
 
-		dest := sb.TempFile()
-		chartDir := createSampleChart(dest, withLock)
+		chartDir := createSampleChart(sb.TempFile(), withLock)
 
 		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},

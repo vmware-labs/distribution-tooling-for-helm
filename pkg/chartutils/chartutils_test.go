@@ -2,7 +2,6 @@ package chartutils
 
 import (
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
@@ -36,7 +35,7 @@ func (suite *ChartUtilsTestSuite) TestAnnotateChart() {
 	scenarioName := "plain-chart"
 	defaultAnnotationsKey := "images"
 	// customAnnotationsKey := "artifacthub.io/images"
-	scenarioDir := fmt.Sprintf("../testdata/scenarios/%s", scenarioName)
+	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 	type testImage struct {
 		Name       string
@@ -61,10 +60,9 @@ func (suite *ChartUtilsTestSuite) TestAnnotateChart() {
 		},
 	}
 	t.Run("Annotates a chart", func(t *testing.T) {
-		dest := sb.TempFile()
-		chartDir := filepath.Join(dest, scenarioName)
+		chartDir := sb.TempFile()
 		annotationsKey := defaultAnnotationsKey
-		require.NoError(tu.RenderScenario(scenarioDir, dest,
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "ValuesImages": images},
 		))
 

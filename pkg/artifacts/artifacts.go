@@ -18,8 +18,8 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 const (

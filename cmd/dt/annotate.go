@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 )
 
 var annotateCmd = newAnnotateCmd()

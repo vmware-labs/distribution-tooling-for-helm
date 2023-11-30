@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/carvel"
-	cu "github.com/vmware-labs/distribution-tooling-for-helm/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/utils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
+	cu "github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-tanzu/carvel-imgpkg/pkg/imgpkg/lockconfig"
 )
 
@@ -71,6 +71,7 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 	for _, opt := range opts {
 		opt(cfg)
 	}
+
 	chart, err := cu.LoadChart(chartPath, cu.WithAnnotationsKey(cfg.ImageLockConfig.AnnotationsKey))
 	if err != nil {
 		return fmt.Errorf("failed to load Helm chart: %v", err)
@@ -93,7 +94,7 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 	if cfg.Recursive {
 		for _, dep := range chart.Dependencies() {
 			if err := relocateChart(dep, prefix, cfg); err != nil {
-				allErrors = errors.Join(allErrors, fmt.Errorf("failed to reloacte Helm SubChart %q: %v", dep.ChartFullPath(), err))
+				allErrors = errors.Join(allErrors, fmt.Errorf("failed to reloacte Helm SubChart %q: %v", dep.Chart().ChartFullPath(), err))
 			}
 		}
 	}

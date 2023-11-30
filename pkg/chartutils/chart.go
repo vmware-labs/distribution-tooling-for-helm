@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/artifacts"
-	"github.com/vmware-labs/distribution-tooling-for-helm/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -14,14 +14,44 @@ import (
 
 // Chart defines a helm Chart with extra functionalities
 type Chart struct {
-	*chart.Chart
+	chart          *chart.Chart
 	rootDir        string
 	annotationsKey string
+}
+
+// ChartFullPath returns the wrapped chart ChartFullPath
+func (c *Chart) ChartFullPath() string {
+	return c.chart.ChartFullPath()
+}
+
+// Name returns the name of the chart
+func (c *Chart) Name() string {
+	return c.chart.Name()
+}
+
+// Version returns the version of the chart
+func (c *Chart) Version() string {
+	return c.chart.Metadata.Version
+}
+
+// Metadata returns the metadata of the chart
+func (c *Chart) Metadata() *chart.Metadata {
+	return c.chart.Metadata
 }
 
 // RootDir returns the Chart root directory
 func (c *Chart) RootDir() string {
 	return c.rootDir
+}
+
+// ChartDir returns the Chart root directory (required to implement wrapping.Unwrapable)
+func (c *Chart) ChartDir() string {
+	return c.RootDir()
+}
+
+// Chart returns the Chart object (required to implement wrapping.Unwrapable)
+func (c *Chart) Chart() *Chart {
+	return c
 }
 
 // LockFilePath returns the absolute path to the chart Images.lock
@@ -41,7 +71,7 @@ func (c *Chart) ImagesDir() string {
 
 // File returns the chart.File for the provided name or nil if not found
 func (c *Chart) File(name string) *chart.File {
-	return getChartFile(c.Chart, name)
+	return getChartFile(c.chart, name)
 }
 
 // ValuesFile returns the values.yaml chart.File
@@ -57,7 +87,7 @@ func (c *Chart) AbsFilePath(name string) string {
 // GetAnnotatedImages returns the chart images specified in the annotations
 func (c *Chart) GetAnnotatedImages() (imagelock.ImageList, error) {
 	return imagelock.GetImagesFromChartAnnotations(
-		c.Chart,
+		c.chart,
 		imagelock.NewImagesLockConfig(
 			imagelock.WithAnnotationsKey(c.annotationsKey),
 		),
@@ -69,7 +99,7 @@ func (c *Chart) Dependencies() []*Chart {
 	cfg := NewConfiguration(WithAnnotationsKey(c.annotationsKey))
 	deps := make([]*Chart, 0)
 
-	for _, dep := range c.Chart.Dependencies() {
+	for _, dep := range c.chart.Dependencies() {
 		subChart := filepath.Join(c.RootDir(), "charts", dep.Name())
 		deps = append(deps, newChart(dep, subChart, cfg))
 	}
@@ -92,5 +122,5 @@ func LoadChart(path string, opts ...Option) (*Chart, error) {
 }
 
 func newChart(c *chart.Chart, chartRoot string, cfg *Configuration) *Chart {
-	return &Chart{Chart: c, rootDir: chartRoot, annotationsKey: cfg.AnnotationsKey}
+	return &Chart{chart: c, rootDir: chartRoot, annotationsKey: cfg.AnnotationsKey}
 }
