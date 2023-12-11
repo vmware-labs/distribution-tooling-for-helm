@@ -26,8 +26,8 @@ jobs:
           echo "::set-output name=PLUGIN_VERSION::$PLUGIN_VERSION"
 
       - name: Check Version
-        if: ${{ steps.version.outputs.PLUGIN_VERSION == inputs.tag }}
-        run: echo "Plugin version matches input tag"
+        if: ${{ steps.version.outputs.PLUGIN_VERSION != inputs.tag }}
+        run: echo "Plugin version does not match input tag. Please make sure you have prepared the release first." && exit 1
 
       - name: Set Golang
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
