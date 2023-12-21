@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"crypto/tls"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,7 +74,13 @@ func getImageTagAndDigest(image string) (string, string, error) {
 
 	switch v := ref.(type) {
 	case name.Tag:
-		desc, err := imagelock.GetImageRemoteDescriptor(image)
+		// Hack -- needs to respect insecure flag instead
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+		desc, err := imagelock.GetImageRemoteDescriptor(image, crane.WithTransport(httpClient.Transport))
 		if err != nil {
 			return "", "", fmt.Errorf("error getting descriptor: %w", err)
 		}
