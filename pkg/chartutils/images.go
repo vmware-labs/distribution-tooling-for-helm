@@ -3,6 +3,8 @@ package chartutils
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"crypto/tls"
 	"os"
 	"path/filepath"
 
@@ -212,6 +214,13 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options)
 		return fmt.Errorf("failed to parse image reference %q: %w", imgData.Image, err)
 	}
 
+	// Hack -- needs to respect insecure flag instead
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	o.Remote = append(o.Remote, remote.WithTransport(httpClient.Transport))
 	if err := remote.WriteIndex(ref, idx, o.Remote...); err != nil {
 		return fmt.Errorf("failed to write image index: %w", err)
 	}
