@@ -139,6 +139,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, l log.Sec
 		chartutils.WithContext(ctx),
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
+		chartutils.WithInsecureMode(insecure),
 	); err != nil {
 		return err
 	}
