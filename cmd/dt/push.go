@@ -64,6 +64,7 @@ func newPushCmd() *cobra.Command {
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
 					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
+					chartutils.WithInsecureMode(insecure),
 				); err != nil {
 					return subLog.Failf("Failed to push images: %w", err)
 				}

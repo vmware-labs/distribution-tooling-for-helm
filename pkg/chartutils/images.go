@@ -3,8 +3,6 @@ package chartutils
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"crypto/tls"
 	"os"
 	"path/filepath"
 
@@ -122,7 +120,13 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	p, _ := cfg.ProgressBar.WithTotal(len(lock.Images)).UpdateTitle("Pushing images").Start()
 	defer p.Stop()
 
-	o := crane.GetOptions(crane.WithContext(ctx))
+	craneOpts := make([]crane.Option, 0)
+	craneOpts = append(craneOpts, crane.WithContext(ctx))
+	if cfg.InsecureMode {
+		craneOpts = append(craneOpts, crane.Insecure)
+	}
+	o := crane.GetOptions(craneOpts...)
+
 	maxRetries := cfg.MaxRetries
 	for _, imgData := range lock.Images {
 
@@ -145,7 +149,10 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				if err := pushImage(imgData, imagesDir, o); err != nil {
 					return err
 				}
-				if err := artifacts.PushImageSignatures(context.Background(), imgData, artifactsDir); err != nil {
+				if err := artifacts.PushImageSignatures(context.Background(),
+					imgData,
+					artifactsDir,
+					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local signature stored", imgData.Image)
 					} else {
@@ -155,7 +162,10 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					p.UpdateTitle(fmt.Sprintf("Pushed image %q signature", imgData.Image))
 				}
 
-				if err := artifacts.PushImageMetadata(context.Background(), imgData, artifactsDir); err != nil {
+				if err := artifacts.PushImageMetadata(context.Background(),
+					imgData,
+					artifactsDir,
+					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)
 					} else {
@@ -214,13 +224,6 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options)
 		return fmt.Errorf("failed to parse image reference %q: %w", imgData.Image, err)
 	}
 
-	// Hack -- needs to respect insecure flag instead
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	o.Remote = append(o.Remote, remote.WithTransport(httpClient.Transport))
 	if err := remote.WriteIndex(ref, idx, o.Remote...); err != nil {
 		return fmt.Errorf("failed to write image index: %w", err)
 	}
