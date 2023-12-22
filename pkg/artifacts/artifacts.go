@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"crypto/tls"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,10 +40,18 @@ var (
 // Config defines the configuration when pulling/pushing artifacts to a registry
 type Config struct {
 	ResolveReference bool
+	InsecureMode     bool
 }
 
 // Option defines a Config option
 type Option func(*Config)
+
+// WithInsecureMode configures Insecure transport
+func WithInsecureMode(insecure bool) func(cfg *Config) {
+	return func(cfg *Config) {
+		cfg.InsecureMode = insecure
+	}
+}
 
 // WithResolveReference configures the ResolveReference setting
 func WithResolveReference(v bool) func(cfg *Config) {
@@ -56,14 +62,14 @@ func WithResolveReference(v bool) func(cfg *Config) {
 
 // NewConfig creates a new Config
 func NewConfig(opts ...Option) *Config {
-	cfg := &Config{ResolveReference: true}
+	cfg := &Config{ResolveReference: true, InsecureMode: false}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 	return cfg
 }
 
-func getImageTagAndDigest(image string) (string, string, error) {
+func getImageTagAndDigest(image string, opts ...Option) (string, string, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to parse image reference: %w", err)
@@ -74,13 +80,12 @@ func getImageTagAndDigest(image string) (string, string, error) {
 
 	switch v := ref.(type) {
 	case name.Tag:
-		// Hack -- needs to respect insecure flag instead
-		httpClient := &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
+		cfg := NewConfig(opts...)
+		craneOpts := make([]crane.Option, 0)
+		if cfg.InsecureMode {
+			craneOpts = append(craneOpts, crane.Insecure)
 		}
-		desc, err := imagelock.GetImageRemoteDescriptor(image, crane.WithTransport(httpClient.Transport))
+		desc, err := imagelock.GetImageRemoteDescriptor(image, craneOpts...)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting descriptor: %w", err)
 		}
@@ -100,8 +105,8 @@ func getImageTagAndDigest(image string) (string, string, error) {
 	return imgTag, hex, nil
 }
 
-func getImageArtifactsDir(image *imagelock.ChartImage, destDir string, suffix string) (string, error) {
-	imgTag, _, err := getImageTagAndDigest(image.Image)
+func getImageArtifactsDir(image *imagelock.ChartImage, destDir string, suffix string, opts ...Option) (string, error) {
+	imgTag, _, err := getImageTagAndDigest(image.Image, opts...)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse image reference: %w", err)
 	}
@@ -120,7 +125,7 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 		return "", fmt.Errorf("failed to get image repository: %w", err)
 	}
 
-	imgTag, hex, err := getImageTagAndDigest(image)
+	imgTag, hex, err := getImageTagAndDigest(image, opts...)
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +176,7 @@ func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, opt
 func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 
-	dir, err := getImageArtifactsDir(image, destDir, "metadata")
+	dir, err := getImageArtifactsDir(image, destDir, "metadata", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
@@ -182,7 +187,7 @@ func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 // PushImageSignatures pushes a oci-layout directory to the registry as the image signature
 func PushImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
-	dir, err := getImageArtifactsDir(image, destDir, "sig")
+	dir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
@@ -213,7 +218,7 @@ func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix s
 	}
 
 	var tag string
-	imgTag, hex, err := getImageTagAndDigest(image)
+	imgTag, hex, err := getImageTagAndDigest(image, opts...)
 	if err != nil {
 		return "", err
 	}
@@ -251,7 +256,7 @@ func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix s
 func PullImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
 
-	dir, err := getImageArtifactsDir(image, destDir, "metadata")
+	dir, err := getImageArtifactsDir(image, destDir, "metadata", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
@@ -283,7 +288,7 @@ func pullAssetMetadata(ctx context.Context, imageRef string, dir string, opts ..
 // PullImageSignatures pulls the image signature and stores it locally as an oci-layout
 func PullImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
-	dir, err := getImageArtifactsDir(image, destDir, "sig")
+	dir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}

@@ -18,6 +18,14 @@ type Configuration struct {
 	ArtifactsDir   string
 	FetchArtifacts bool
 	MaxRetries     int
+	InsecureMode   bool
+}
+
+// WithInsecureMode configures Insecure transport
+func WithInsecureMode(insecure bool) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.InsecureMode = insecure
+	}
 }
 
 // WithArtifactsDir configures the ArtifactsDir
@@ -65,6 +73,7 @@ func NewConfiguration(opts ...Option) *Configuration {
 		FetchArtifacts: false,
 		MaxRetries:     3,
 		Log:            log.NewSilentLogger(),
+		InsecureMode:   false,
 	}
 	for _, opt := range opts {
 		opt(cfg)
