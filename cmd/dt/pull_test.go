@@ -51,8 +51,8 @@ func (suite *CmdSuite) TestPullCommand() {
 		suite.Require().DirExists(imagesDir)
 		for _, imgData := range images {
 			for _, digestData := range imgData.Digests {
-				imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.tar", digestData.Digest.Encoded()))
-				suite.Assert().FileExists(imgFile)
+				imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+				suite.Assert().DirExists(imgDir)
 			}
 		}
 	}

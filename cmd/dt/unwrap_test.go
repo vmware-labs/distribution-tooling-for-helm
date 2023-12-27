@@ -115,10 +115,10 @@ func writeSampleImages(imageName string, imageTag string, dir string) ([]tu.Imag
 			return nil, fmt.Errorf("failed to get image digest: %w", err)
 		}
 
-		imgFileName := filepath.Join(dir, fmt.Sprintf("%s.tar", d.Hex))
+		imgDir := filepath.Join(dir, fmt.Sprintf("%s.layout", d.Hex))
 
-		if err := crane.Save(img, fullImageName, imgFileName); err != nil {
-			return nil, fmt.Errorf("failed to save image %q to %q: %w", fullImageName, imgFileName, err)
+		if err := crane.SaveOCI(img, imgDir); err != nil {
+			return nil, fmt.Errorf("failed to save image %q to %q: %w", fullImageName, imgDir, err)
 		}
 
 	}
