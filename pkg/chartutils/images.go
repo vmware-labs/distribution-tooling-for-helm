@@ -194,14 +194,14 @@ func loadImage(path string) (v1.Image, error) {
 	if !stat.IsDir() {
 		img, err := crane.Load(path)
 		if err != nil {
-			return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
+			return nil, fmt.Errorf("could not load %q as tarball: %w", path, err)
 		}
 		return img, nil
 	}
 
 	l, err := layout.ImageIndexFromPath(path)
 	if err != nil {
-		return nil, fmt.Errorf("loading %s as OCI layout: %w", path, err)
+		return nil, fmt.Errorf("could load %q as OCI layout: %w", path, err)
 	}
 	m, err := l.IndexManifest()
 	if err != nil {
@@ -222,7 +222,7 @@ func buildImageIndex(image *imagelock.ChartImage, imagesDir string) (v1.ImageInd
 
 	base := mutate.IndexMediaType(empty.Index, types.DockerManifestList)
 	for _, dgstData := range image.Digests {
-		imgDir := getImageLayourDir(imagesDir, dgstData)
+		imgDir := getImageLayoutDir(imagesDir, dgstData)
 
 		img, err := loadImage(imgDir)
 		if err != nil {
@@ -264,12 +264,12 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options)
 	return nil
 }
 
-func getImageLayourDir(imagesDir string, dgst imagelock.DigestInfo) string {
+func getImageLayoutDir(imagesDir string, dgst imagelock.DigestInfo) string {
 	return filepath.Join(imagesDir, fmt.Sprintf("%s.layout", dgst.Digest.Encoded()))
 }
 
 func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o crane.Options) (string, error) {
-	imgDir := getImageLayourDir(imagesDir, digest)
+	imgDir := getImageLayoutDir(imagesDir, digest)
 
 	src := fmt.Sprintf("%s@%s", image, digest.Digest)
 	ref, err := name.ParseReference(src, o.Name...)
