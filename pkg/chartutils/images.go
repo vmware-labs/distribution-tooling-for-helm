@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -184,18 +185,49 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	return nil
 }
 
+func loadImage(path string) (v1.Image, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if !stat.IsDir() {
+		img, err := crane.Load(path)
+		if err != nil {
+			return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
+		}
+		return img, nil
+	}
+
+	l, err := layout.ImageIndexFromPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("loading %s as OCI layout: %w", path, err)
+	}
+	m, err := l.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+	if len(m.Manifests) != 1 {
+		return nil, fmt.Errorf("layout contains too many entries (%d)", len(m.Manifests))
+	}
+	desc := m.Manifests[0]
+	if desc.MediaType.IsImage() {
+		return l.Image(desc.Digest)
+	}
+	return nil, fmt.Errorf("layout contains non-image (mediaType: %q)", desc.MediaType)
+}
+
 func buildImageIndex(image *imagelock.ChartImage, imagesDir string) (v1.ImageIndex, error) {
 	adds := make([]mutate.IndexAddendum, 0, len(image.Digests))
 
 	base := mutate.IndexMediaType(empty.Index, types.DockerManifestList)
 	for _, dgstData := range image.Digests {
-		imgFileName := getImageTarFile(imagesDir, dgstData)
+		imgDir := getImageLayourDir(imagesDir, dgstData)
 
-		img, err := crane.Load(imgFileName)
+		img, err := loadImage(imgDir)
 		if err != nil {
-			return nil, fmt.Errorf("loading %s as tarball: %w", imgFileName, err)
+			return nil, fmt.Errorf("failed to load image %q: %w", imgDir, err)
 		}
-
 		newDesc, err := partial.Descriptor(img)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create descriptor: %w", err)
@@ -205,6 +237,7 @@ func buildImageIndex(image *imagelock.ChartImage, imagesDir string) (v1.ImageInd
 			return nil, fmt.Errorf("failed to obtain image config file: %w", err)
 		}
 		newDesc.Platform = cf.Platform()
+
 		adds = append(adds, mutate.IndexAddendum{
 			Add:        img,
 			Descriptor: *newDesc,
@@ -231,12 +264,12 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options)
 	return nil
 }
 
-func getImageTarFile(imagesDir string, dgst imagelock.DigestInfo) string {
-	return filepath.Join(imagesDir, fmt.Sprintf("%s.tar", dgst.Digest.Encoded()))
+func getImageLayourDir(imagesDir string, dgst imagelock.DigestInfo) string {
+	return filepath.Join(imagesDir, fmt.Sprintf("%s.layout", dgst.Digest.Encoded()))
 }
 
 func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o crane.Options) (string, error) {
-	imgFileName := getImageTarFile(imagesDir, digest)
+	imgDir := getImageLayourDir(imagesDir, digest)
 
 	src := fmt.Sprintf("%s@%s", image, digest.Digest)
 	ref, err := name.ParseReference(src, o.Name...)
@@ -251,9 +284,15 @@ func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o cr
 	if err != nil {
 		return "", err
 	}
-
-	if err := crane.Save(img, image, imgFileName); err != nil {
-		return "", fmt.Errorf("failed to save image %q to %q: %w", image, imgFileName, err)
+	// We do not want to keep adding images to the index so we
+	// start fresh
+	if utils.FileExists(imgDir) {
+		if err := os.RemoveAll(imgDir); err != nil {
+			return "", fmt.Errorf("failed to remove existing image dir %q: %v", imgDir, err)
+		}
 	}
-	return imgFileName, nil
+	if err := crane.SaveOCI(img, imgDir); err != nil {
+		return "", fmt.Errorf("failed to save image %q to %q: %w", image, imgDir, err)
+	}
+	return imgDir, nil
 }
