@@ -14,8 +14,7 @@ import (
 
 var pullCmd = newPullCommand()
 
-func pullChartImages(chart wrapping.Lockable, opts ...chartutils.Option) error {
-	imagesDir := chart.ImagesDir()
+func pullChartImages(chart wrapping.Lockable, imagesDir string, opts ...chartutils.Option) error {
 	lockFile := chart.LockFilePath()
 
 	lock, err := imagelock.FromYAMLFile(lockFile)
@@ -38,6 +37,7 @@ func compressChart(ctx context.Context, dir, prefix, outputFile string) error {
 
 func newPullCommand() *cobra.Command {
 	var outputFile string
+	var imagesDir string
 
 	cmd := &cobra.Command{
 		Use:   "pull CHART_PATH",
@@ -60,9 +60,13 @@ func newPullCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to load chart: %w", err)
 			}
+			if imagesDir == "" {
+				imagesDir = chart.ImagesDir()
+			}
 			if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
 				if err := pullChartImages(
 					chart,
+					imagesDir,
 					chartutils.WithLog(childLog),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(childLog.ProgressBar()),
@@ -103,5 +107,7 @@ func newPullCommand() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
+	cmd.PersistentFlags().StringVar(&imagesDir, "images-dir", imagesDir,
+		"directory where the images will be pulled to. If not empty, it overrides the default images directory inside the chart directory")
 	return cmd
 }

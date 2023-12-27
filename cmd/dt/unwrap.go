@@ -135,6 +135,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, l log.Sec
 	}
 	if err := pushChartImages(
 		wrap,
+		wrap.ImagesDir(),
 		chartutils.WithLog(log.SilentLog),
 		chartutils.WithContext(ctx),
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
