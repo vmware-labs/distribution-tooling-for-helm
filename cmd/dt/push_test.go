@@ -87,7 +87,6 @@ func (suite *CmdSuite) TestPushCommand() {
 		chartName := "test"
 
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-		imageName := "test:mytag"
 
 		imageData := tu.ImageData{Name: "test", Image: "test:mytag"}
 		architectures := []string{
@@ -119,8 +118,8 @@ func (suite *CmdSuite) TestPushCommand() {
 			if err != nil {
 				t.Fatal(err)
 			}
-			imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.tar", d.Hex))
-			if err := crane.Save(img, imageName, imgFile); err != nil {
+			imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", d.Hex))
+			if err := crane.SaveOCI(img, imgDir); err != nil {
 				t.Fatal(err)
 			}
 		}

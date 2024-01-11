@@ -61,8 +61,8 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 
 		for _, imgData := range images {
 			for _, digestData := range imgData.Digests {
-				imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.tar", digestData.Digest.Encoded()))
-				suite.Assert().FileExists(imgFile)
+				imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+				suite.Assert().DirExists(imgDir)
 			}
 		}
 	})
@@ -90,7 +90,6 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 		chartName := "test"
 
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-		imageName := "test:mytag"
 
 		imageData := tu.ImageData{Name: "test", Image: "test:mytag"}
 		architectures := []string{
@@ -122,8 +121,8 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 			if err != nil {
 				t.Fatal(err)
 			}
-			imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.tar", d.Hex))
-			if err := crane.Save(img, imageName, imgFile); err != nil {
+			imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", d.Hex))
+			if err := crane.SaveOCI(img, imgFile); err != nil {
 				t.Fatal(err)
 			}
 		}
