@@ -121,8 +121,8 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 	require.DirExists(t, imagesDir)
 	for _, imgData := range cfg.Images {
 		for _, digestData := range imgData.Digests {
-			imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.tar", digestData.Digest.Encoded()))
-			assert.FileExists(t, imgFile)
+			imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+			assert.DirExists(t, imgDir)
 		}
 	}
 	wrappedChartDir := filepath.Join(tmpDir, "chart")
