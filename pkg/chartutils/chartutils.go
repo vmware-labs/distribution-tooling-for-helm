@@ -15,41 +15,57 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
+// ErrNoImagesToAnnotate is returned when the chart can't be annotated because
+// there are no container images
+var ErrNoImagesToAnnotate = errors.New("no container images to annotate found")
+
 // AnnotateChart parses the values.yaml file in the chart specified by chartPath and
 // annotates the Chart with the list of found images
 func AnnotateChart(chartPath string, opts ...Option) error {
+	n, err := annotateChart(chartPath, opts...)
+	if n == 0 && err == nil {
+		return ErrNoImagesToAnnotate
+	}
+
+	return err
+}
+
+func annotateChart(chartPath string, opts ...Option) (int, error) {
 	cfg := NewConfiguration(opts...)
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load Helm chart: %v", err)
+		return 0, fmt.Errorf("failed to load Helm chart: %v", err)
 	}
 
 	chartRoot, err := GetChartRoot(chartPath)
 	if err != nil {
-		return fmt.Errorf("cannot determine Helm chart root: %v", err)
+		return 0, fmt.Errorf("cannot determine Helm chart root: %v", err)
 	}
 
 	res, err := FindImageElementsInValuesFile(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to find image elements: %v", err)
+		return 0, fmt.Errorf("failed to find image elements: %v", err)
 	}
 
+	nImages := len(res)
 	// Make sure order is always the same
 	sort.Sort(res)
 
 	chartFile := filepath.Join(chartRoot, "Chart.yaml")
 
 	if err := writeAnnotationsToChart(res, chartFile, cfg); err != nil {
-		return fmt.Errorf("failed to serialize annotations: %v", err)
+		return 0, fmt.Errorf("failed to serialize annotations: %v", err)
 	}
 	var allErrors error
 	for _, dep := range chart.Dependencies() {
 		subChart := filepath.Join(chartRoot, "charts", dep.Name())
-		if err := AnnotateChart(subChart, opts...); err != nil {
+		n, err := annotateChart(subChart, opts...)
+		if err != nil {
 			allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
 		}
+		nImages += n
 	}
-	return allErrors
+	return nImages, allErrors
 }
 
 // GetChartRoot returns the chart root directory to the chart provided (which may point to its Chart.yaml file)

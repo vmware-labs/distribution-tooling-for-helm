@@ -89,7 +89,7 @@ func (suite *CmdSuite) TestAnnotateCommand() {
 				map[string]interface{}{"ServerURL": serverURL},
 			))
 
-			dt("charts", "annotate", chartDir).AssertSuccess(t)
+			dt("charts", "annotate", chartDir).AssertSuccessMatch(t, regexp.MustCompile(`No container images found`))
 
 			tu.AssertChartAnnotations(t, chartDir, defaultAnnotationsKey, make([]tu.AnnotationEntry, 0))
 
