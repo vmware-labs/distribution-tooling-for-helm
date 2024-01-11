@@ -115,6 +115,7 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		fetchArtifacts, _ := flags.GetBool("fetch-artifacts")
 		if err := pullChartImages(
 			wrap,
+			wrap.ImagesDir(),
 			chartutils.WithLog(childLog),
 			chartutils.WithContext(ctx),
 			chartutils.WithFetchArtifacts(fetchArtifacts),

@@ -14,10 +14,7 @@ import (
 
 var pushCmd = newPushCmd()
 
-func pushChartImages(wrap wrapping.Wrap, opts ...chartutils.Option) error {
-
-	imagesDir := wrap.ImagesDir()
-
+func pushChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
 	lockFile := wrap.LockFilePath()
 
 	fh, err := os.Open(lockFile)
@@ -35,8 +32,10 @@ func pushChartImages(wrap wrapping.Wrap, opts ...chartutils.Option) error {
 }
 
 func newPushCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "push CHART_PATH OCI_URI",
+	var imagesDir string
+
+	cmd := &cobra.Command{
+		Use:   "push CHART_PATH",
 		Short: "Pushes the images from Images.lock",
 		Long:  "Pushes the images found on the Images.lock from the given Helm chart path into their current registries",
 		Example: `  # Push images from a sample local Helm chart
@@ -57,9 +56,13 @@ func newPushCmd() *cobra.Command {
 				return fmt.Errorf("failed to load chart: %w", err)
 			}
 
+			if imagesDir == "" {
+				imagesDir = chart.ImagesDir()
+			}
 			if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
 				if err := pushChartImages(
 					chart,
+					imagesDir,
 					chartutils.WithLog(log.SilentLog),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
@@ -79,4 +82,7 @@ func newPushCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.PersistentFlags().StringVar(&imagesDir, "images-dir", imagesDir,
+		"directory containing the images to push. If not empty, it overrides the default images directory inside the chart directory")
+	return cmd
 }
