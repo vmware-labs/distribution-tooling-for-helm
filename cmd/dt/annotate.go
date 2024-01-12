@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -30,9 +31,14 @@ Use it cautiously. Very often the complete list of images cannot be guessed from
 					chartutils.WithAnnotationsKey(getAnnotationsKey()),
 					chartutils.WithLog(l),
 				)
+
 			})
 
 			if err != nil {
+				if errors.Is(err, chartutils.ErrNoImagesToAnnotate) {
+					l.Warnf("No container images found to be annotated")
+					return nil
+				}
 				return l.Failf("failed to annotate Helm chart %q: %v", chartPath, err)
 			}
 

@@ -15,9 +15,14 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
+// ErrNoImagesToAnnotate is returned when the chart can't be annotated because
+// there are no container images
+var ErrNoImagesToAnnotate = errors.New("no container images to annotate found")
+
 // AnnotateChart parses the values.yaml file in the chart specified by chartPath and
 // annotates the Chart with the list of found images
 func AnnotateChart(chartPath string, opts ...Option) error {
+	var annotated bool
 	cfg := NewConfiguration(opts...)
 	chart, err := loader.Load(chartPath)
 	if err != nil {
@@ -36,19 +41,34 @@ func AnnotateChart(chartPath string, opts ...Option) error {
 
 	// Make sure order is always the same
 	sort.Sort(res)
+	if len(res) > 0 {
+		annotated = true
+	}
 
 	chartFile := filepath.Join(chartRoot, "Chart.yaml")
 
 	if err := writeAnnotationsToChart(res, chartFile, cfg); err != nil {
 		return fmt.Errorf("failed to serialize annotations: %v", err)
 	}
+
 	var allErrors error
 	for _, dep := range chart.Dependencies() {
 		subChart := filepath.Join(chartRoot, "charts", dep.Name())
 		if err := AnnotateChart(subChart, opts...); err != nil {
-			allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
+			// Ignore the error if its ErrNoImagesToAnnotate
+			if !errors.Is(err, ErrNoImagesToAnnotate) {
+				allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
+			}
+		} else {
+			// No error means the dependency was annotated
+			annotated = true
 		}
 	}
+
+	if !annotated && allErrors == nil {
+		return ErrNoImagesToAnnotate
+	}
+
 	return allErrors
 }
 
