@@ -22,50 +22,54 @@ var ErrNoImagesToAnnotate = errors.New("no container images to annotate found")
 // AnnotateChart parses the values.yaml file in the chart specified by chartPath and
 // annotates the Chart with the list of found images
 func AnnotateChart(chartPath string, opts ...Option) error {
-	n, err := annotateChart(chartPath, opts...)
-	if n == 0 && err == nil {
-		return ErrNoImagesToAnnotate
-	}
-
-	return err
-}
-
-func annotateChart(chartPath string, opts ...Option) (int, error) {
+	var annotated bool
 	cfg := NewConfiguration(opts...)
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to load Helm chart: %v", err)
+		return fmt.Errorf("failed to load Helm chart: %v", err)
 	}
 
 	chartRoot, err := GetChartRoot(chartPath)
 	if err != nil {
-		return 0, fmt.Errorf("cannot determine Helm chart root: %v", err)
+		return fmt.Errorf("cannot determine Helm chart root: %v", err)
 	}
 
 	res, err := FindImageElementsInValuesFile(chartPath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to find image elements: %v", err)
+		return fmt.Errorf("failed to find image elements: %v", err)
 	}
 
-	nImages := len(res)
 	// Make sure order is always the same
 	sort.Sort(res)
+	if len(res) > 0 {
+		annotated = true
+	}
 
 	chartFile := filepath.Join(chartRoot, "Chart.yaml")
 
 	if err := writeAnnotationsToChart(res, chartFile, cfg); err != nil {
-		return 0, fmt.Errorf("failed to serialize annotations: %v", err)
+		return fmt.Errorf("failed to serialize annotations: %v", err)
 	}
+
 	var allErrors error
 	for _, dep := range chart.Dependencies() {
 		subChart := filepath.Join(chartRoot, "charts", dep.Name())
-		n, err := annotateChart(subChart, opts...)
-		if err != nil {
-			allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
+		if err := AnnotateChart(subChart, opts...); err != nil {
+			// Ignore the error if its ErrNoImagesToAnnotate
+			if !errors.Is(err, ErrNoImagesToAnnotate) {
+				allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
+			}
+		} else {
+			// No error means the dependency was annotated
+			annotated = true
 		}
-		nImages += n
 	}
-	return nImages, allErrors
+
+	if !annotated && allErrors == nil {
+		return ErrNoImagesToAnnotate
+	}
+
+	return allErrors
 }
 
 // GetChartRoot returns the chart root directory to the chart provided (which may point to its Chart.yaml file)
