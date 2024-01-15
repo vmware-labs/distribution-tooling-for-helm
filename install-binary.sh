@@ -83,10 +83,14 @@ verifySupported() {
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
   version="$(< "$HELM_PLUGIN_DIR/$PLUGIN_MANIFEST" grep "version" | cut -d '"' -f 2)"
+  ext="tar.gz"
+  if [ "$OS" = "windows" ]; then
+    ext="zip"
+  fi
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
-    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.${ext}"
   else
-    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/latest/download/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/latest/download/${PROJECT_NAME}_${version}_${OS}_${ARCH}.${ext}"
   fi
 }
 
@@ -119,10 +123,12 @@ downloadFile() {
 # installFile verifies the SHA256 for the file, then unpacks and
 # installs it.
 installFile() {
-  tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
   HELM_TMP_BIN="$HELM_TMP/$BINARY_NAME"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
+    unzip "$PLUGIN_TMP_FILE" -d "$HELM_TMP"
+  else
+    tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
   fi
   echo "Preparing to install into ${HELM_PLUGIN_DIR}"
   mkdir -p "$HELM_PLUGIN_DIR/bin"

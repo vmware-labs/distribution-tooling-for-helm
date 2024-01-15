@@ -34,6 +34,10 @@ Provided you have [Helm](https://helm.sh) then you can install this tool as a pl
 $ helm plugin install https://github.com/vmware-labs/distribution-tooling-for-helm
 ```
 
+> **Note:** Windows installation
+>
+> If installing on Windows, the above command must be run in a bash emulator such as Git Bash. 
+
 ### Downloading and using standalone
 
 Fetch the latest available release from the [Releases](https://github.com/vmware-labs/distribution-tooling-for-helm/releases) section.
