@@ -83,10 +83,14 @@ verifySupported() {
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
   version="$(< "$HELM_PLUGIN_DIR/$PLUGIN_MANIFEST" grep "version" | cut -d '"' -f 2)"
+  ext="tar.gz"
+  if [ "$OS" = "windows" ]; then
+    ext="zip"
+  fi
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
-    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/download/v${version}/${PROJECT_NAME}_${version}_${OS}_${ARCH}.${ext}"
   else
-    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/latest/download/${PROJECT_NAME}_${version}_${OS}_${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${PROJECT_GH}/releases/latest/download/${PROJECT_NAME}_${version}_${OS}_${ARCH}.${ext}"
   fi
 }
 
