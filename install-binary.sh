@@ -123,10 +123,12 @@ downloadFile() {
 # installFile verifies the SHA256 for the file, then unpacks and
 # installs it.
 installFile() {
-  tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
   HELM_TMP_BIN="$HELM_TMP/$BINARY_NAME"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
+    unzip "$PLUGIN_TMP_FILE" -d "$HELM_TMP"
+  else
+    tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
   fi
   echo "Preparing to install into ${HELM_PLUGIN_DIR}"
   mkdir -p "$HELM_PLUGIN_DIR/bin"
