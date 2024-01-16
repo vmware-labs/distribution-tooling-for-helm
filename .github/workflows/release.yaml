@@ -20,15 +20,12 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch Version
-        id: version
-        run: |
-          PLUGIN_VERSION=$(echo "${{ inputs.tag }}" | tr -d 'v')
-          echo "::set-output name=PLUGIN_VERSION::$PLUGIN_VERSION"
+        run: echo PLUGIN_VERSION=$(echo "${{ inputs.tag }}" | tr -d 'v') >> "$GITHUB_ENV"
 
       - name: Update Version
         run: |
-          sed -i 's/version: ".*"/version: "${{ steps.version.outputs.PLUGIN_VERSION }}"/' plugin.yaml
-          sed -i 's/var Version = ".*"/var Version = "${{ steps.version.outputs.PLUGIN_VERSION }}"/' cmd/dt/version.go
+          sed -i 's/version: ".*"/version: "$PLUGIN_VERSION"/' plugin.yaml
+          sed -i 's/var Version = ".*"/var Version = "$PLUGIN_VERSION"/' cmd/dt/version.go
           git add plugin.yaml cmd/dt/version.go
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
