@@ -1,17 +1,17 @@
 name: Release
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (i.e. v1.2.3)'
-        required: true
-        type: string
+  pull_request_target:
+    types:
+      - closed
+    paths:
+      - 'plugin.yaml'
 
 permissions:
   contents: write
 
 jobs:
   Release:
+    if: (github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,19 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch Version
-        run: echo PLUGIN_VERSION=$(echo "${{ inputs.tag }}" | tr -d 'v') >> "$GITHUB_ENV"
-
-      - name: Update Version
-        run: |
-          sed -i "s/version: \".*\"/version: \"$PLUGIN_VERSION\"/" plugin.yaml
-          sed -i "s/var Version = \".*\"/var Version = \"$PLUGIN_VERSION\"/" cmd/dt/version.go
-          git add plugin.yaml cmd/dt/version.go
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-          git commit -m 'Prepare release ${{ inputs.tag }}'
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2) >> "$GITHUB_ENV"
 
       - name: Set Golang
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
@@ -43,7 +31,7 @@ jobs:
         run: make build
 
       - name: Create tag
-        run: git tag ${{ github.event.inputs.tag }}
+        run: git tag $PLUGIN_VERSION
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@336e29918d653399e599bfca99fadc1d7ffbc9f7 # v4.3.0

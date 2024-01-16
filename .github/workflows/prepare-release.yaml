@@ -1,0 +1,39 @@
+name: Prepare Release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (i.e. v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  Release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3
+        with:
+          fetch-depth: 0
+
+      - name: Config Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Fetch Version
+        run: echo PLUGIN_VERSION=$(echo "${{ inputs.tag }}" | tr -d 'v') >> "$GITHUB_ENV"
+
+      - name: Update Version
+        run: |
+          sed -i "s/version: \".*\"/version: \"$PLUGIN_VERSION\"/" plugin.yaml
+          sed -i "s/var Version = \".*\"/var Version = \"$PLUGIN_VERSION\"/" cmd/dt/version.go
+          git checkout -B release/$PLUGIN_VERSION
+          git add plugin.yaml cmd/dt/version.go
+          git commit -m 'Prepare release ${{ inputs.tag }}'
+          git push origin release/$PLUGIN_VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
