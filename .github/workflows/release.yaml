@@ -24,8 +24,8 @@ jobs:
 
       - name: Update Version
         run: |
-          sed -i 's/version: ".*"/version: "$PLUGIN_VERSION"/' plugin.yaml
-          sed -i 's/var Version = ".*"/var Version = "$PLUGIN_VERSION"/' cmd/dt/version.go
+          sed -i "s/version: \".*\"/version: \"$PLUGIN_VERSION\"/" plugin.yaml
+          sed -i "s/var Version = \".*\"/var Version = \"$PLUGIN_VERSION\"/" cmd/dt/version.go
           git add plugin.yaml cmd/dt/version.go
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
