@@ -19,6 +19,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Print GitHub context
+        run: echo "$GITHUB_CONTEXT"
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }} 
+
       - name: Fetch Version
         run: echo PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2) >> "$GITHUB_ENV"
 
