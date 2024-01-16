@@ -34,6 +34,7 @@ jobs:
           git checkout -B release/$PLUGIN_VERSION
           git add plugin.yaml cmd/dt/version.go
           git commit -m 'Prepare release ${{ inputs.tag }}'
+          git push origin release/$PLUGIN_VERSION
 
       - name: Create PR
         run: gh pr create --fill
