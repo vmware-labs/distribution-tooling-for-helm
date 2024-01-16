@@ -37,6 +37,6 @@ jobs:
           git push origin release/$PLUGIN_VERSION
 
       - name: Create PR
-        run: gh pr create --fill
+        run: gh pr create --fill --base main --repo $GITHUB_REPOSITORY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
