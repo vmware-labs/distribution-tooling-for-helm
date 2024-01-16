@@ -106,7 +106,7 @@ func TarContext(parentCtx context.Context, sourceDir string, filename string, cf
 			if skip(trimmedPath) {
 				return nil
 			}
-			relPath := filepath.Join(prefix, trimmedPath)
+			relPath := filepath.ToSlash(filepath.Join(prefix, trimmedPath))
 
 			return tarFile(tarWriter, path, relPath, info)
 		}
