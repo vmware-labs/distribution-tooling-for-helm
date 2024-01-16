@@ -9,7 +9,7 @@ import (
 )
 
 // Version is the tool version
-var Version = "$PLUGIN_VERSION"
+var Version = "0.3.5"
 
 // BuildDate is the tool build date
 var BuildDate = ""

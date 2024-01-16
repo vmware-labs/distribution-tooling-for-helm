@@ -1,5 +1,5 @@
 name: "dt"
-version: "$PLUGIN_VERSION"
+version: "0.3.5"
 usage: "Distribution Tooling for Helm"
 description: "Distribution Tooling for Helm"
 command: "$HELM_PLUGIN_DIR/bin/dt"
