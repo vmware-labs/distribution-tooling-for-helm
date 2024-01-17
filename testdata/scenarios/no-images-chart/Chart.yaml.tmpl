@@ -1,0 +1,16 @@
+name: {{or .Name "WordPress"}}
+version: {{or .Version "1.0.0"}}
+annotations:
+    category: CMS
+    licenses: Apache-2.0
+appVersion: {{if .AppVersion}}{{.AppVersion}}{{else}}6.2.2{{end}}
+{{if .Dependencies }}
+{{if gt (len .Dependencies) 0 }}
+dependencies:
+{{- range .Dependencies}}
+    - name: {{.Name}}
+      repository: {{.Repository}}
+      version: {{.Version}}
+{{end -}}
+{{end}}
+{{end}}
