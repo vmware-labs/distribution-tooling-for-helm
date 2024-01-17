@@ -2,6 +2,7 @@ package chartutils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,9 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
+
+// ErrNoImagesFound is returned when no images are found in the Images.lock file
+var ErrNoImagesFound = errors.New("no images found in Images.lock")
 
 func getNumberOfArtifacts(images imagelock.ImageList) int {
 	n := 0
@@ -49,6 +53,10 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 		return fmt.Errorf("failed to create bundle directory: %v", err)
 	}
 	l := cfg.Log
+
+	if getNumberOfArtifacts(lock.Images) == 0 {
+		return ErrNoImagesFound
+	}
 
 	p, _ := cfg.ProgressBar.WithTotal(getNumberOfArtifacts(lock.Images)).UpdateTitle("Pulling Images").Start()
 	defer p.Stop()

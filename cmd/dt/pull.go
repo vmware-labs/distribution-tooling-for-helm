@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -24,7 +25,7 @@ func pullChartImages(chart wrapping.Lockable, imagesDir string, opts ...chartuti
 	if err := chartutils.PullImages(lock, imagesDir,
 		opts...,
 	); err != nil {
-		return fmt.Errorf("failed to pull images: %v", err)
+		return fmt.Errorf("failed to pull images: %w", err)
 	}
 	return nil
 }
@@ -63,6 +64,8 @@ func newPullCommand() *cobra.Command {
 			if imagesDir == "" {
 				imagesDir = chart.ImagesDir()
 			}
+
+			var imagesPulled bool
 			if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
 				if err := pullChartImages(
 					chart,
@@ -72,8 +75,13 @@ func newPullCommand() *cobra.Command {
 					chartutils.WithProgressBar(childLog.ProgressBar()),
 					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 				); err != nil {
-					return childLog.Failf("%v", err)
+					if !errors.Is(err, chartutils.ErrNoImagesFound) {
+						return childLog.Failf("%v", err)
+					}
+					childLog.Warnf("No images found in Images.lock")
+					return nil
 				}
+				imagesPulled = true
 				childLog.Infof("All images pulled successfully")
 				return nil
 			}); err != nil {
@@ -100,8 +108,20 @@ func newPullCommand() *cobra.Command {
 				successMessage = fmt.Sprintf("All images pulled successfully into %q", chart.ImagesDir())
 			}
 
+			var warningMessage string
+			if outputFile != "" {
+				warningMessage = fmt.Sprintf("No images found in Images.lock. Chart compressed into %q", outputFile)
+			} else {
+				warningMessage = "No images found in Images.lock"
+			}
+
 			l.Printf(terminalSpacer)
-			l.Successf(successMessage)
+
+			if imagesPulled {
+				l.Successf(successMessage)
+			} else {
+				l.Warnf(warningMessage)
+			}
 
 			return nil
 		},

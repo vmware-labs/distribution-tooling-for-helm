@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	glog "log"
 	"path/filepath"
@@ -122,7 +123,11 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 			chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 			chartutils.WithProgressBar(childLog.ProgressBar()),
 		); err != nil {
-			return childLog.Failf("%v", err)
+			if !errors.Is(err, chartutils.ErrNoImagesFound) {
+				return childLog.Failf("%v", err)
+			}
+			childLog.Warnf("No images found in Images.lock")
+			return nil
 		}
 		childLog.Infof("All images pulled successfully")
 		return nil
