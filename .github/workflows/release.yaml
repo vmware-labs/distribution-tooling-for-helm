@@ -1,18 +1,20 @@
 name: Release
 on:
-  pull_request_target:
+  workflow_run:
+    workflows:
+      - CI
     types:
-      - closed
-    paths:
-      - 'plugin.yaml'
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   Release:
-    if: (github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/'))
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, 'Prepare release v') }}
     steps:
       - name: Checkout
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3
@@ -20,7 +22,15 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch Version
-        run: echo PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2) >> "$GITHUB_ENV"
+        run: |
+          PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)
+          LATEST_VERSION=$(git describe --tags --abbrev=0)
+          echo PLUGIN_VERSION=$PLUGIN_VERSION >> "$GITHUB_ENV"
+          echo LATEST_VERSION=$LATEST_VERSION >> "$GITHUB_ENV"
+
+      - name: Check Version
+        if: ${{ env.PLUGIN_VERSION == env.LATEST_VERSION }}
+        run: echo "Plugin version already released. Please make sure you have prepared the release first." && exit 1
 
       - name: Set Golang
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
