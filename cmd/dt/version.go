@@ -28,7 +28,7 @@ var versionCmd = &cobra.Command{
 		if Commit != "" {
 			msg += fmt.Sprintf("Git Commit: %s\n", Commit)
 		}
-		fmt.Printf("%s\n", msg)
+		fmt.Print(msg)
 		os.Exit(0)
 	},
 }
