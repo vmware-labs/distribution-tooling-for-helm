@@ -75,11 +75,11 @@ func newPullCommand() *cobra.Command {
 					chartutils.WithProgressBar(childLog.ProgressBar()),
 					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
 				); err != nil {
-					if !errors.Is(err, chartutils.ErrNoImagesFound) {
-						return childLog.Failf("%v", err)
+					if errors.Is(err, chartutils.ErrNoImagesFound) {
+						childLog.Warnf("No images found in Images.lock")
+						return nil
 					}
-					childLog.Warnf("No images found in Images.lock")
-					return nil
+					return childLog.Failf("%v", err)
 				}
 				imagesPulled = true
 				childLog.Infof("All images pulled successfully")

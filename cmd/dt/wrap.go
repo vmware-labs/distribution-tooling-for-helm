@@ -123,11 +123,11 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 			chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 			chartutils.WithProgressBar(childLog.ProgressBar()),
 		); err != nil {
-			if !errors.Is(err, chartutils.ErrNoImagesFound) {
-				return childLog.Failf("%v", err)
+			if errors.Is(err, chartutils.ErrNoImagesFound) {
+				childLog.Warnf("No images found in Images.lock")
+				return nil
 			}
-			childLog.Warnf("No images found in Images.lock")
-			return nil
+			return childLog.Failf("%v", err)
 		}
 		childLog.Infof("All images pulled successfully")
 		return nil
