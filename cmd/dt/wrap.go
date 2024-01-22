@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	glog "log"
 	"path/filepath"
@@ -112,27 +111,32 @@ func wrapChart(ctx context.Context, inputPath string, outputFile string, platfor
 		}
 	}
 
-	if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
-		fetchArtifacts, _ := flags.GetBool("fetch-artifacts")
-		if err := pullChartImages(
-			wrap,
-			wrap.ImagesDir(),
-			chartutils.WithLog(childLog),
-			chartutils.WithContext(ctx),
-			chartutils.WithFetchArtifacts(fetchArtifacts),
-			chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
-			chartutils.WithProgressBar(childLog.ProgressBar()),
-		); err != nil {
-			if errors.Is(err, chartutils.ErrNoImagesFound) {
-				childLog.Warnf("No images found in Images.lock")
-				return nil
+	lock, err := chart.GetImagesLock()
+	if err != nil {
+		return l.Failf("Failed to load Images.lock: %v", err)
+	}
+
+	if len(lock.Images) == 0 {
+		l.Warnf("No images found in Images.lock")
+	} else {
+		if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
+			fetchArtifacts, _ := flags.GetBool("fetch-artifacts")
+			if err := pullChartImages(
+				wrap,
+				wrap.ImagesDir(),
+				chartutils.WithLog(childLog),
+				chartutils.WithContext(ctx),
+				chartutils.WithFetchArtifacts(fetchArtifacts),
+				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
+				chartutils.WithProgressBar(childLog.ProgressBar()),
+			); err != nil {
+				return childLog.Failf("%v", err)
 			}
-			return childLog.Failf("%v", err)
+			childLog.Infof("All images pulled successfully")
+			return nil
+		}); err != nil {
+			return err
 		}
-		childLog.Infof("All images pulled successfully")
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	if shouldCarvelize(flags) {

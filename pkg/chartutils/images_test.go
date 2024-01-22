@@ -67,7 +67,7 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 		}
 	})
 
-	t.Run("Warning when no images in Images.lock", func(t *testing.T) {
+	t.Run("Error when no images in Images.lock", func(t *testing.T) {
 		chartDir := sb.TempFile()
 
 		images := []tu.ImageData{}
@@ -82,7 +82,7 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 
 		lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
 		require.NoError(err)
-		require.ErrorIs(PullImages(lock, imagesDir), ErrNoImagesFound)
+		require.Error(PullImages(lock, imagesDir))
 
 		require.DirExists(imagesDir)
 

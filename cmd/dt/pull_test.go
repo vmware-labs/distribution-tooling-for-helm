@@ -80,7 +80,7 @@ func (suite *CmdSuite) TestPullCommand() {
 		scenarioDir = fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 		chartDir := createSampleChart(sb.TempFile())
 		dt("images", "pull", chartDir).AssertSuccessMatch(t, "No images found in Images.lock")
-		verifyChartDir(chartDir)
+		require.NoDirExists(filepath.Join(chartDir, "images"))
 	})
 
 	t.Run("Errors", func(t *testing.T) {
@@ -88,7 +88,7 @@ func (suite *CmdSuite) TestPullCommand() {
 			chartDir := createSampleChart(sb.TempFile())
 			require.NoError(os.RemoveAll(filepath.Join(chartDir, "Images.lock")))
 
-			dt("images", "pull", chartDir).AssertErrorMatch(t, `(?s).*failed to read Images\.lock file.*`)
+			dt("images", "pull", chartDir).AssertErrorMatch(t, `Failed to load Images\.lock.*`)
 		})
 	})
 }

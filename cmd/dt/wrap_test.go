@@ -123,11 +123,15 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 	require.NoError(t, utils.Untar(expectedWrapFile, tmpDir, utils.TarConfig{StripComponents: 1}))
 
 	imagesDir := filepath.Join(tmpDir, "images")
-	require.DirExists(t, imagesDir)
-	for _, imgData := range cfg.Images {
-		for _, digestData := range imgData.Digests {
-			imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
-			assert.DirExists(t, imgDir)
+	if len(cfg.Images) == 0 {
+		require.NoDirExists(t, imagesDir)
+	} else {
+		require.DirExists(t, imagesDir)
+		for _, imgData := range cfg.Images {
+			for _, digestData := range imgData.Digests {
+				imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+				assert.DirExists(t, imgDir)
+			}
 		}
 	}
 	wrappedChartDir := filepath.Join(tmpDir, "chart")

@@ -59,6 +59,18 @@ func (c *Chart) LockFilePath() string {
 	return c.AbsFilePath(imagelock.DefaultImagesLockFileName)
 }
 
+// GetImagesLock returns the chart's ImagesLock object
+func (c *Chart) GetImagesLock() (*imagelock.ImagesLock, error) {
+	lockFile := c.LockFilePath()
+
+	lock, err := imagelock.FromYAMLFile(lockFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return lock, nil
+}
+
 // ImageArtifactsDir returns the imags artifacts directory
 func (c *Chart) ImageArtifactsDir() string {
 	return filepath.Join(c.RootDir(), artifacts.HelmArtifactsFolder, "images")
