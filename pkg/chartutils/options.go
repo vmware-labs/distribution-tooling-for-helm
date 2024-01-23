@@ -3,7 +3,7 @@ package chartutils
 import (
 	"context"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
