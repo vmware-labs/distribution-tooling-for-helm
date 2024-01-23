@@ -1,4 +1,5 @@
-package main
+// Package verify defines the verify command
+package verify
 
 import (
 	"context"
@@ -6,13 +7,20 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
-var verifyCmd = newVerifyCmd()
+// Config defines the configuration of the verify command
+type Config struct {
+	AnnotationsKey string
+	Insecure       bool
+}
 
-func verifyLock(chartPath string, lockFile string) error {
+// Lock verifies the images in an Images.lock
+func Lock(chartPath string, lockFile string, cfg Config) error {
 	if !utils.FileExists(chartPath) {
 		return fmt.Errorf("Helm chart %q does not exist", chartPath)
 	}
@@ -26,11 +34,11 @@ func verifyLock(chartPath string, lockFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
-
+	fmt.Println("currentLock", cfg.Insecure)
 	calculatedLock, err := imagelock.GenerateFromChart(chartPath,
-		imagelock.WithAnnotationsKey(getAnnotationsKey()),
+		imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 		imagelock.WithContext(context.Background()),
-		imagelock.WithInsecure(insecure),
+		imagelock.WithInsecure(cfg.Insecure),
 	)
 
 	if err != nil {
@@ -43,7 +51,8 @@ func verifyLock(chartPath string, lockFile string) error {
 	return nil
 }
 
-func newVerifyCmd() *cobra.Command {
+// NewCmd builds a new verify command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var lockFile string
 
 	cmd := &cobra.Command{
@@ -58,14 +67,14 @@ func newVerifyCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			chartPath := args[0]
 
-			l := getLogger()
+			l := cfg.Logger()
 
 			if !utils.FileExists(chartPath) {
 				return fmt.Errorf("Helm chart %q does not exist", chartPath)
 			}
 
 			if lockFile == "" {
-				f, err := getImageLockFilePath(chartPath)
+				f, err := chartutils.GetImageLockFilePath(chartPath)
 				if err != nil {
 					return fmt.Errorf("failed to find Images.lock file for Helm chart %q: %v", chartPath, err)
 				}
@@ -73,7 +82,7 @@ func newVerifyCmd() *cobra.Command {
 			}
 
 			if err := l.ExecuteStep("Verifying Images.lock", func() error {
-				return verifyLock(chartPath, lockFile)
+				return Lock(chartPath, lockFile, Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey})
 			}); err != nil {
 				return l.Failf("failed to verify %q lock: %w", chartPath, err)
 			}

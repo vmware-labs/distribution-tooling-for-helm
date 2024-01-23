@@ -1,29 +1,16 @@
-package main
+// Package relocate implements the dt relocate command
+package relocate
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/relocator"
 )
 
-var relocateCmd = newRelocateCmd()
-
-func relocateChart(chartPath, repository string, opts ...relocator.RelocateOption) error {
-	baseOpts := []relocator.RelocateOption{
-		relocator.Recursive,
-		relocator.WithAnnotationsKey(getAnnotationsKey()),
-	}
-	if err := relocator.RelocateChartDir(
-		chartPath,
-		repository,
-		append(baseOpts, opts...)...,
-	); err != nil {
-		return fmt.Errorf("failed to relocate Helm chart: %v", err)
-	}
-	return nil
-}
-func newRelocateCmd() *cobra.Command {
+// NewCmd builds a new relocate command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",
 		Short: "Relocates a Helm chart",
@@ -38,12 +25,17 @@ func newRelocateCmd() *cobra.Command {
 			if repository == "" {
 				return fmt.Errorf("repository cannot be empty")
 			}
-			l := getLogger()
+			l := cfg.Logger()
 
 			if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", chartPath, repository), func() error {
-				return relocateChart(chartPath, repository, relocator.WithLog(l))
+				return relocator.RelocateChartDir(
+					chartPath,
+					repository,
+					relocator.WithLog(l), relocator.Recursive,
+					relocator.WithAnnotationsKey(cfg.AnnotationsKey),
+				)
 			}); err != nil {
-				return l.Failf("failed to relocate %q: %w", chartPath, err)
+				return l.Failf("failed to relocate Helm chart %q: %w", chartPath, err)
 			}
 
 			l.Successf("Helm chart relocated successfully")

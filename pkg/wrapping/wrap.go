@@ -24,6 +24,8 @@ type Lockable interface {
 // Wrap defines the interface to implement a Helm chart wrap
 type Wrap interface {
 	Lockable
+	VerifyLock(...imagelock.Option) error
+
 	Chart() *chartutils.Chart
 	RootDir() string
 	ChartDir() string
@@ -74,6 +76,10 @@ func (w *wrap) ChartDir() string {
 // Chart returns the Chart object
 func (w *wrap) Chart() *chartutils.Chart {
 	return w.chart
+}
+
+func (w *wrap) VerifyLock(opts ...imagelock.Option) error {
+	return w.chart.VerifyLock(opts...)
 }
 
 // Load loads a directory containing a wrapped chart and returns a Wrap

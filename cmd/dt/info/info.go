@@ -1,47 +1,20 @@
-package main
+// Package info implements the dt info command
+package info
 
 import (
-	"archive/tar"
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
-var infoCmd = newInfoCmd()
-
-func readLockFromWrap(chartPath string) (*imagelock.ImagesLock, error) {
-	var lock *imagelock.ImagesLock
-	var err error
-	if isTar, _ := utils.IsTarFile(chartPath); isTar {
-		if err := utils.FindFileInTar(context.Background(), chartPath, "Images.lock", func(tr *tar.Reader) error {
-			lock, err = imagelock.FromYAML(tr)
-			return err
-		}, utils.TarConfig{StripComponents: 1}); err != nil {
-			return nil, err
-		}
-		if lock == nil {
-			return nil, fmt.Errorf("Images.lock not found in wrap")
-		}
-		return lock, nil
-	}
-
-	f, err := getImageLockFilePath(chartPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find Images.lock: %v", err)
-	}
-	if !utils.FileExists(f) {
-		return nil, fmt.Errorf("Images.lock file does not exist")
-	}
-	return imagelock.FromYAMLFile(f)
-}
-
-func newInfoCmd() *cobra.Command {
+// NewCmd returns a new dt info command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var yamlFormat bool
 	var showDetails bool
 
@@ -56,12 +29,12 @@ func newInfoCmd() *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			chartPath := args[0]
-			l := getLogger()
+			l := cfg.Logger()
 			_, _ = chartPath, l
 			if !utils.FileExists(chartPath) {
 				return fmt.Errorf("wrap file %q does not exist", chartPath)
 			}
-			lock, err := readLockFromWrap(chartPath)
+			lock, err := chartutils.ReadLockFromChart(chartPath)
 			if err != nil {
 				return fmt.Errorf("failed to load Images.lock: %v", err)
 			}
@@ -116,8 +89,4 @@ func newInfoCmd() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&showDetails, "detailed", showDetails, "When using the printable report, add more details about the bundled images")
 
 	return cmd
-}
-
-func init() {
-	rootCmd.AddCommand(infoCmd)
 }

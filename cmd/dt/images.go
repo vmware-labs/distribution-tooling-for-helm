@@ -1,11 +1,11 @@
 package main
 
 import (
-	"path/filepath"
-
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/lock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/pull"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/push"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/verify"
 )
 
 var imagesCmd = &cobra.Command{
@@ -18,15 +18,6 @@ var imagesCmd = &cobra.Command{
 	},
 }
 
-func getImageLockFilePath(chartPath string) (string, error) {
-	chartRoot, err := chartutils.GetChartRoot(chartPath)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(chartRoot, imagelock.DefaultImagesLockFileName), nil
-}
-
 func init() {
-	imagesCmd.AddCommand(lockCmd, verifyCmd, pullCmd, pushCmd)
+	imagesCmd.AddCommand(lock.NewCmd(mainConfig), verify.NewCmd(mainConfig), pull.NewCmd(mainConfig), push.NewCmd(mainConfig))
 }
