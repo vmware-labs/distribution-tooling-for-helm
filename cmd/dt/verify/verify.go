@@ -34,7 +34,6 @@ func Lock(chartPath string, lockFile string, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
-	fmt.Println("currentLock", cfg.Insecure)
 	calculatedLock, err := imagelock.GenerateFromChart(chartPath,
 		imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 		imagelock.WithContext(context.Background()),
