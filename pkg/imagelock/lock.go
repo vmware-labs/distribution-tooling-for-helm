@@ -112,7 +112,7 @@ func FromYAML(r io.Reader) (*ImagesLock, error) {
 func FromYAMLFile(file string) (*ImagesLock, error) {
 	fh, err := os.Open(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open Images.lock file: %v", err)
+		return nil, fmt.Errorf("failed to open Images.lock file: %w", err)
 	}
 	defer fh.Close()
 	return FromYAML(fh)

@@ -50,6 +50,10 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	}
 	l := cfg.Log
 
+	if len(lock.Images) == 0 {
+		return fmt.Errorf("no images found in Images.lock")
+	}
+
 	p, _ := cfg.ProgressBar.WithTotal(getNumberOfArtifacts(lock.Images)).UpdateTitle("Pulling Images").Start()
 	defer p.Stop()
 	maxRetries := cfg.MaxRetries

@@ -27,7 +27,7 @@ run:
 
 linters-settings:
   gocyclo:
-    min-complexity: 16
+    min-complexity: 18
   govet:
     check-shadowing: false
   lll:

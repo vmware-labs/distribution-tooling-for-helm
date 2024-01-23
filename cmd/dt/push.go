@@ -3,27 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
 var pushCmd = newPushCmd()
 
 func pushChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
-	lockFile := wrap.LockFilePath()
-
-	fh, err := os.Open(lockFile)
-	if err != nil {
-		return fmt.Errorf("failed to open Images.lock file: %v", err)
-	}
-	defer fh.Close()
-
-	lock, err := imagelock.FromYAML(fh)
+	lock, err := wrap.GetImagesLock()
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}

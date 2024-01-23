@@ -74,12 +74,21 @@ func (suite *CmdSuite) TestPullCommand() {
 		verifyChartDir(tmpDir)
 	})
 
+	t.Run("Warning when no images in Images.lock", func(t *testing.T) {
+		images = []tu.ImageData{}
+		scenarioName := "no-images-chart"
+		scenarioDir = fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+		chartDir := createSampleChart(sb.TempFile())
+		dt("images", "pull", chartDir).AssertSuccessMatch(t, "No images found in Images.lock")
+		require.NoDirExists(filepath.Join(chartDir, "images"))
+	})
+
 	t.Run("Errors", func(t *testing.T) {
 		t.Run("Fails when Images.lock is not found", func(t *testing.T) {
 			chartDir := createSampleChart(sb.TempFile())
 			require.NoError(os.RemoveAll(filepath.Join(chartDir, "Images.lock")))
 
-			dt("images", "pull", chartDir).AssertErrorMatch(t, `(?s).*failed to read Images\.lock file.*`)
+			dt("images", "pull", chartDir).AssertErrorMatch(t, `Failed to load Images\.lock.*`)
 		})
 	})
 }

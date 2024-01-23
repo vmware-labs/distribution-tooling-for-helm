@@ -18,6 +18,7 @@ import (
 type Lockable interface {
 	LockFilePath() string
 	ImagesDir() string
+	GetImagesLock() (*imagelock.ImagesLock, error)
 }
 
 // Wrap defines the interface to implement a Helm chart wrap
@@ -53,6 +54,11 @@ func (w *wrap) ImageArtifactsDir() string {
 // ImagesDir returns the images directory inside the chart root directory
 func (w *wrap) ImagesDir() string {
 	return w.AbsFilePath("images")
+}
+
+// GetImagesLock returns the chart's ImagesLock object
+func (w *wrap) GetImagesLock() (*imagelock.ImagesLock, error) {
+	return w.chart.GetImagesLock()
 }
 
 // AbsFilePath returns the absolute path to the Chart relative file name
