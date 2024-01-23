@@ -1,0 +1,10 @@
+apiVersion: v0
+kind: ImagesLock
+metadata:
+  generatedAt: "2023-07-13T16:30:33.284125307Z"
+  generatedBy: Distribution Tooling for Helm
+chart:
+  name: {{.Name}}
+  version: 1.0.0
+  appVersion: {{if .AppVersion}}{{.AppVersion}}{{else}}6.2.2{{end}}
+images: []

@@ -43,7 +43,7 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	suite.T().Run("Pulls images", func(t *testing.T) {
+	t.Run("Pulls images", func(t *testing.T) {
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
@@ -56,6 +56,33 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 		lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
 		require.NoError(err)
 		require.NoError(PullImages(lock, imagesDir))
+
+		require.DirExists(imagesDir)
+
+		for _, imgData := range images {
+			for _, digestData := range imgData.Digests {
+				imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+				suite.Assert().DirExists(imgDir)
+			}
+		}
+	})
+
+	t.Run("Error when no images in Images.lock", func(t *testing.T) {
+		chartDir := sb.TempFile()
+
+		images := []tu.ImageData{}
+		scenarioName := "no-images-chart"
+		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
+		))
+		imagesDir := filepath.Join(chartDir, "images")
+
+		require.NoError(err)
+
+		lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
+		require.NoError(err)
+		require.Error(PullImages(lock, imagesDir))
 
 		require.DirExists(imagesDir)
 
