@@ -12,7 +12,6 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/relocator"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
@@ -155,7 +154,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, l log.Sec
 }
 
 func showImagesSummary(wrap wrapping.Lockable, l log.SectionLogger) int {
-	lock, err := imagelock.FromYAMLFile(wrap.LockFilePath())
+	lock, err := wrap.GetImagesLock()
 	if err != nil {
 		l.Debugf("failed to load list of images: failed to load lock file: %v", err)
 		return 0

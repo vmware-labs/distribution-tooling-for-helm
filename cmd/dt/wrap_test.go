@@ -111,18 +111,27 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 	if cfg.FetchArtifacts {
 		args = append(args, "--fetch-artifacts")
 	}
-	dt(args...).AssertSuccess(t)
+
+	if len(cfg.Images) == 0 {
+		dt(args...).AssertSuccessMatch(t, "No images found in Images.lock")
+	} else {
+		dt(args...).AssertSuccess(t)
+	}
 	require.FileExists(t, expectedWrapFile)
 
 	tmpDir := sb.TempFile()
 	require.NoError(t, utils.Untar(expectedWrapFile, tmpDir, utils.TarConfig{StripComponents: 1}))
 
 	imagesDir := filepath.Join(tmpDir, "images")
-	require.DirExists(t, imagesDir)
-	for _, imgData := range cfg.Images {
-		for _, digestData := range imgData.Digests {
-			imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
-			assert.DirExists(t, imgDir)
+	if len(cfg.Images) == 0 {
+		require.NoDirExists(t, imagesDir)
+	} else {
+		require.DirExists(t, imagesDir)
+		for _, imgData := range cfg.Images {
+			for _, digestData := range imgData.Digests {
+				imgDir := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", digestData.Digest.Encoded()))
+				assert.DirExists(t, imgDir)
+			}
 		}
 	}
 	wrappedChartDir := filepath.Join(tmpDir, "chart")
@@ -247,10 +256,10 @@ func (suite *CmdSuite) TestWrapCommand() {
 		testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle, fetchArtifacts)
 	}
 
-	t.Run("Wrap Chart without exiting lock", func(t *testing.T) {
+	t.Run("Wrap Chart without existing lock", func(t *testing.T) {
 		testSampleWrap(t, withoutLock, "", false, WithoutArtifacts)
 	})
-	t.Run("Wrap Chart with exiting lock", func(t *testing.T) {
+	t.Run("Wrap Chart with existing lock", func(t *testing.T) {
 		testSampleWrap(t, withLock, "", false, WithoutArtifacts)
 	})
 	t.Run("Wrap Chart From compressed tgz", func(t *testing.T) {
@@ -322,5 +331,12 @@ func (suite *CmdSuite) TestWrapCommand() {
 	t.Run("Wrap Chart and generate carvel bundle", func(t *testing.T) {
 		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
 		testSampleWrap(t, withLock, tempFilename, true, WithoutArtifacts) // triggers the Carvel checks
+	})
+
+	t.Run("Wrap Chart with no images", func(t *testing.T) {
+		images = []tu.ImageData{}
+		scenarioName = "no-images-chart"
+		scenarioDir = fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+		testSampleWrap(t, withLock, "", false, WithoutArtifacts)
 	})
 }

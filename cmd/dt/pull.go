@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
@@ -15,11 +14,9 @@ import (
 var pullCmd = newPullCommand()
 
 func pullChartImages(chart wrapping.Lockable, imagesDir string, opts ...chartutils.Option) error {
-	lockFile := chart.LockFilePath()
-
-	lock, err := imagelock.FromYAMLFile(lockFile)
+	lock, err := chart.GetImagesLock()
 	if err != nil {
-		return fmt.Errorf("failed to read Images.lock file")
+		return fmt.Errorf("failed to read Images.lock file: %v", err)
 	}
 	if err := chartutils.PullImages(lock, imagesDir,
 		opts...,
@@ -63,21 +60,30 @@ func newPullCommand() *cobra.Command {
 			if imagesDir == "" {
 				imagesDir = chart.ImagesDir()
 			}
-			if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
-				if err := pullChartImages(
-					chart,
-					imagesDir,
-					chartutils.WithLog(childLog),
-					chartutils.WithContext(ctx),
-					chartutils.WithProgressBar(childLog.ProgressBar()),
-					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
-				); err != nil {
-					return childLog.Failf("%v", err)
+			lock, err := chart.GetImagesLock()
+			if err != nil {
+				return l.Failf("Failed to load Images.lock: %v", err)
+			}
+
+			if len(lock.Images) == 0 {
+				l.Warnf("No images found in Images.lock")
+			} else {
+				if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
+					if err := pullChartImages(
+						chart,
+						imagesDir,
+						chartutils.WithLog(childLog),
+						chartutils.WithContext(ctx),
+						chartutils.WithProgressBar(childLog.ProgressBar()),
+						chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
+					); err != nil {
+						return childLog.Failf("%v", err)
+					}
+					childLog.Infof("All images pulled successfully")
+					return nil
+				}); err != nil {
+					return l.Failf("%w", err)
 				}
-				childLog.Infof("All images pulled successfully")
-				return nil
-			}); err != nil {
-				return l.Failf("%w", err)
 			}
 
 			if outputFile != "" {
