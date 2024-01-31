@@ -1,38 +1,25 @@
-package main
+// Package pull implements the pull command
+package pull
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
-var pullCmd = newPullCommand()
-
-func pullChartImages(chart wrapping.Lockable, imagesDir string, opts ...chartutils.Option) error {
-	lock, err := chart.GetImagesLock()
-	if err != nil {
-		return fmt.Errorf("failed to read Images.lock file: %v", err)
-	}
-	if err := chartutils.PullImages(lock, imagesDir,
-		opts...,
-	); err != nil {
-		return fmt.Errorf("failed to pull images: %v", err)
-	}
-	return nil
+// ChartImages pulls the images of a Helm chart
+func ChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
+	return pullImages(wrap, imagesDir, opts...)
 }
 
-func compressChart(ctx context.Context, dir, prefix, outputFile string) error {
-	return utils.TarContext(ctx, dir, outputFile, utils.TarConfig{
-		Prefix: prefix,
-	})
-}
-
-func newPullCommand() *cobra.Command {
+// NewCmd builds a new pull command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var outputFile string
 	var imagesDir string
 
@@ -47,10 +34,11 @@ func newPullCommand() *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			chartPath := args[0]
-			l := getLogger()
+			l := cfg.Logger()
 
 			// TODO: Implement timeout
-			ctx, cancel := contextWithSigterm(context.Background())
+
+			ctx, cancel := cfg.ContextWithSigterm()
 			defer cancel()
 
 			chart, err := chartutils.LoadChart(chartPath)
@@ -64,12 +52,11 @@ func newPullCommand() *cobra.Command {
 			if err != nil {
 				return l.Failf("Failed to load Images.lock: %v", err)
 			}
-
 			if len(lock.Images) == 0 {
 				l.Warnf("No images found in Images.lock")
 			} else {
 				if err := l.Section(fmt.Sprintf("Pulling images into %q", chart.ImagesDir()), func(childLog log.SectionLogger) error {
-					if err := pullChartImages(
+					if err := pullImages(
 						chart,
 						imagesDir,
 						chartutils.WithLog(childLog),
@@ -90,7 +77,9 @@ func newPullCommand() *cobra.Command {
 				if err := l.ExecuteStep(
 					fmt.Sprintf("Compressing chart into %q", outputFile),
 					func() error {
-						return compressChart(ctx, chart.RootDir(), fmt.Sprintf("%s-%s", chart.Name(), chart.Version()), outputFile)
+						return utils.TarContext(ctx, chart.RootDir(), outputFile, utils.TarConfig{
+							Prefix: fmt.Sprintf("%s-%s", chart.Name(), chart.Version()),
+						})
 					},
 				); err != nil {
 					return l.Failf("failed to compress chart: %w", err)
@@ -106,7 +95,7 @@ func newPullCommand() *cobra.Command {
 				successMessage = fmt.Sprintf("All images pulled successfully into %q", chart.ImagesDir())
 			}
 
-			l.Printf(terminalSpacer)
+			l.Printf(widgets.TerminalSpacer)
 			l.Successf(successMessage)
 
 			return nil
@@ -116,4 +105,18 @@ func newPullCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&imagesDir, "images-dir", imagesDir,
 		"directory where the images will be pulled to. If not empty, it overrides the default images directory inside the chart directory")
 	return cmd
+}
+
+func pullImages(chart wrapping.Lockable, imagesDir string, opts ...chartutils.Option) error {
+	lock, err := chart.GetImagesLock()
+
+	if err != nil {
+		return fmt.Errorf("failed to read Images.lock file")
+	}
+	if err := chartutils.PullImages(lock, imagesDir,
+		opts...,
+	); err != nil {
+		return fmt.Errorf("failed to pull images: %v", err)
+	}
+	return nil
 }

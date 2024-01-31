@@ -7,6 +7,7 @@ import (
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -47,6 +48,31 @@ func (c *Chart) RootDir() string {
 // ChartDir returns the Chart root directory (required to implement wrapping.Unwrapable)
 func (c *Chart) ChartDir() string {
 	return c.RootDir()
+}
+
+// VerifyLock verifies the Images.lock file for the chart
+func (c *Chart) VerifyLock(opts ...imagelock.Option) error {
+	chartPath := c.ChartDir()
+	if !utils.FileExists(chartPath) {
+		return fmt.Errorf("Helm chart %q does not exist", chartPath)
+	}
+
+	currentLock, err := c.GetImagesLock()
+	if err != nil {
+		return fmt.Errorf("failed to load Images.lock: %w", err)
+	}
+	calculatedLock, err := imagelock.GenerateFromChart(chartPath,
+		opts...,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to re-create Images.lock from Helm chart %q: %v", chartPath, err)
+	}
+
+	if err := calculatedLock.Validate(currentLock.Images); err != nil {
+		return fmt.Errorf("Images.lock does not validate:\n%v", err)
+	}
+	return nil
 }
 
 // Chart returns the Chart object (required to implement wrapping.Unwrapable)

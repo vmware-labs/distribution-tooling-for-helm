@@ -1,16 +1,17 @@
-package main
+// Package annotate implements the dt charts annotate command
+package annotate
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 )
 
-var annotateCmd = newAnnotateCmd()
-
-func newAnnotateCmd() *cobra.Command {
+// NewCmd builds a new annotate command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "annotate CHART_PATH",
 		Short: "Annotates a Helm chart (Experimental)",
@@ -24,11 +25,11 @@ Use it cautiously. Very often the complete list of images cannot be guessed from
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			chartPath := args[0]
-			l := getLogger()
+			l := cfg.Logger()
 
 			err := l.ExecuteStep(fmt.Sprintf("Annotating Helm chart %q", chartPath), func() error {
 				return chartutils.AnnotateChart(chartPath,
-					chartutils.WithAnnotationsKey(getAnnotationsKey()),
+					chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 					chartutils.WithLog(l),
 				)
 

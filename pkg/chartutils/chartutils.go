@@ -1,14 +1,19 @@
 package chartutils
 
 import (
+	"archive/tar"
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
+
 	"gopkg.in/yaml.v3"
 
 	"helm.sh/helm/v3/pkg/chart"
@@ -135,4 +140,46 @@ func getChartFile(c *chart.Chart, name string) *chart.File {
 		}
 	}
 	return nil
+}
+
+// GetImageLockFilePath returns the path to the Images.lock file for the chart
+func GetImageLockFilePath(chartPath string) (string, error) {
+	chartRoot, err := GetChartRoot(chartPath)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(chartRoot, imagelock.DefaultImagesLockFileName), nil
+}
+
+// IsRemoteChart returns true if the chart is a remote chart
+func IsRemoteChart(path string) bool {
+	return strings.HasPrefix(path, "oci://")
+}
+
+// ReadLockFromChart reads the Images.lock file from the chart
+func ReadLockFromChart(chartPath string) (*imagelock.ImagesLock, error) {
+	var lock *imagelock.ImagesLock
+	var err error
+	if isTar, _ := utils.IsTarFile(chartPath); isTar {
+		if err := utils.FindFileInTar(context.Background(), chartPath, "Images.lock", func(tr *tar.Reader) error {
+			lock, err = imagelock.FromYAML(tr)
+			return err
+		}, utils.TarConfig{StripComponents: 1}); err != nil {
+			return nil, err
+		}
+		if lock == nil {
+			return nil, fmt.Errorf("Images.lock not found in wrap")
+		}
+		return lock, nil
+	}
+
+	f, err := GetImageLockFilePath(chartPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find Images.lock: %v", err)
+	}
+	if !utils.FileExists(f) {
+		return nil, fmt.Errorf("Images.lock file does not exist")
+	}
+	return imagelock.FromYAMLFile(f)
 }
