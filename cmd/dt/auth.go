@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 var authCmd = &cobra.Command{
 	Use:           "auth",
-	Short:         "Log in to a registry",
+	Short:         "Authentication commands",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Run: func(cmd *cobra.Command, _ []string) {

@@ -26,8 +26,14 @@ func newLoginCmd() *cobra.Command {
 	var opts loginOptions
 
 	cmd := &cobra.Command{
-		Use:           "login SERVER",
-		Short:         "Log in to an OCI registry",
+		Use:   "login REGISTRY",
+		Short: "Log in to an OCI registry (Experimental)",
+		Long:  "Experimental. Log in to an OCI registry using the Docker configuration file",
+		Example: `  # Log in to index.docker.io 
+  $ dt auth login index.docker.io -u my_username -p my_password
+
+  # Log in to index.docker.io with a password from stdin
+  $ dt auth login index.docker.io -u my_username --password-stdin < <(echo my_password)`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,

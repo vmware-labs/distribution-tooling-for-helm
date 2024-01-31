@@ -14,9 +14,12 @@ var logoutCmd = newLogoutCmd()
 
 func newLogoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "logout SERVER",
-		Short:         "Log from an OCI registry",
-		Args:          cobra.ExactArgs(1),
+		Use:   "logout REGISTRY",
+		Short: "Logout from an OCI registry (Experimental)",
+		Long:  "Experimental. Logout from an OCI registry using the Docker configuration file",
+		Args:  cobra.ExactArgs(1),
+		Example: `  # Log out from index.docker.io
+  $ dt auth logout index.docker.io`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
