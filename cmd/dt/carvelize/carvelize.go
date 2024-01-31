@@ -1,4 +1,5 @@
-package main
+// Package carvelize provides the carvelize command
+package carvelize
 
 import (
 	"bytes"
@@ -7,15 +8,18 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/lock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/verify"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
-var carvelizeCmd = newCarvelizeCmd()
-
-func newCarvelizeCmd() *cobra.Command {
+// NewCmd builds a new carvelize command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var yamlFormat bool
 	var showDetails bool
 
@@ -30,18 +34,18 @@ func newCarvelizeCmd() *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			chartPath := args[0]
-			l := getLogger()
+			l := cfg.Logger()
 			// Allows silencing called methods
 			silentLog := log.SilentLog
 
-			lockFile, err := getImageLockFilePath(chartPath)
+			lockFile, err := chartutils.GetImageLockFilePath(chartPath)
 			if err != nil {
 				return fmt.Errorf("failed to determine Images.lock file location: %w", err)
 			}
 
 			if utils.FileExists(lockFile) {
 				if err := l.ExecuteStep("Verifying Images.lock", func() error {
-					return verifyLock(chartPath, lockFile)
+					return verify.Lock(chartPath, lockFile, verify.Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey})
 				}); err != nil {
 					return l.Failf("Failed to verify lock: %w", err)
 				}
@@ -51,8 +55,8 @@ func newCarvelizeCmd() *cobra.Command {
 				err := l.ExecuteStep(
 					"Images.lock file does not exist. Generating it from annotations...",
 					func() error {
-						return createImagesLock(chartPath,
-							lockFile, silentLog,
+						return lock.Create(chartPath,
+							lockFile, silentLog, imagelock.WithAnnotationsKey(cfg.AnnotationsKey), imagelock.WithInsecure(cfg.Insecure),
 						)
 					},
 				)
@@ -62,9 +66,9 @@ func newCarvelizeCmd() *cobra.Command {
 				l.Infof("Images.lock file written to %q", lockFile)
 			}
 			if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
-				if err := generateCarvelBundle(
+				if err := GenerateBundle(
 					chartPath,
-					chartutils.WithAnnotationsKey(getAnnotationsKey()),
+					chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 					chartutils.WithLog(childLog),
 				); err != nil {
 					return childLog.Failf("%v", err)
@@ -83,11 +87,12 @@ func newCarvelizeCmd() *cobra.Command {
 	return cmd
 }
 
-func generateCarvelBundle(chartPath string, opts ...chartutils.Option) error {
+// GenerateBundle generates a Carvel bundle for a Helm chart
+func GenerateBundle(chartPath string, opts ...chartutils.Option) error {
 	cfg := chartutils.NewConfiguration(opts...)
 	l := cfg.Log
 
-	lock, err := readLockFromWrap(chartPath)
+	lock, err := chartutils.ReadLockFromChart(chartPath)
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}

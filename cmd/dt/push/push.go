@@ -1,18 +1,23 @@
-package main
+// Package push implements the `dt images push` command
+package push
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
-var pushCmd = newPushCmd()
+// ChartImages pushes the images from the Images.lock
+func ChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
+	return pushImages(wrap, imagesDir, opts...)
+}
 
-func pushChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
+func pushImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
 	lock, err := wrap.GetImagesLock()
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
@@ -21,7 +26,8 @@ func pushChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Op
 	return chartutils.PushImages(lock, imagesDir, opts...)
 }
 
-func newPushCmd() *cobra.Command {
+// NewCmd builds a new push command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var imagesDir string
 
 	cmd := &cobra.Command{
@@ -35,11 +41,12 @@ func newPushCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			l := cfg.Logger()
+
 			chartPath := args[0]
 
-			ctx, cancel := contextWithSigterm(context.Background())
+			ctx, cancel := cfg.ContextWithSigterm()
 			defer cancel()
-			l := getLogger()
 
 			chart, err := chartutils.LoadChart(chartPath)
 			if err != nil {
@@ -50,14 +57,14 @@ func newPushCmd() *cobra.Command {
 				imagesDir = chart.ImagesDir()
 			}
 			if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
-				if err := pushChartImages(
+				if err := pushImages(
 					chart,
 					imagesDir,
 					chartutils.WithLog(log.SilentLog),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
 					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
-					chartutils.WithInsecureMode(insecure),
+					chartutils.WithInsecureMode(cfg.Insecure),
 				); err != nil {
 					return subLog.Failf("Failed to push images: %w", err)
 				}
@@ -67,7 +74,7 @@ func newPushCmd() *cobra.Command {
 				return err
 			}
 
-			l.Printf(terminalSpacer)
+			l.Printf(widgets.TerminalSpacer)
 			l.Successf("All images pushed successfully")
 			return nil
 		},
