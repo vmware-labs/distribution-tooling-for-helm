@@ -461,6 +461,22 @@ $ helm dt charts carvelize examples/postgresql
  🎉  Carvel bundle created successfully
 ```
 
+### Login and logout from OCI registries (EXPERIMENTAL)
+
+It is also possible to login and logout from OCI registries using the `dt` command. For example:
+
+```console
+$ helm dt auth login 127.0.0.1:5000 -u testuser -p testpassword
+ ✔  log in to 127.0.0.1:5000 as user testuser
+ 🎉  logged in via /Users/home/.docker/config.json
+```
+
+```console
+$ helm dt auth logout 127.0.0.1:5000
+ ✔  logout from 127.0.0.1:5000
+ 🎉  logged out via /Users/home/.docker/config.json
+```
+
 ## Frequently Asked Questions
 
 ### I cannot install the plugin due to `Error: Unable to update repository: exit status 1`

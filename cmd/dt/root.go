@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 	// Do not show completion command
 	cmd.CompletionOptions.DisableDefaultCmd = true
 
+	cmd.AddCommand(authCmd)
 	cmd.AddCommand(chartCmd)
 	cmd.AddCommand(imagesCmd)
 	cmd.AddCommand(versionCmd)
