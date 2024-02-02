@@ -68,8 +68,7 @@ func login(opts loginOptions, l log.SectionLogger) error {
 			return l.Failf("failed to read from stdin: %v", err)
 		}
 
-		opts.password = strings.TrimSuffix(string(contents), "\n")
-		opts.password = strings.TrimSuffix(opts.password, "\r")
+		opts.password = strings.TrimRight(string(contents), "\r\n")
 	}
 	if opts.user == "" && opts.password == "" {
 		return l.Failf("username and password required")
