@@ -1,6 +1,10 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/login"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/logout"
+)
 
 var authCmd = &cobra.Command{
 	Use:           "auth",
@@ -13,5 +17,5 @@ var authCmd = &cobra.Command{
 }
 
 func init() {
-	authCmd.AddCommand(loginCmd, logoutCmd)
+	authCmd.AddCommand(login.NewCmd(mainConfig), logout.NewCmd(mainConfig))
 }

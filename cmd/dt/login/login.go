@@ -1,19 +1,19 @@
-package main
+// Package login implements the command to login to OCI registries
+package login
 
 import (
 	"io"
 	"os"
 	"strings"
 
-	"github.com/docker/cli/cli/config"
+	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 )
-
-var loginCmd = newLoginCmd()
 
 type loginOptions struct {
 	serverAddress string
@@ -22,7 +22,8 @@ type loginOptions struct {
 	passwordStdin bool
 }
 
-func newLoginCmd() *cobra.Command {
+// NewCmd returns a new dt login command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	var opts loginOptions
 
 	cmd := &cobra.Command{
@@ -38,7 +39,7 @@ func newLoginCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
-			l := getLogger()
+			l := cfg.Logger()
 
 			reg, err := name.NewRegistry(args[0])
 			if err != nil {
@@ -74,7 +75,7 @@ func login(opts loginOptions, l log.SectionLogger) error {
 		return l.Failf("username and password required")
 	}
 	l.Infof("log in to %s as user %s", opts.serverAddress, opts.user)
-	cf, err := config.Load(os.Getenv("DOCKER_CONFIG"))
+	cf, err := dockercfg.Load(os.Getenv("DOCKER_CONFIG"))
 	if err != nil {
 		return l.Failf("failed to load configuration: %v", err)
 	}

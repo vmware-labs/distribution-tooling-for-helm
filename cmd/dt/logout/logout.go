@@ -1,18 +1,19 @@
-package main
+// Package logout implements the command to logout from OCI registries
+package logout
 
 import (
 	"os"
 
-	"github.com/docker/cli/cli/config"
+	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/cobra"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 )
 
-var logoutCmd = newLogoutCmd()
-
-func newLogoutCmd() *cobra.Command {
+// NewCmd returns a new dt logout command
+func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout REGISTRY",
 		Short: "Logout from an OCI registry (Experimental)",
@@ -23,7 +24,7 @@ func newLogoutCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
-			l := getLogger()
+			l := cfg.Logger()
 
 			reg, err := name.NewRegistry(args[0])
 			if err != nil {
@@ -41,7 +42,7 @@ func newLogoutCmd() *cobra.Command {
 // from https://github.com/google/go-containerregistry/blob/main/cmd/crane/cmd/auth.go
 func logout(serverAddress string, l log.SectionLogger) error {
 	l.Infof("logout from %s", serverAddress)
-	cf, err := config.Load(os.Getenv("DOCKER_CONFIG"))
+	cf, err := dockercfg.Load(os.Getenv("DOCKER_CONFIG"))
 	if err != nil {
 		return l.Failf("failed to load configuration: %v", err)
 	}
