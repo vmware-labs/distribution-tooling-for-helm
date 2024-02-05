@@ -237,7 +237,7 @@ func untarChart(chartFile string, dir string) (string, error) {
 }
 
 func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) (string, error) {
-	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP))
+	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP), artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password))
 	if err != nil {
 		return "", err
 	}
@@ -279,10 +279,10 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 	return nil
 }
 
-func fetchArtifacts(chartURL string, destDir string) error {
+func fetchArtifacts(chartURL string, destDir string, cfg *Config) error {
 	if err := artifacts.FetchChartMetadata(
 		context.Background(), chartURL,
-		destDir,
+		destDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 	); err != nil && err != artifacts.ErrTagDoesNotExist {
 		return fmt.Errorf("failed to fetch chart remote metadata: %w", err)
 	}
@@ -349,7 +349,7 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
-		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir)); err != nil {
+		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
 			return err
 		}
 	}
@@ -405,6 +405,8 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var outputFile string
 	var version string
+	var username string
+	var password string
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
@@ -423,7 +425,7 @@ This command will pull all the container images and wrap it into a single tarbal
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath := args[0]
 
 			ctx, cancel := cfg.ContextWithSigterm()
@@ -444,11 +446,11 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
-				WithTempDirectory(tmpDir),
+				WithTempDirectory(tmpDir), WithAuth(username, password),
 			); err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
 					// We already logged it, lets be less verbose
-					return fmt.Errorf("failed to wrap Helm chart")
+					return fmt.Errorf("failed to wrap Helm chart: %v", err)
 				}
 				return err
 			}
@@ -458,6 +460,8 @@ This command will pull all the container images and wrap it into a single tarbal
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when wrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
+	cmd.PersistentFlags().StringVar(&username, "username", outputFile, "username to the registry that holds the Helm chart and images")
+	cmd.PersistentFlags().StringVar(&password, "password", outputFile, "password to the registry that holds the Helm chart and images")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")

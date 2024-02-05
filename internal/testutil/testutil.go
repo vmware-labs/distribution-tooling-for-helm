@@ -13,6 +13,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -192,10 +193,17 @@ func createSampleImages(imageName string, server string) (map[string]sampleImage
 	return images, nil
 }
 
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Config defines multiple test util options
 type Config struct {
 	SignKey     string
 	MetadataDir string
+	Auth        Auth
 }
 
 // NewConfig returns a new Config
@@ -224,6 +232,14 @@ func WithMetadataDir(dir string) Option {
 	}
 }
 
+// WithAuth sets the credentials to access the container registry
+func WithAuth(username, password string) Option {
+	return func(cfg *Config) {
+		cfg.Auth.Username = username
+		cfg.Auth.Password = password
+	}
+}
+
 // AddSampleImagesToRegistry adds a set of sample images to the provided registry
 func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) ([]ImageData, error) {
 	cfg := NewConfig(opts...)
@@ -232,18 +248,22 @@ func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) 
 	if err != nil {
 		return nil, err
 	}
+	authenticator := authn.Anonymous
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		authenticator = &authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}
+	}
 
 	for src, data := range samples {
 		ref, err := name.ParseReference(src)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse reference: %v", err)
 		}
-		if err := remote.WriteIndex(ref, data.Index); err != nil {
+		if err := remote.WriteIndex(ref, data.Index, remote.WithAuth(authenticator)); err != nil {
 			return nil, fmt.Errorf("failed to write index: %v", err)
 		}
 		images = append(images, data.ImageData)
 		if cfg.SignKey != "" {
-			if err := CosignImage(src, cfg.SignKey); err != nil {
+			if err := CosignImage(src, cfg.SignKey, authenticator); err != nil {
 				return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
 			}
 		}
@@ -258,11 +278,11 @@ func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) 
 			}
 			metadataImg := fmt.Sprintf("%s:sha256-%s.metadata", ref.Context().Name(), imgDigest.Hex)
 
-			if err := pushArtifact(context.Background(), metadataImg, newDir); err != nil {
+			if err := pushArtifact(context.Background(), metadataImg, newDir, authenticator); err != nil {
 				return nil, fmt.Errorf("failed to push metadata: %v", err)
 			}
 			if cfg.SignKey != "" {
-				if err := CosignImage(metadataImg, cfg.SignKey); err != nil {
+				if err := CosignImage(metadataImg, cfg.SignKey, authenticator); err != nil {
 					return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
 				}
 			}

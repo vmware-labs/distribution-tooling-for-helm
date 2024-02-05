@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/DataDog/go-tuf/encrypted"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -22,8 +23,8 @@ import (
 )
 
 // resolveImage gets a image and returns its resolved tag version
-func resolveImage(image string) (string, error) {
-	o := crane.GetOptions()
+func resolveImage(image string, auth authn.Authenticator) (string, error) {
+	o := crane.GetOptions(crane.WithAuth(auth))
 
 	ref, err := name.ParseReference(image)
 	if err != nil {
@@ -46,15 +47,16 @@ func resolveImage(image string) (string, error) {
 }
 
 // CosignImage signs a remote artifact with the provided key
-func CosignImage(url string, key string) error {
+func CosignImage(url string, key string, auth authn.Authenticator) error {
+	o := crane.GetOptions(crane.WithAuth(auth))
 	url = strings.TrimPrefix(url, "oci://")
 	// cosign complains if we sign a tag with
 	// WARNING: Image reference 127.0.0.1/test:mytag uses a tag, not a digest, to identify the image to sign.
-	image, err := resolveImage(url)
+	image, err := resolveImage(url, auth)
 	if err != nil {
 		return fmt.Errorf("failed to sign %q: %v", url, err)
 	}
-	return sign.SignCmd(&options.RootOptions{Timeout: options.DefaultTimeout, Verbose: false}, options.KeyOpts{KeyRef: key}, options.SignOptions{Upload: true}, []string{image})
+	return sign.SignCmd(&options.RootOptions{Timeout: options.DefaultTimeout, Verbose: false}, options.KeyOpts{KeyRef: key}, options.SignOptions{Upload: true, Registry: options.RegistryOptions{RegistryClientOpts: o.Remote}}, []string{image})
 }
 
 // CosignVerifyImage verifies a remote artifact signature with the provided key

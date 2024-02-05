@@ -39,6 +39,7 @@ var (
 	ErrLocalArtifactNotExist = errors.New("local artifact does not exist")
 )
 
+// Auth defines the authentication information to access the container registry
 type Auth struct {
 	Username string
 	Password string

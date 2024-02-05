@@ -9,6 +9,7 @@ import (
 
 	"oras.land/oras-go/v2/content/oci"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -187,8 +188,8 @@ func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
 	return err
 }
 
-func pushArtifact(ctx context.Context, image string, dir string) error {
-	opts := []crane.Option{crane.WithContext(ctx)}
+func pushArtifact(ctx context.Context, image string, dir string, auth authn.Authenticator) error {
+	opts := []crane.Option{crane.WithContext(ctx), crane.WithAuth(auth)}
 
 	img, err := loadImage(dir)
 	if err != nil {

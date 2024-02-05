@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,22 +98,32 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
+	u, err := url.Parse(chartURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+	cfg := &action.Configuration{}
+	cc := NewRegistryClientConfig(opts...)
+	reg, err := getRegistryClient(cc)
+	if err != nil {
+		return "", fmt.Errorf("missing registry client: %w", err)
+	}
+	cfg.RegistryClient = reg
+	if cc.Auth.Username != "" && cc.Auth.Password != "" {
+		if err := reg.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
+			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
+		}
+		defer reg.Logout(u.Host)
+	}
+	client := action.NewPullWithOpts(action.WithConfig(cfg))
+
 	dir, err := os.MkdirTemp(destDir, "chart-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
 	}
-	cfg := &action.Configuration{}
-	client := action.NewPullWithOpts(action.WithConfig(cfg))
 	client.Settings = cli.New()
 	client.DestDir = dir
 	client.Untar = true
-
-	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
-	if err != nil {
-		return "", fmt.Errorf("missing registry client: %w", err)
-	}
-
-	client.SetRegistryClient(reg)
 	client.Version = version
 	_, err = client.Run(chartURL)
 	if err != nil {
