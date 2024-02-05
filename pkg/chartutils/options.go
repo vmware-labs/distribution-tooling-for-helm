@@ -9,6 +9,12 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
+// Auth defines the authentication settings
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Configuration defines configuration settings used in chartutils functions
 type Configuration struct {
 	AnnotationsKey string
@@ -19,12 +25,23 @@ type Configuration struct {
 	FetchArtifacts bool
 	MaxRetries     int
 	InsecureMode   bool
+	Auth           Auth
 }
 
 // WithInsecureMode configures Insecure transport
 func WithInsecureMode(insecure bool) func(cfg *Configuration) {
 	return func(cfg *Configuration) {
 		cfg.InsecureMode = insecure
+	}
+}
+
+// WithAuth configures the Auth
+func WithAuth(username, password string) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
 	}
 }
 

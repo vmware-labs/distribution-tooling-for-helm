@@ -40,8 +40,25 @@ type Config struct {
 	Carvelize      bool
 	KeepArtifacts  bool
 	FetchArtifacts bool
+	Auth           Auth
 
 	SayYes bool
+}
+
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
+// WithAuth configures the Auth of the unwrap Config
+func WithAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
 }
 
 // WithSayYes configures the SayYes of the WrapConfig
@@ -282,13 +299,17 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
+		chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 	); err != nil {
 		return err
 	}
 	l.Infof("All images pushed successfully")
 	if err := l.ExecuteStep("Verifying Images.lock", func() error {
 
-		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey})
+		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{
+			Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey,
+			Auth: verify.Auth{Username: cfg.Auth.Username, Password: cfg.Auth.Password},
+		})
 	}); err != nil {
 		return fmt.Errorf("failed to verify Helm chart Images.lock: %w", err)
 	}
@@ -343,14 +364,17 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
-	if err := artifacts.PushChart(tempTarFile, pushChartURL, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP)); err != nil {
+	if err := artifacts.PushChart(tempTarFile, pushChartURL,
+		artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
+		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+	); err != nil {
 		return err
 	}
 	fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chart.Name())
 
 	metadataArtifactDir := filepath.Join(chart.RootDir(), artifacts.HelmChartArtifactMetadataDir)
 	if utils.FileExists(metadataArtifactDir) {
-		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version()), metadataArtifactDir)
+		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version(), artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password)), metadataArtifactDir)
 	}
 	return nil
 }

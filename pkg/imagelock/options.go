@@ -1,12 +1,21 @@
 package imagelock
 
-import "context"
+import (
+	"context"
+)
+
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
 
 // Config defines configuration options for ImageLock functions
 type Config struct {
 	InsecureMode   bool
 	AnnotationsKey string
 	Context        context.Context
+	Auth           Auth
 	Platforms      []string
 }
 
@@ -30,6 +39,14 @@ type Option func(*Config)
 // Insecure asks the tool to allow insecure HTTPS connections to the remote server.
 func Insecure(ic *Config) {
 	ic.InsecureMode = true
+}
+
+// WithAuth provides authentication information to access the container registry
+func WithAuth(username, password string) func(ic *Config) {
+	return func(ic *Config) {
+		ic.Auth.Username = username
+		ic.Auth.Password = password
+	}
 }
 
 // WithPlatforms configures the Platforms of the Config

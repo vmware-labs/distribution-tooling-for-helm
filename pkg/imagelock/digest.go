@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -25,6 +26,9 @@ func fetchImageDigests(r string, cfg *Config) ([]DigestInfo, error) {
 		opts = append(opts, crane.Insecure)
 	}
 	opts = append(opts, crane.WithContext(cfg.Context))
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		opts = append(opts, crane.WithAuth(&authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}))
+	}
 
 	desc, err := GetImageRemoteDescriptor(r, opts...)
 	if err != nil {

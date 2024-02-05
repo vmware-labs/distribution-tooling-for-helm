@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -37,14 +39,30 @@ var (
 	ErrLocalArtifactNotExist = errors.New("local artifact does not exist")
 )
 
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Config defines the configuration when pulling/pushing artifacts to a registry
 type Config struct {
 	ResolveReference bool
 	InsecureMode     bool
+	Auth             Auth
 }
 
 // Option defines a Config option
 type Option func(*Config)
+
+// WithAuth configures the Auth
+func WithAuth(username, password string) func(cfg *Config) {
+	return func(cfg *Config) {
+		cfg.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
+}
 
 // WithInsecureMode configures Insecure transport
 func WithInsecureMode(insecure bool) func(cfg *Config) {
@@ -85,6 +103,12 @@ func getImageTagAndDigest(image string, opts ...Option) (string, string, error) 
 		if cfg.InsecureMode {
 			craneOpts = append(craneOpts, crane.Insecure)
 		}
+		if cfg.Auth.Password != "" && cfg.Auth.Username != "" {
+			craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{
+				Username: cfg.Auth.Username,
+				Password: cfg.Auth.Password,
+			}))
+		}
 		desc, err := imagelock.GetImageRemoteDescriptor(image, craneOpts...)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting descriptor: %w", err)
@@ -120,6 +144,13 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 		return "", ErrLocalArtifactNotExist
 	}
 	craneOpts := []crane.Option{crane.WithContext(ctx)}
+
+	if cfg.Auth.Password != "" && cfg.Auth.Username != "" {
+		craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{
+			Username: cfg.Auth.Username,
+			Password: cfg.Auth.Password,
+		}))
+	}
 	repo, err := getImageRepository(image)
 	if err != nil {
 		return "", fmt.Errorf("failed to get image repository: %w", err)
@@ -178,7 +209,7 @@ func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 
 	dir, err := getImageArtifactsDir(image, destDir, "metadata", opts...)
 	if err != nil {
-		return fmt.Errorf("failed to obtain signature location: %v", err)
+		return fmt.Errorf("failed to obtain metadata location: %v", err)
 	}
 
 	return pushAssetMetadata(ctx, imageRef, dir, opts...)
@@ -210,6 +241,15 @@ func pullArtifact(ctx context.Context, image string, destDir string, tagSuffix s
 	cfg := NewConfig(opts...)
 
 	craneOpts := []crane.Option{crane.WithContext(ctx)}
+	if cfg.InsecureMode {
+		craneOpts = append(craneOpts, crane.Insecure)
+	}
+	if cfg.Auth.Password != "" && cfg.Auth.Username != "" {
+		craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{
+			Username: cfg.Auth.Username,
+			Password: cfg.Auth.Password,
+		}))
+	}
 	o := crane.GetOptions(craneOpts...)
 
 	repo, err := getImageRepository(image)
@@ -258,7 +298,7 @@ func PullImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 
 	dir, err := getImageArtifactsDir(image, destDir, "metadata", opts...)
 	if err != nil {
-		return fmt.Errorf("failed to obtain signature location: %v", err)
+		return fmt.Errorf("failed to obtain metadata location: %v", err)
 	}
 
 	return pullAssetMetadata(ctx, imageRef, dir, opts...)

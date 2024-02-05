@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -42,8 +43,16 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	ctx := cfg.Context
 
 	artifactsDir := getArtifactsDir(filepath.Join(imagesDir, "artifacts"), cfg)
-
-	o := crane.GetOptions(crane.WithContext(ctx))
+	allOpts := []crane.Option{
+		crane.WithContext(ctx),
+	}
+	if cfg.InsecureMode {
+		allOpts = append(allOpts, crane.Insecure)
+	}
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		allOpts = append(allOpts, crane.WithAuth(&authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}))
+	}
+	o := crane.GetOptions(allOpts...)
 
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create bundle directory: %v", err)
@@ -89,7 +98,7 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 		}
 		if cfg.FetchArtifacts {
 			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s signature", imgDesc.Chart, imgDesc.Name))
-			if err := artifacts.PullImageSignatures(context.Background(), imgDesc, artifactsDir); err != nil {
+			if err := artifacts.PullImageSignatures(context.Background(), imgDesc, artifactsDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password)); err != nil {
 				if err == artifacts.ErrTagDoesNotExist {
 					l.Debugf("image %q does not have an associated signature", imgDesc.Image)
 				} else {
@@ -99,7 +108,7 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				l.Debugf("image %q signature fetched", imgDesc.Image)
 			}
 			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s metadata", imgDesc.Chart, imgDesc.Name))
-			if err := artifacts.PullImageMetadata(context.Background(), imgDesc, artifactsDir); err != nil {
+			if err := artifacts.PullImageMetadata(context.Background(), imgDesc, artifactsDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password)); err != nil {
 				if err == artifacts.ErrTagDoesNotExist {
 					l.Debugf("image %q does not have an associated metadata artifact", imgDesc.Image)
 				} else {
@@ -130,6 +139,9 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	if cfg.InsecureMode {
 		craneOpts = append(craneOpts, crane.Insecure)
 	}
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}))
+	}
 	o := crane.GetOptions(craneOpts...)
 
 	maxRetries := cfg.MaxRetries
@@ -157,6 +169,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				if err := artifacts.PushImageSignatures(context.Background(),
 					imgData,
 					artifactsDir,
+					artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local signature stored", imgData.Image)
@@ -170,6 +183,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				if err := artifacts.PushImageMetadata(context.Background(),
 					imgData,
 					artifactsDir,
+					artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
 					if err == artifacts.ErrLocalArtifactNotExist {
 						l.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)

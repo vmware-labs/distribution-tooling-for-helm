@@ -21,6 +21,12 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Config defines the configuration for the Wrap/Unwrap command
 type Config struct {
 	Context        context.Context
@@ -34,12 +40,23 @@ type Config struct {
 	Carvelize      bool
 	KeepArtifacts  bool
 	FetchArtifacts bool
+	Auth           Auth
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
 func WithKeepArtifacts(keepArtifacts bool) func(c *Config) {
 	return func(c *Config) {
 		c.KeepArtifacts = keepArtifacts
+	}
+}
+
+// WithAuth configures the Auth of the wrap Config
+func WithAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
 	}
 }
 
@@ -227,14 +244,6 @@ func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) 
 	return chartPath, nil
 }
 
-func createWrap(chartPath string, cfg *Config) (wrapping.Wrap, error) {
-	tmpDir, err := cfg.GetTemporaryDirectory()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
-	}
-	return wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"))
-}
-
 func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 	l := cfg.GetLogger()
 	chart := wrap.Chart()
@@ -244,6 +253,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 		if err := l.ExecuteStep("Verifying Images.lock", func() error {
 			return wrap.VerifyLock(imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 				imagelock.WithContext(cfg.Context),
+				imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 				imagelock.WithInsecure(cfg.Insecure))
 		}); err != nil {
 			return l.Failf("Failed to verify lock: %w", err)
@@ -256,6 +266,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 				return lock.Create(chart.RootDir(), lockFile, log.SilentLog,
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure),
+					imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 					imagelock.WithPlatforms(cfg.Platforms),
 					imagelock.WithContext(cfg.Context),
 				)
@@ -295,6 +306,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithLog(childLog),
 				chartutils.WithContext(cfg.Context),
 				chartutils.WithFetchArtifacts(cfg.FetchArtifacts),
+				chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 			); err != nil {
@@ -321,8 +333,14 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 	if err != nil {
 		return err
 	}
-
-	wrap, err := createWrap(chartPath, subCfg)
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
+		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
+		chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+	)
 	if err != nil {
 		return l.Failf("failed to create wrap: %v", err)
 	}
