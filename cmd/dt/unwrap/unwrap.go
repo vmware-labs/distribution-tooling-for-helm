@@ -374,7 +374,7 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 
 	metadataArtifactDir := filepath.Join(chart.RootDir(), artifacts.HelmChartArtifactMetadataDir)
 	if utils.FileExists(metadataArtifactDir) {
-		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version(), artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password)), metadataArtifactDir)
+		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version()), metadataArtifactDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password))
 	}
 	return nil
 }
