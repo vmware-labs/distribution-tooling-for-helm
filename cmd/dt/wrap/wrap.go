@@ -448,10 +448,8 @@ This command will pull all the container images and wrap it into a single tarbal
 
 			parentLog := cfg.Logger()
 
-			l := parentLog.StartSection(fmt.Sprintf("Wrapping Helm chart %q", chartPath))
-
 			if err := wrapChart(chartPath, outputFile,
-				WithLogger(l),
+				WithLogger(parentLog),
 				WithAnnotationsKey(cfg.AnnotationsKey), WithContext(ctx),
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
