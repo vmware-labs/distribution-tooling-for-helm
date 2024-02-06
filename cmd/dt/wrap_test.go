@@ -361,7 +361,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 				pushChartURL := fmt.Sprintf("oci://%s/charts", ociServerURL)
 				fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chartName)
 
-				require.NoError(artifacts.PushChart(tarFilename, pushChartURL, artifacts.WithRegistryAuth(username, password)))
+				require.NoError(artifacts.PushChart(tarFilename, pushChartURL, artifacts.WithRegistryAuth(username, password), artifacts.WithPlainHTTP(true)))
 				t.Run("With artifacts", func(t *testing.T) {
 					testWrap(t, fullChartURL, "", expectedLock, false, WithArtifacts, username, password)
 				})

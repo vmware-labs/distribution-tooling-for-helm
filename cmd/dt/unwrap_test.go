@@ -34,7 +34,7 @@ type unwrapOpts struct {
 }
 
 func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegistry string, srcRegistry string, cfg unwrapOpts) {
-	args := []string{"unwrap", "--log-level", "debug", "--plain", "--yes", inputChart, targetRegistry}
+	args := []string{"unwrap", "--log-level", "debug", "--plain", "--yes", "--use-plain-http", inputChart, targetRegistry}
 	authenticator := authn.Anonymous
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
 		args = append(args, "--username", "username", "--password", "password")
@@ -42,7 +42,12 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 	}
 	dt(args...).AssertSuccessMatch(t, "")
 	assert.True(t,
-		artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName), cfg.Version, artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password)),
+		artifacts.RemoteChartExist(
+			fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName),
+			cfg.Version,
+			artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+			artifacts.WithPlainHTTP(true),
+		),
 		"chart should exist in the repository",
 	)
 
@@ -216,7 +221,7 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 				require.NoError(err)
 				require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
 				targetRegistry := newUniqueTargetRegistry()
-				args := []string{"unwrap", wrapDir, targetRegistry, "--plain", "--yes"}
+				args := []string{"unwrap", wrapDir, targetRegistry, "--plain", "--yes", "--use-plain-http"}
 				if username != "" && password != "" {
 					args = append(args, "--username", "username", "--password", "password")
 				}
@@ -233,7 +238,12 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 					}
 				}
 				assert.True(
-					artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, chartName), version, artifacts.WithRegistryAuth(username, password)),
+					artifacts.RemoteChartExist(
+						fmt.Sprintf("oci://%s/%s", targetRegistry, chartName),
+						version,
+						artifacts.WithRegistryAuth(username, password),
+						artifacts.WithPlainHTTP(true),
+					),
 					"chart should exist in the repository",
 				)
 			})

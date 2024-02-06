@@ -82,12 +82,14 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 		}
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		revOpts := docker.ResolverOptions{
-			PlainHTTP: cfg.UsePlainHTTP,
-		}
-		revOpts.Credentials = func(hostName string) (string, string, error) {
+		revOpts := docker.ResolverOptions{}
+		authz := docker.NewDockerAuthorizer(docker.WithAuthCreds(func(_ string) (string, string, error) {
 			return cfg.Auth.Username, cfg.Auth.Password, nil
-		}
+		}))
+		revOpts.Hosts = docker.ConfigureDefaultRegistries(
+			docker.WithAuthorizer(authz),
+			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
+		)
 		rev := docker.NewResolver(revOpts)
 
 		opts = append(opts, registry.ClientOptResolver(rev))
