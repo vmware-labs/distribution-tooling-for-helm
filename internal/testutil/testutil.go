@@ -263,7 +263,7 @@ func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) 
 		}
 		images = append(images, data.ImageData)
 		if cfg.SignKey != "" {
-			if err := CosignImage(src, cfg.SignKey, authenticator); err != nil {
+			if err := CosignImage(src, cfg.SignKey, crane.WithAuth(authenticator)); err != nil {
 				return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
 			}
 		}
@@ -278,11 +278,11 @@ func AddSampleImagesToRegistry(imageName string, server string, opts ...Option) 
 			}
 			metadataImg := fmt.Sprintf("%s:sha256-%s.metadata", ref.Context().Name(), imgDigest.Hex)
 
-			if err := pushArtifact(context.Background(), metadataImg, newDir, authenticator); err != nil {
+			if err := pushArtifact(context.Background(), metadataImg, newDir, crane.WithAuth(authenticator)); err != nil {
 				return nil, fmt.Errorf("failed to push metadata: %v", err)
 			}
 			if cfg.SignKey != "" {
-				if err := CosignImage(metadataImg, cfg.SignKey, authenticator); err != nil {
+				if err := CosignImage(metadataImg, cfg.SignKey, crane.WithAuth(authenticator)); err != nil {
 					return nil, fmt.Errorf("failed to sign image %q: %v", src, err)
 				}
 			}
@@ -336,8 +336,13 @@ func CreateSampleImages(imageData *ImageData, archs []string) ([]v1.Image, error
 }
 
 // ReadRemoteImageManifest reads the image src digests from a remote repository
-func ReadRemoteImageManifest(src string) (map[string]DigestData, error) {
-	o := crane.GetOptions()
+func ReadRemoteImageManifest(src string, opts ...Option) (map[string]DigestData, error) {
+	cfg := NewConfig(opts...)
+	authenticator := authn.Anonymous
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		authenticator = &authn.Basic{Username: "username", Password: "password"}
+	}
+	o := crane.GetOptions(crane.WithAuth(authenticator))
 
 	ref, err := name.ParseReference(src, o.Name...)
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,7 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"helm.sh/helm/v3/pkg/repo/repotest"
 )
 
 type unwrapOpts struct {
@@ -28,12 +30,19 @@ type unwrapOpts struct {
 	ChartName         string
 	Version           string
 	ArtifactsMetadata map[string][]byte
+	Auth              tu.Auth
 }
 
 func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegistry string, srcRegistry string, cfg unwrapOpts) {
-	dt("unwrap", "--log-level", "debug", "--plain", "--yes", inputChart, targetRegistry).AssertSuccessMatch(t, "")
+	args := []string{"unwrap", "--log-level", "debug", "--plain", "--yes", inputChart, targetRegistry}
+	authenticator := authn.Anonymous
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		args = append(args, "--username", "username", "--password", "password")
+		authenticator = &authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}
+	}
+	dt(args...).AssertSuccessMatch(t, "")
 	assert.True(t,
-		artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName), cfg.Version),
+		artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName), cfg.Version, artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password)),
 		"chart should exist in the repository",
 	)
 
@@ -55,7 +64,7 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 	// Verify the images were pushed
 	for _, img := range cfg.Images {
 		src := fmt.Sprintf("%s/%s", relocatedRegistryPath, img.Image)
-		remoteDigests, err := tu.ReadRemoteImageManifest(src)
+		remoteDigests, err := tu.ReadRemoteImageManifest(src, tu.WithAuth(cfg.Auth.Username, cfg.Auth.Password))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -64,7 +73,7 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 		}
 
 		tagsInfo := map[string]string{"main": "", "metadata": ""}
-		tags, err := artifacts.ListTags(context.Background(), fmt.Sprintf("%s/%s", srcRegistry, "test"))
+		tags, err := artifacts.ListTags(context.Background(), fmt.Sprintf("%s/%s", srcRegistry, "test"), crane.WithAuth(authenticator))
 		require.NoError(t, err)
 
 		for _, tag := range tags {
@@ -81,14 +90,14 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 				continue
 			}
 			if cfg.PublicKey != "" {
-				assert.NoError(t, testutil.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey), "Signature for %q failed", src)
+				assert.NoError(t, testutil.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey, crane.WithAuth(authenticator)), "Signature for %q failed", src)
 			}
 		}
 		// Verify the metadata
 		if cfg.FetchedArtifacts {
 			ociMetadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
 			require.NoError(t, err)
-			require.NoError(t, testutil.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir))
+			require.NoError(t, testutil.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir, crane.WithAuth(authenticator)))
 
 			verifyArtifactsContents(t, sb, ociMetadataDir, cfg.ArtifactsMetadata)
 		}
@@ -127,154 +136,232 @@ func writeSampleImages(imageName string, imageTag string, dir string) ([]tu.Imag
 
 func (suite *CmdSuite) TestUnwrapCommand() {
 	t := suite.T()
-	silentLog := log.New(io.Discard, "", 0)
-
-	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
-	defer s.Close()
-	u, err := url.Parse(s.URL)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name string
+		auth bool
+	}{
+		{name: "WithoutAuth", auth: false},
+		{name: "WithAuth", auth: true},
 	}
-	imageName := "test"
-	imageTag := "mytag"
 
-	sb := suite.sb
-	serverURL := u.Host
-	scenarioName := "complete-chart"
-	chartName := "test"
-	version := "1.0.0"
-	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-	currentRegIdx := 0
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var username, password string
+			var registryURL string
+			if tc.auth {
+				srv, err := repotest.NewTempServerWithCleanup(t, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer srv.Stop()
 
-	newTargetRegistry := func(name string) string {
-		return fmt.Sprintf("%s/%s", serverURL, name)
-	}
-	newUniqueTargetRegistry := func() string {
-		currentRegIdx++
-		return newTargetRegistry(fmt.Sprintf("new-images-%d", currentRegIdx))
-	}
-	t.Run("Unwrap Chart", func(t *testing.T) {
-		require := suite.Require()
-		assert := suite.Assert()
+				ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+				if err != nil {
+					t.Fatal(err)
+				}
+				go ociSrv.ListenAndServe()
+				registryURL = ociSrv.RegistryURL
 
-		wrapDir := sb.TempFile()
+				username = "username"
+				password = "password"
+			} else {
+				silentLog := log.New(io.Discard, "", 0)
 
-		chartDir := filepath.Join(wrapDir, "chart")
+				s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+				defer s.Close()
+				u, err := url.Parse(s.URL)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		images, err := writeSampleImages(imageName, imageTag, filepath.Join(wrapDir, "images"))
-		require.NoError(err)
-
-		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
-		))
-
-		data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
-		)
-		require.NoError(err)
-		require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
-		targetRegistry := newUniqueTargetRegistry()
-		dt("unwrap", "--plain", "--yes", wrapDir, targetRegistry).AssertSuccessMatch(suite.T(), "")
-		// Verify the images were pushed
-		for _, img := range images {
-			src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
-			remoteDigests, err := tu.ReadRemoteImageManifest(src)
-			if err != nil {
-				t.Fatal(err)
+				registryURL = u.Host
 			}
-			for _, dgstData := range img.Digests {
-				assert.Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
+
+			imageName := "test"
+			imageTag := "mytag"
+
+			sb := suite.sb
+			serverURL := registryURL
+			scenarioName := "complete-chart"
+			chartName := "test"
+			version := "1.0.0"
+			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+			currentRegIdx := 0
+
+			newTargetRegistry := func(name string) string {
+				return fmt.Sprintf("%s/%s", serverURL, name)
 			}
-		}
-		assert.True(
-			artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, chartName), version),
-			"chart should exist in the repository",
-		)
-	})
+			newUniqueTargetRegistry := func() string {
+				currentRegIdx++
+				return newTargetRegistry(fmt.Sprintf("new-images-%d", currentRegIdx))
+			}
+			t.Run("Unwrap Chart", func(t *testing.T) {
+				require := suite.Require()
+				assert := suite.Assert()
+
+				wrapDir := sb.TempFile()
+
+				chartDir := filepath.Join(wrapDir, "chart")
+
+				images, err := writeSampleImages(imageName, imageTag, filepath.Join(wrapDir, "images"))
+				require.NoError(err)
+
+				require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": serverURL},
+				))
+
+				data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
+					map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version},
+				)
+				require.NoError(err)
+				require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
+				targetRegistry := newUniqueTargetRegistry()
+				args := []string{"unwrap", wrapDir, targetRegistry, "--plain", "--yes"}
+				if username != "" && password != "" {
+					args = append(args, "--username", "username", "--password", "password")
+				}
+				dt(args...).AssertSuccessMatch(suite.T(), "")
+				// Verify the images were pushed
+				for _, img := range images {
+					src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
+					remoteDigests, err := tu.ReadRemoteImageManifest(src, tu.WithAuth(username, password))
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, dgstData := range img.Digests {
+						assert.Equal(dgstData.Digest.Hex(), remoteDigests[dgstData.Arch].Digest.Hex())
+					}
+				}
+				assert.True(
+					artifacts.RemoteChartExist(fmt.Sprintf("oci://%s/%s", targetRegistry, chartName), version, artifacts.WithRegistryAuth(username, password)),
+					"chart should exist in the repository",
+				)
+			})
+		})
+	}
 }
 func (suite *CmdSuite) TestEndToEnd() {
 	t := suite.T()
-	silentLog := log.New(io.Discard, "", 0)
-
-	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
-	defer s.Close()
-	u, err := url.Parse(s.URL)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name string
+		auth bool
+	}{
+		{name: "WithoutAuth", auth: false},
+		{name: "WithAuth", auth: true},
 	}
-	imageName := "test"
 
-	sb := suite.sb
-	serverURL := u.Host
-	scenarioName := "complete-chart"
-	chartName := "test"
-	version := "1.0.0"
-	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-	currentRegIdx := 0
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var username, password string
+			var registryURL string
+			if tc.auth {
+				srv, err := repotest.NewTempServerWithCleanup(t, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer srv.Stop()
 
-	newTargetRegistry := func(name string) string {
-		return fmt.Sprintf("%s/%s", serverURL, name)
-	}
-	newUniqueTargetRegistry := func() string {
-		currentRegIdx++
-		return newTargetRegistry(fmt.Sprintf("new-images-%d", currentRegIdx))
-	}
-	t.Run("Wrap and unwrap Chart", func(t *testing.T) {
-		require := suite.Require()
-		chartDir := sb.TempFile()
+				ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+				if err != nil {
+					t.Fatal(err)
+				}
+				go ociSrv.ListenAndServe()
+				registryURL = ociSrv.RegistryURL
 
-		srcRegistryNamespace := "wrap-unwrap-test"
-		srcRegistry := newTargetRegistry(srcRegistryNamespace)
-		targetRegistry := newUniqueTargetRegistry()
+				username = "username"
+				password = "password"
+			} else {
+				silentLog := log.New(io.Discard, "", 0)
 
-		certDir, err := sb.Mkdir(sb.TempFile(), 0755)
-		require.NoError(err)
+				s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+				defer s.Close()
+				u, err := url.Parse(s.URL)
+				if err != nil {
+					t.Fatal(err)
+				}
+				registryURL = u.Host
+			}
+			imageName := "test"
 
-		keyFile, pubKey, err := tu.GenerateCosignCertificateFiles(certDir)
-		require.NoError(err)
+			sb := suite.sb
+			serverURL := registryURL
+			scenarioName := "complete-chart"
+			chartName := "test"
+			version := "1.0.0"
+			scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+			currentRegIdx := 0
 
-		metadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
-		require.NoError(err)
+			newTargetRegistry := func(name string) string {
+				return fmt.Sprintf("%s/%s", serverURL, name)
+			}
+			newUniqueTargetRegistry := func() string {
+				currentRegIdx++
+				return newTargetRegistry(fmt.Sprintf("new-images-%d", currentRegIdx))
+			}
+			t.Run("Wrap and unwrap Chart", func(t *testing.T) {
+				require := suite.Require()
+				chartDir := sb.TempFile()
 
-		metdataFileText := "this is a sample text"
+				srcRegistryNamespace := "wrap-unwrap-test"
+				srcRegistry := newTargetRegistry(srcRegistryNamespace)
+				targetRegistry := newUniqueTargetRegistry()
 
-		metadataArtifacts := map[string][]byte{
-			"metadata.txt": []byte(metdataFileText),
-		}
-		for fileName, data := range metadataArtifacts {
-			_, err := sb.Write(filepath.Join(metadataDir, fileName), string(data))
-			require.NoError(err)
-		}
+				certDir, err := sb.Mkdir(sb.TempFile(), 0755)
+				require.NoError(err)
 
-		images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir))
-		if err != nil {
-			require.NoError(err)
-		}
+				keyFile, pubKey, err := tu.GenerateCosignCertificateFiles(certDir)
+				require.NoError(err)
 
-		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": srcRegistry, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": srcRegistry},
-		))
+				metadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
+				require.NoError(err)
 
-		tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
+				metdataFileText := "this is a sample text"
 
-		testChartWrap(t, sb, chartDir, nil, wrapOpts{
-			FetchArtifacts:       true,
-			GenerateCarvelBundle: false,
-			ChartName:            chartName,
-			Version:              version,
-			OutputFile:           tempFilename,
-			SkipExpectedLock:     true,
-			Images:               images,
-			ArtifactsMetadata:    metadataArtifacts,
+				metadataArtifacts := map[string][]byte{
+					"metadata.txt": []byte(metdataFileText),
+				}
+				for fileName, data := range metadataArtifacts {
+					_, err := sb.Write(filepath.Join(metadataDir, fileName), string(data))
+					require.NoError(err)
+				}
+
+				images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(username, password))
+				if err != nil {
+					require.NoError(err)
+				}
+
+				require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+					map[string]interface{}{"ServerURL": srcRegistry, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": srcRegistry},
+				))
+
+				tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
+
+				testChartWrap(t, sb, chartDir, nil, wrapOpts{
+					FetchArtifacts:       true,
+					GenerateCarvelBundle: false,
+					ChartName:            chartName,
+					Version:              version,
+					OutputFile:           tempFilename,
+					SkipExpectedLock:     true,
+					Images:               images,
+					ArtifactsMetadata:    metadataArtifacts,
+					Auth: tu.Auth{
+						Username: username,
+						Password: password,
+					},
+				})
+
+				testChartUnwrap(t, sb, tempFilename, targetRegistry, srcRegistry, unwrapOpts{
+					FetchedArtifacts: true, Images: images, PublicKey: pubKey,
+					ArtifactsMetadata: metadataArtifacts,
+					ChartName:         chartName,
+					Version:           version,
+					Auth: tu.Auth{
+						Username: username,
+						Password: password,
+					},
+				})
+			})
 		})
-
-		testChartUnwrap(t, sb, tempFilename, targetRegistry, srcRegistry, unwrapOpts{
-			FetchedArtifacts: true, Images: images, PublicKey: pubKey,
-			ArtifactsMetadata: metadataArtifacts,
-			ChartName:         chartName,
-			Version:           version,
-		})
-
-	})
-
+	}
 }

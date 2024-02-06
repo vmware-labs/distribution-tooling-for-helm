@@ -237,7 +237,12 @@ func untarChart(chartFile string, dir string) (string, error) {
 }
 
 func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) (string, error) {
-	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP), artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password))
+	chartPath, err := artifacts.PullChart(
+		chartURL, version, dir,
+		artifacts.WithInsecure(cfg.Insecure),
+		artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
+		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+	)
 	if err != nil {
 		return "", err
 	}
@@ -460,8 +465,8 @@ This command will pull all the container images and wrap it into a single tarbal
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when wrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
-	cmd.PersistentFlags().StringVar(&username, "username", outputFile, "username to the registry that holds the Helm chart and images")
-	cmd.PersistentFlags().StringVar(&password, "password", outputFile, "password to the registry that holds the Helm chart and images")
+	cmd.PersistentFlags().StringVar(&username, "username", "", "username to the registry that holds the Helm chart and images")
+	cmd.PersistentFlags().StringVar(&password, "password", "", "password to the registry that holds the Helm chart and images")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")

@@ -384,6 +384,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
 		sayYes       bool
 		pushChartURL string
+		username     string
+		password     string
 		version      string
 	)
 	cmd := &cobra.Command{
@@ -415,12 +417,15 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithInsecure(cfg.Insecure),
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
+				WithAuth(username, password),
 			)
 		},
 	}
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when unwrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&pushChartURL, "push-chart-url", pushChartURL, "push the unwrapped Helm chart to the given URL")
+	cmd.PersistentFlags().StringVar(&username, "username", "", "username to the registry that holds the Helm chart and images")
+	cmd.PersistentFlags().StringVar(&password, "password", "", "password to the registry that holds the Helm chart and images")
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
 
 	return cmd
