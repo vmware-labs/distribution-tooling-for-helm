@@ -237,11 +237,16 @@ func untarChart(chartFile string, dir string) (string, error) {
 }
 
 func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) (string, error) {
+	d, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", err
+	}
 	chartPath, err := artifacts.PullChart(
 		chartURL, version, dir,
 		artifacts.WithInsecure(cfg.Insecure),
 		artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
 		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+		artifacts.WithCredentialsFileDir(d),
 	)
 	if err != nil {
 		return "", err

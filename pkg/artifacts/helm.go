@@ -18,9 +18,10 @@ import (
 
 // RegistryClientConfig defines how the client communicates with the remote server
 type RegistryClientConfig struct {
-	UsePlainHTTP     bool
-	UseInsecureHTTPS bool
-	Auth             Auth
+	UsePlainHTTP       bool
+	UseInsecureHTTPS   bool
+	Auth               Auth
+	CredentialsFileDir string
 }
 
 // RegistryClientOption defines a RegistryClientConfig setting
@@ -49,6 +50,13 @@ func WithInsecure(insecure bool) func(c *RegistryClientConfig) {
 func WithPlainHTTP(usePlain bool) func(c *RegistryClientConfig) {
 	return func(c *RegistryClientConfig) {
 		c.UsePlainHTTP = usePlain
+	}
+}
+
+// WithCredentialsFileDir configures the directory in which to place the temporary credentials file
+func WithCredentialsFileDir(dir string) func(c *RegistryClientConfig) {
+	return func(c *RegistryClientConfig) {
+		c.CredentialsFileDir = dir
 	}
 }
 
@@ -82,6 +90,15 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 		}
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		f, err := os.CreateTemp(cfg.CredentialsFileDir, "config-*.json")
+		if err != nil {
+			return nil, fmt.Errorf("error creating credentials file: %w", err)
+		}
+		err = f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error closing credentials file: %w", err)
+		}
+		opts = append(opts, registry.ClientOptCredentialsFile(f.Name()))
 		revOpts := docker.ResolverOptions{}
 		authz := docker.NewDockerAuthorizer(docker.WithAuthCreds(func(_ string) (string, string, error) {
 			return cfg.Auth.Username, cfg.Auth.Password, nil

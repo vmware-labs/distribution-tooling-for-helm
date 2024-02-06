@@ -364,9 +364,14 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
+	d, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to get temp dir: %w", err)
+	}
 	if err := artifacts.PushChart(tempTarFile, pushChartURL,
 		artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
 		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+		artifacts.WithCredentialsFileDir(d),
 	); err != nil {
 		return err
 	}
