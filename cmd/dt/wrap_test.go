@@ -19,7 +19,6 @@ import (
 	"helm.sh/helm/v3/pkg/repo/repotest"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/wrap"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
@@ -50,7 +49,7 @@ type wrapOpts struct {
 func verifyArtifactsContents(t *testing.T, sb *tu.Sandbox, dir string, artifactsData map[string][]byte) {
 	plainMetadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
 	require.NoError(t, err)
-	require.NoError(t, testutil.UnpackOCILayout(context.Background(), dir, plainMetadataDir))
+	require.NoError(t, tu.UnpackOCILayout(context.Background(), dir, plainMetadataDir))
 
 	for fileName, data := range artifactsData {
 		got, err := os.ReadFile(filepath.Join(plainMetadataDir, fileName))
@@ -128,6 +127,7 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 			wrap.WithCarvelize(cfg.GenerateCarvelBundle),
 			wrap.WithFetchArtifacts(cfg.FetchArtifacts),
 			wrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			wrap.WithContainerRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
 		}
 		require.NoError(t, wrap.Chart(inputChart, expectedWrapFile, opts...))
 	} else {
@@ -217,7 +217,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 				}
 				defer srv.Stop()
 
-				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
+				ociSrv, err := tu.NewOCIServer(t, srv.Root())
 				if err != nil {
 					t.Fatal(err)
 				}

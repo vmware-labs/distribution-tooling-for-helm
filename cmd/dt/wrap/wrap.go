@@ -29,18 +29,19 @@ type Auth struct {
 
 // Config defines the configuration for the Wrap/Unwrap command
 type Config struct {
-	Context        context.Context
-	AnnotationsKey string
-	UsePlainHTTP   bool
-	Insecure       bool
-	Platforms      []string
-	logger         log.SectionLogger
-	TempDirectory  string
-	Version        string
-	Carvelize      bool
-	KeepArtifacts  bool
-	FetchArtifacts bool
-	Auth           Auth
+	Context               context.Context
+	AnnotationsKey        string
+	UsePlainHTTP          bool
+	Insecure              bool
+	Platforms             []string
+	logger                log.SectionLogger
+	TempDirectory         string
+	Version               string
+	Carvelize             bool
+	KeepArtifacts         bool
+	FetchArtifacts        bool
+	Auth                  Auth
+	ContainerRegistryAuth Auth
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
@@ -54,6 +55,16 @@ func WithKeepArtifacts(keepArtifacts bool) func(c *Config) {
 func WithAuth(username, password string) func(c *Config) {
 	return func(c *Config) {
 		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
+}
+
+// WithContainerRegistryAuth configures the Auth of the wrap Config
+func WithContainerRegistryAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.ContainerRegistryAuth = Auth{
 			Username: username,
 			Password: password,
 		}
@@ -263,7 +274,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 		if err := l.ExecuteStep("Verifying Images.lock", func() error {
 			return wrap.VerifyLock(imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 				imagelock.WithContext(cfg.Context),
-				imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+				imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 				imagelock.WithInsecure(cfg.Insecure))
 		}); err != nil {
 			return l.Failf("Failed to verify lock: %w", err)
@@ -276,7 +287,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 				return lock.Create(chart.RootDir(), lockFile, log.SilentLog,
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure),
-					imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+					imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 					imagelock.WithPlatforms(cfg.Platforms),
 					imagelock.WithContext(cfg.Context),
 				)
@@ -316,7 +327,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithLog(childLog),
 				chartutils.WithContext(cfg.Context),
 				chartutils.WithFetchArtifacts(cfg.FetchArtifacts),
-				chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+				chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 			); err != nil {
@@ -349,7 +360,7 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 	}
 	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
-		chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+		// chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 	)
 	if err != nil {
 		return l.Failf("failed to create wrap: %v", err)
