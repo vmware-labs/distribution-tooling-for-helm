@@ -29,18 +29,19 @@ var (
 
 // Config defines the configuration for the Wrap/Unwrap command
 type Config struct {
-	Context        context.Context
-	AnnotationsKey string
-	UsePlainHTTP   bool
-	Insecure       bool
-	Platforms      []string
-	logger         log.SectionLogger
-	TempDirectory  string
-	Version        string
-	Carvelize      bool
-	KeepArtifacts  bool
-	FetchArtifacts bool
-	Auth           Auth
+	Context               context.Context
+	AnnotationsKey        string
+	UsePlainHTTP          bool
+	Insecure              bool
+	Platforms             []string
+	logger                log.SectionLogger
+	TempDirectory         string
+	Version               string
+	Carvelize             bool
+	KeepArtifacts         bool
+	FetchArtifacts        bool
+	Auth                  Auth
+	ContainerRegistryAuth Auth
 
 	SayYes bool
 }
@@ -55,6 +56,16 @@ type Auth struct {
 func WithAuth(username, password string) func(c *Config) {
 	return func(c *Config) {
 		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
+}
+
+// WithContainerRegistryAuth configures the ContainerRegistryAuth of the unwrap Config
+func WithContainerRegistryAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.ContainerRegistryAuth = Auth{
 			Username: username,
 			Password: password,
 		}
@@ -257,6 +268,8 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 
 		if pushChartURL == "" {
 			pushChartURL = registryURL
+			// we will push the chart to the same registry as the containers
+			cfg.Auth = cfg.ContainerRegistryAuth
 		}
 		pushChartURL = normalizeOCIURL(pushChartURL)
 		fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, wrap.Chart().Name())
@@ -299,7 +312,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
-		chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 	); err != nil {
 		return err
 	}
@@ -308,7 +321,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 
 		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{
 			Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey,
-			Auth: verify.Auth{Username: cfg.Auth.Username, Password: cfg.Auth.Password},
+			Auth: verify.Auth{Username: cfg.ContainerRegistryAuth.Username, Password: cfg.ContainerRegistryAuth.Password},
 		})
 	}); err != nil {
 		return fmt.Errorf("failed to verify Helm chart Images.lock: %w", err)

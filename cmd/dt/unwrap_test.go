@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/unwrap"
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	dtLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
@@ -26,21 +25,28 @@ import (
 )
 
 type unwrapOpts struct {
-	FetchedArtifacts  bool
-	PublicKey         string
-	Images            []tu.ImageData
-	ChartName         string
-	Version           string
-	ArtifactsMetadata map[string][]byte
-	UseAPI            bool
-	Auth              tu.Auth
+	FetchedArtifacts      bool
+	PublicKey             string
+	Images                []tu.ImageData
+	ChartName             string
+	Version               string
+	ArtifactsMetadata     map[string][]byte
+	UseAPI                bool
+	Auth                  tu.Auth
+	ContainerRegistryAuth tu.Auth
 }
 
-func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegistry string, srcRegistry string, cfg unwrapOpts) {
+func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegistry string, chartTargetRegistry string, srcRegistry string, cfg unwrapOpts) {
 	args := []string{"unwrap", "--log-level", "debug", "--plain", "--yes", "--use-plain-http", inputChart, targetRegistry}
 	craneAuth := authn.Anonymous
-	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		craneAuth = &authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}
+	if cfg.ContainerRegistryAuth.Username != "" && cfg.ContainerRegistryAuth.Password != "" {
+		craneAuth = &authn.Basic{Username: cfg.ContainerRegistryAuth.Username, Password: cfg.ContainerRegistryAuth.Password}
+	}
+	if chartTargetRegistry == "" {
+		cfg.Auth = cfg.ContainerRegistryAuth
+		chartTargetRegistry = targetRegistry
+	} else {
+		args = append(args, "--push-chart-url", chartTargetRegistry)
 	}
 	if cfg.UseAPI {
 		l := dtLog.NewLogrusSectionLogger()
@@ -50,14 +56,15 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 			unwrap.WithUsePlainHTTP(true),
 			unwrap.WithSayYes(true),
 			unwrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			unwrap.WithContainerRegistryAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 		}
-		require.NoError(t, unwrap.Chart(inputChart, targetRegistry, "", opts...))
+		require.NoError(t, unwrap.Chart(inputChart, targetRegistry, chartTargetRegistry, opts...))
 	} else {
 		dt(args...).AssertSuccessMatch(t, "")
 	}
 	assert.True(t,
 		artifacts.RemoteChartExist(
-			fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName),
+			fmt.Sprintf("oci://%s/%s", chartTargetRegistry, cfg.ChartName),
 			cfg.Version,
 			artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
 			artifacts.WithPlainHTTP(true),
@@ -83,7 +90,7 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 	// Verify the images were pushed
 	for _, img := range cfg.Images {
 		src := fmt.Sprintf("%s/%s", relocatedRegistryPath, img.Image)
-		remoteDigests, err := tu.ReadRemoteImageManifest(src, tu.WithAuth(cfg.Auth.Username, cfg.Auth.Password))
+		remoteDigests, err := tu.ReadRemoteImageManifest(src, tu.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,14 +116,14 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 				continue
 			}
 			if cfg.PublicKey != "" {
-				assert.NoError(t, testutil.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey, crane.WithAuth(craneAuth)), "Signature for %q failed", src)
+				assert.NoError(t, tu.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey, crane.WithAuth(craneAuth)), "Signature for %q failed", src)
 			}
 		}
 		// Verify the metadata
 		if cfg.FetchedArtifacts {
 			ociMetadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
 			require.NoError(t, err)
-			require.NoError(t, testutil.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir, crane.WithAuth(craneAuth)))
+			require.NoError(t, tu.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir, crane.WithAuth(craneAuth)))
 
 			verifyArtifactsContents(t, sb, ociMetadataDir, cfg.ArtifactsMetadata)
 		}
@@ -177,7 +184,7 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 				}
 				defer srv.Stop()
 
-				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
+				ociSrv, err := tu.NewOCIServer(t, srv.Root())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -246,7 +253,7 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 						unwrap.WithLogger(l),
 						unwrap.WithUsePlainHTTP(true),
 						unwrap.WithSayYes(true),
-						unwrap.WithAuth(username, password),
+						unwrap.WithContainerRegistryAuth(username, password),
 					}
 					require.NoError(unwrap.Chart(wrapDir, targetRegistry, "", opts...))
 				} else {
@@ -288,26 +295,43 @@ func (suite *CmdSuite) TestEndToEnd() {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			var contUser, contPass string
 			var username, password string
 			var useAPI bool
 			var registryURL string
+			var pushChartURL string
 			if tc.auth {
 				useAPI = true
+				contUser = "username"
+				contPass = "password"
+
 				srv, err := repotest.NewTempServerWithCleanup(t, "")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer srv.Stop()
 
-				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
+				srv2, err := repotest.NewTempServerWithCleanup(t, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer srv2.Stop()
+
+				contSrv, err := tu.NewOCIServer(t, srv.Root())
+				if err != nil {
+					t.Fatal(err)
+				}
+				go contSrv.ListenAndServe()
+				registryURL = contSrv.RegistryURL
+
+				username = "username2"
+				password = "password2"
+				ociSrv, err := tu.NewOCIServerWithCustomCreds(t, srv2.Root(), username, password)
 				if err != nil {
 					t.Fatal(err)
 				}
 				go ociSrv.ListenAndServe()
-				registryURL = ociSrv.RegistryURL
-
-				username = "username"
-				password = "password"
+				pushChartURL = ociSrv.RegistryURL
 			} else {
 				silentLog := log.New(io.Discard, "", 0)
 
@@ -363,7 +387,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 					require.NoError(err)
 				}
 
-				images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(username, password))
+				images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(contUser, contPass))
 				if err != nil {
 					require.NoError(err)
 				}
@@ -375,31 +399,26 @@ func (suite *CmdSuite) TestEndToEnd() {
 				tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
 
 				testChartWrap(t, sb, chartDir, nil, wrapOpts{
-					FetchArtifacts:       true,
-					GenerateCarvelBundle: false,
-					ChartName:            chartName,
-					Version:              version,
-					OutputFile:           tempFilename,
-					SkipExpectedLock:     true,
-					Images:               images,
-					ArtifactsMetadata:    metadataArtifacts,
-					UseAPI:               useAPI,
-					ContainerRegistryAuth: tu.Auth{
-						Username: username,
-						Password: password,
-					},
+					FetchArtifacts:        true,
+					GenerateCarvelBundle:  false,
+					ChartName:             chartName,
+					Version:               version,
+					OutputFile:            tempFilename,
+					SkipExpectedLock:      true,
+					Images:                images,
+					ArtifactsMetadata:     metadataArtifacts,
+					UseAPI:                useAPI,
+					ContainerRegistryAuth: tu.Auth{Username: contUser, Password: contPass},
 				})
 
-				testChartUnwrap(t, sb, tempFilename, targetRegistry, srcRegistry, unwrapOpts{
+				testChartUnwrap(t, sb, tempFilename, targetRegistry, pushChartURL, srcRegistry, unwrapOpts{
 					FetchedArtifacts: true, Images: images, PublicKey: pubKey,
-					ArtifactsMetadata: metadataArtifacts,
-					ChartName:         chartName,
-					Version:           version,
-					UseAPI:            useAPI,
-					Auth: tu.Auth{
-						Username: username,
-						Password: password,
-					},
+					ArtifactsMetadata:     metadataArtifacts,
+					ChartName:             chartName,
+					Version:               version,
+					UseAPI:                useAPI,
+					ContainerRegistryAuth: tu.Auth{Username: contUser, Password: contPass},
+					Auth:                  tu.Auth{Username: username, Password: password},
 				})
 			})
 		})
