@@ -5,8 +5,10 @@ go 1.21
 require (
 	github.com/DataDog/go-tuf v1.0.2-0.5.2
 	github.com/Masterminds/sprig/v3 v3.2.3
+	github.com/distribution/distribution/v3 v3.0.0-20221208165359-362910506bc2
 	github.com/google/go-containerregistry v0.19.0
 	github.com/opencontainers/go-digest v1.0.0
+	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/pterm/pterm v0.12.78
 	github.com/sigstore/cosign/v2 v2.2.3
 	github.com/sirupsen/logrus v1.9.3
@@ -88,7 +90,6 @@ require (
 	github.com/digitorus/pkcs7 v0.0.0-20230818184609-3a137a874352 // indirect
 	github.com/digitorus/timestamp v0.0.0-20231217203849-220c5c2851b7 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
-	github.com/distribution/distribution/v3 v3.0.0-20221208165359-362910506bc2 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/docker/libtrust v0.0.0-20150114040149-fa567046d9b1 // indirect
@@ -140,7 +141,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
-	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20240116145035-ef3ab179eed6 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
@@ -295,7 +295,7 @@ require (
 	go.opentelemetry.io/otel v1.23.0 // indirect
 	go.opentelemetry.io/otel/trace v1.23.0 // indirect
 	go.starlark.net v0.0.0-20240123142251-f86470692795 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/crypto v0.18.0
 	golang.org/x/exp v0.0.0-20240205201215-2c58cdc269a3
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
