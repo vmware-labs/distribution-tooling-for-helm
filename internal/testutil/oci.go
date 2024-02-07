@@ -267,8 +267,13 @@ func loadImage(path string) (partial.WithRawManifest, error) {
 
 // NewOCIServer returns a new OCI server with basic auth for testing purposes
 func NewOCIServer(t *testing.T, dir string) (*repotest.OCIServer, error) {
+	return NewOCIServerWithCustomCreds(t, dir, "username", "password")
+}
+
+// NewOCIServerWithCustomCreds returns a new OCI server with custom credentials
+func NewOCIServerWithCustomCreds(t *testing.T, dir string, username, password string) (*repotest.OCIServer, error) {
 	testHtpasswdFileBasename := "authtest.htpasswd"
-	testUsername, testPassword := "username", "password"
+	testUsername, testPassword := username, password
 
 	pwBytes, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
 	if err != nil {

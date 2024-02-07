@@ -384,7 +384,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 					Images:               images,
 					ArtifactsMetadata:    metadataArtifacts,
 					UseAPI:               useAPI,
-					Auth: tu.Auth{
+					ContainerRegistryAuth: tu.Auth{
 						Username: username,
 						Password: password,
 					},

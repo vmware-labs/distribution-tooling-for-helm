@@ -34,16 +34,17 @@ const (
 )
 
 type wrapOpts struct {
-	FetchArtifacts       bool
-	GenerateCarvelBundle bool
-	ChartName            string
-	Version              string
-	OutputFile           string
-	SkipExpectedLock     bool
-	Images               []tu.ImageData
-	ArtifactsMetadata    map[string][]byte
-	UseAPI               bool
-	Auth                 tu.Auth
+	FetchArtifacts        bool
+	GenerateCarvelBundle  bool
+	ChartName             string
+	Version               string
+	OutputFile            string
+	SkipExpectedLock      bool
+	Images                []tu.ImageData
+	ArtifactsMetadata     map[string][]byte
+	UseAPI                bool
+	Auth                  tu.Auth
+	ContainerRegistryAuth tu.Auth
 }
 
 func verifyArtifactsContents(t *testing.T, sb *tu.Sandbox, dir string, artifactsData map[string][]byte) {
@@ -127,7 +128,7 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 			wrap.WithCarvelize(cfg.GenerateCarvelBundle),
 			wrap.WithFetchArtifacts(cfg.FetchArtifacts),
 			wrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
-			wrap.WithContainerRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+			wrap.WithContainerRegistryAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 		}
 		require.NoError(t, wrap.Chart(inputChart, expectedWrapFile, opts...))
 	} else {
@@ -286,20 +287,18 @@ func (suite *CmdSuite) TestWrapCommand() {
 				return chartDir
 			}
 			testWrap := func(t *testing.T, inputChart string, outputFile string, expectedLock map[string]interface{},
-				generateCarvelBundle bool, fetchArtifacts bool, useAPI bool, username string, password string) string {
+				generateCarvelBundle bool, fetchArtifacts bool, useAPI bool, contUser, contPass string, username, password string) string {
 				return testChartWrap(t, sb, inputChart, expectedLock, wrapOpts{
-					FetchArtifacts:       fetchArtifacts,
-					GenerateCarvelBundle: generateCarvelBundle,
-					ChartName:            chartName,
-					Version:              version,
-					OutputFile:           outputFile,
-					ArtifactsMetadata:    metadataArtifacts,
-					Images:               images,
-					UseAPI:               useAPI,
-					Auth: tu.Auth{
-						Username: username,
-						Password: password,
-					},
+					FetchArtifacts:        fetchArtifacts,
+					GenerateCarvelBundle:  generateCarvelBundle,
+					ChartName:             chartName,
+					Version:               version,
+					OutputFile:            outputFile,
+					ArtifactsMetadata:     metadataArtifacts,
+					Images:                images,
+					UseAPI:                useAPI,
+					ContainerRegistryAuth: tu.Auth{Username: contUser, Password: contPass},
+					Auth:                  tu.Auth{Username: username, Password: password},
 				})
 			}
 			testSampleWrap := func(t *testing.T, withLock bool, outputFile string, generateCarvelBundle bool,
@@ -316,7 +315,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 				// Clear the timestamp
 				expectedLock["metadata"] = nil
 
-				testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle, fetchArtifacts, useAPI, username, password)
+				testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle, fetchArtifacts, useAPI, username, password, "", "")
 			}
 
 			t.Run("Wrap Chart without existing lock", func(t *testing.T) {
@@ -343,12 +342,29 @@ func (suite *CmdSuite) TestWrapCommand() {
 				require.NoError(utils.Tar(chartDir, tarFilename, utils.TarConfig{}))
 				require.FileExists(tarFilename)
 
-				testWrap(t, tarFilename, "", expectedLock, false, WithoutArtifacts, useAPI, username, password)
+				testWrap(t, tarFilename, "", expectedLock, false, WithoutArtifacts, useAPI, username, password, "", "")
 			})
 
 			t.Run("Wrap Chart From oci", func(t *testing.T) {
-				ociServerURL := registryURL
-				if !tc.auth {
+				var ociServerURL string
+				var ociUser, ociPass string
+				if tc.auth {
+					ociUser = "username2"
+					ociPass = "password2"
+					srv, err := repotest.NewTempServerWithCleanup(t, "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer srv.Stop()
+
+					ociSrv, err := tu.NewOCIServerWithCustomCreds(t, srv.Root(), ociUser, ociPass)
+					if err != nil {
+						t.Fatal(err)
+					}
+					go ociSrv.ListenAndServe()
+
+					ociServerURL = ociSrv.RegistryURL
+				} else {
 					silentLog := log.New(io.Discard, "", 0)
 					s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
 					defer s.Close()
@@ -378,12 +394,12 @@ func (suite *CmdSuite) TestWrapCommand() {
 				pushChartURL := fmt.Sprintf("oci://%s/charts", ociServerURL)
 				fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chartName)
 
-				require.NoError(artifacts.PushChart(tarFilename, pushChartURL, artifacts.WithRegistryAuth(username, password), artifacts.WithPlainHTTP(true)))
+				require.NoError(artifacts.PushChart(tarFilename, pushChartURL, artifacts.WithRegistryAuth(ociUser, ociPass), artifacts.WithPlainHTTP(true)))
 				t.Run("With artifacts", func(t *testing.T) {
-					testWrap(t, fullChartURL, "", expectedLock, false, WithArtifacts, useAPI, username, password)
+					testWrap(t, fullChartURL, "", expectedLock, false, WithArtifacts, useAPI, username, password, ociUser, ociPass)
 				})
 				t.Run("Without artifacts", func(t *testing.T) {
-					testWrap(t, fullChartURL, "", expectedLock, false, WithoutArtifacts, useAPI, username, password)
+					testWrap(t, fullChartURL, "", expectedLock, false, WithoutArtifacts, useAPI, username, password, ociUser, ociPass)
 				})
 			})
 

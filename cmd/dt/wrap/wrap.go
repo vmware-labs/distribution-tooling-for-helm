@@ -360,7 +360,6 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 	}
 	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
-		// chartutils.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 	)
 	if err != nil {
 		return l.Failf("failed to create wrap: %v", err)
