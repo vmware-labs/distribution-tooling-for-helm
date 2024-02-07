@@ -415,8 +415,6 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var outputFile string
 	var version string
-	var username string
-	var password string
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
@@ -454,7 +452,7 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
-				WithTempDirectory(tmpDir), WithAuth(username, password),
+				WithTempDirectory(tmpDir),
 			); err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
 					// We already logged it, lets be less verbose
@@ -468,8 +466,6 @@ This command will pull all the container images and wrap it into a single tarbal
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when wrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
-	cmd.PersistentFlags().StringVar(&username, "username", "", "username to the registry that holds the Helm chart and images")
-	cmd.PersistentFlags().StringVar(&password, "password", "", "password to the registry that holds the Helm chart and images")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")

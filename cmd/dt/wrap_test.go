@@ -18,10 +18,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/repo/repotest"
 
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/wrap"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
+	dtLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 	"gopkg.in/yaml.v3"
@@ -41,6 +43,7 @@ type wrapOpts struct {
 	SkipExpectedLock     bool
 	Images               []tu.ImageData
 	ArtifactsMetadata    map[string][]byte
+	UseAPI               bool
 	Auth                 tu.Auth
 }
 
@@ -116,14 +119,23 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 		args = append(args, "--fetch-artifacts")
 	}
 
-	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		args = append(args, "--username", "username", "--password", "password")
-	}
-
-	if len(cfg.Images) == 0 {
-		dt(args...).AssertSuccessMatch(t, "No images found in Images.lock")
+	if cfg.UseAPI {
+		l := dtLog.NewLogrusSectionLogger()
+		l.SetWriter(io.Discard)
+		opts := []wrap.Option{
+			wrap.WithLogger(l),
+			wrap.WithUsePlainHTTP(true),
+			wrap.WithCarvelize(cfg.GenerateCarvelBundle),
+			wrap.WithFetchArtifacts(cfg.FetchArtifacts),
+			wrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+		}
+		require.NoError(t, wrap.Chart(inputChart, expectedWrapFile, opts...))
 	} else {
-		dt(args...).AssertSuccess(t)
+		if len(cfg.Images) == 0 {
+			dt(args...).AssertSuccessMatch(t, "No images found in Images.lock")
+		} else {
+			dt(args...).AssertSuccess(t)
+		}
 	}
 	require.FileExists(t, expectedWrapFile)
 
@@ -195,14 +207,17 @@ func (suite *CmdSuite) TestWrapCommand() {
 		t.Run(tc.name, func(t *testing.T) {
 			var username, password string
 			var registryURL string
+			var useAPI bool
 			if tc.auth {
+				useAPI = true
+
 				srv, err := repotest.NewTempServerWithCleanup(t, "")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer srv.Stop()
 
-				ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -271,7 +286,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 				return chartDir
 			}
 			testWrap := func(t *testing.T, inputChart string, outputFile string, expectedLock map[string]interface{},
-				generateCarvelBundle bool, fetchArtifacts bool, username string, password string) string {
+				generateCarvelBundle bool, fetchArtifacts bool, useAPI bool, username string, password string) string {
 				return testChartWrap(t, sb, inputChart, expectedLock, wrapOpts{
 					FetchArtifacts:       fetchArtifacts,
 					GenerateCarvelBundle: generateCarvelBundle,
@@ -280,13 +295,15 @@ func (suite *CmdSuite) TestWrapCommand() {
 					OutputFile:           outputFile,
 					ArtifactsMetadata:    metadataArtifacts,
 					Images:               images,
+					UseAPI:               useAPI,
 					Auth: tu.Auth{
 						Username: username,
 						Password: password,
 					},
 				})
 			}
-			testSampleWrap := func(t *testing.T, withLock bool, outputFile string, generateCarvelBundle bool, fetchArtifacts bool, username string, password string) {
+			testSampleWrap := func(t *testing.T, withLock bool, outputFile string, generateCarvelBundle bool,
+				fetchArtifacts bool, useAPI bool, username string, password string) {
 				chartDir := createSampleChart(sb.TempFile(), withLock)
 
 				data, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "imagelock.partial.tmpl"),
@@ -299,14 +316,14 @@ func (suite *CmdSuite) TestWrapCommand() {
 				// Clear the timestamp
 				expectedLock["metadata"] = nil
 
-				testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle, fetchArtifacts, username, password)
+				testWrap(t, chartDir, outputFile, expectedLock, generateCarvelBundle, fetchArtifacts, useAPI, username, password)
 			}
 
 			t.Run("Wrap Chart without existing lock", func(t *testing.T) {
-				testSampleWrap(t, withoutLock, "", false, WithoutArtifacts, username, password)
+				testSampleWrap(t, withoutLock, "", false, WithoutArtifacts, useAPI, username, password)
 			})
 			t.Run("Wrap Chart with existing lock", func(t *testing.T) {
-				testSampleWrap(t, withLock, "", false, WithoutArtifacts, username, password)
+				testSampleWrap(t, withLock, "", false, WithoutArtifacts, useAPI, username, password)
 			})
 			t.Run("Wrap Chart From compressed tgz", func(t *testing.T) {
 				chartDir := createSampleChart(sb.TempFile(), withLock)
@@ -326,7 +343,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 				require.NoError(utils.Tar(chartDir, tarFilename, utils.TarConfig{}))
 				require.FileExists(tarFilename)
 
-				testWrap(t, tarFilename, "", expectedLock, false, WithoutArtifacts, username, password)
+				testWrap(t, tarFilename, "", expectedLock, false, WithoutArtifacts, useAPI, username, password)
 			})
 
 			t.Run("Wrap Chart From oci", func(t *testing.T) {
@@ -363,30 +380,30 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 				require.NoError(artifacts.PushChart(tarFilename, pushChartURL, artifacts.WithRegistryAuth(username, password), artifacts.WithPlainHTTP(true)))
 				t.Run("With artifacts", func(t *testing.T) {
-					testWrap(t, fullChartURL, "", expectedLock, false, WithArtifacts, username, password)
+					testWrap(t, fullChartURL, "", expectedLock, false, WithArtifacts, useAPI, username, password)
 				})
 				t.Run("Without artifacts", func(t *testing.T) {
-					testWrap(t, fullChartURL, "", expectedLock, false, WithoutArtifacts, username, password)
+					testWrap(t, fullChartURL, "", expectedLock, false, WithoutArtifacts, useAPI, username, password)
 				})
 			})
 
 			t.Run("Wrap Chart with custom output filename", func(t *testing.T) {
 				tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
-				testSampleWrap(t, withLock, tempFilename, false, WithoutArtifacts, username, password)
+				testSampleWrap(t, withLock, tempFilename, false, WithoutArtifacts, useAPI, username, password)
 				// This should already be handled by testWrap, but make sure it is there
 				suite.Assert().FileExists(tempFilename)
 			})
 
 			t.Run("Wrap Chart and generate carvel bundle", func(t *testing.T) {
 				tempFilename := fmt.Sprintf("%s/chart.wrap.tar.gz", sb.TempFile())
-				testSampleWrap(t, withLock, tempFilename, true, WithoutArtifacts, username, password) // triggers the Carvel checks
+				testSampleWrap(t, withLock, tempFilename, true, WithoutArtifacts, useAPI, username, password) // triggers the Carvel checks
 			})
 
 			t.Run("Wrap Chart with no images", func(t *testing.T) {
 				images = []tu.ImageData{}
 				scenarioName = "no-images-chart"
 				scenarioDir = fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
-				testSampleWrap(t, withLock, "", false, WithoutArtifacts, username, password)
+				testSampleWrap(t, withLock, "", false, WithoutArtifacts, useAPI, username, password)
 			})
 		})
 	}

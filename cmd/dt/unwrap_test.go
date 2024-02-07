@@ -17,9 +17,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/unwrap"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	dtLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
 	"helm.sh/helm/v3/pkg/repo/repotest"
 )
 
@@ -30,17 +32,29 @@ type unwrapOpts struct {
 	ChartName         string
 	Version           string
 	ArtifactsMetadata map[string][]byte
+	UseAPI            bool
 	Auth              tu.Auth
 }
 
 func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegistry string, srcRegistry string, cfg unwrapOpts) {
 	args := []string{"unwrap", "--log-level", "debug", "--plain", "--yes", "--use-plain-http", inputChart, targetRegistry}
-	authenticator := authn.Anonymous
+	craneAuth := authn.Anonymous
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		args = append(args, "--username", "username", "--password", "password")
-		authenticator = &authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}
+		craneAuth = &authn.Basic{Username: cfg.Auth.Username, Password: cfg.Auth.Password}
 	}
-	dt(args...).AssertSuccessMatch(t, "")
+	if cfg.UseAPI {
+		l := dtLog.NewLogrusSectionLogger()
+		l.SetWriter(io.Discard)
+		opts := []unwrap.Option{
+			unwrap.WithLogger(l),
+			unwrap.WithUsePlainHTTP(true),
+			unwrap.WithSayYes(true),
+			unwrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+		}
+		require.NoError(t, unwrap.Chart(inputChart, targetRegistry, "", opts...))
+	} else {
+		dt(args...).AssertSuccessMatch(t, "")
+	}
 	assert.True(t,
 		artifacts.RemoteChartExist(
 			fmt.Sprintf("oci://%s/%s", targetRegistry, cfg.ChartName),
@@ -78,7 +92,7 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 		}
 
 		tagsInfo := map[string]string{"main": "", "metadata": ""}
-		tags, err := artifacts.ListTags(context.Background(), fmt.Sprintf("%s/%s", srcRegistry, "test"), crane.WithAuth(authenticator))
+		tags, err := artifacts.ListTags(context.Background(), fmt.Sprintf("%s/%s", srcRegistry, "test"), crane.WithAuth(craneAuth))
 		require.NoError(t, err)
 
 		for _, tag := range tags {
@@ -95,14 +109,14 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 				continue
 			}
 			if cfg.PublicKey != "" {
-				assert.NoError(t, testutil.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey, crane.WithAuth(authenticator)), "Signature for %q failed", src)
+				assert.NoError(t, testutil.CosignVerifyImage(fmt.Sprintf("%s:%s", src, v), cfg.PublicKey, crane.WithAuth(craneAuth)), "Signature for %q failed", src)
 			}
 		}
 		// Verify the metadata
 		if cfg.FetchedArtifacts {
 			ociMetadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
 			require.NoError(t, err)
-			require.NoError(t, testutil.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir, crane.WithAuth(authenticator)))
+			require.NoError(t, testutil.PullArtifact(context.Background(), fmt.Sprintf("%s:%s", src, tagsInfo["metadata"]), ociMetadataDir, crane.WithAuth(craneAuth)))
 
 			verifyArtifactsContents(t, sb, ociMetadataDir, cfg.ArtifactsMetadata)
 		}
@@ -152,15 +166,18 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var username, password string
+			var useAPI bool
 			var registryURL string
 			if tc.auth {
+				useAPI = true
+
 				srv, err := repotest.NewTempServerWithCleanup(t, "")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer srv.Stop()
 
-				ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -222,10 +239,19 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 				require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0755))
 				targetRegistry := newUniqueTargetRegistry()
 				args := []string{"unwrap", wrapDir, targetRegistry, "--plain", "--yes", "--use-plain-http"}
-				if username != "" && password != "" {
-					args = append(args, "--username", "username", "--password", "password")
+				if useAPI {
+					l := dtLog.NewLogrusSectionLogger()
+					l.SetWriter(io.Discard)
+					opts := []unwrap.Option{
+						unwrap.WithLogger(l),
+						unwrap.WithUsePlainHTTP(true),
+						unwrap.WithSayYes(true),
+						unwrap.WithAuth(username, password),
+					}
+					require.NoError(unwrap.Chart(wrapDir, targetRegistry, "", opts...))
+				} else {
+					dt(args...).AssertSuccessMatch(suite.T(), "")
 				}
-				dt(args...).AssertSuccessMatch(suite.T(), "")
 				// Verify the images were pushed
 				for _, img := range images {
 					src := fmt.Sprintf("%s/%s", targetRegistry, img.Image)
@@ -263,15 +289,17 @@ func (suite *CmdSuite) TestEndToEnd() {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var username, password string
+			var useAPI bool
 			var registryURL string
 			if tc.auth {
+				useAPI = true
 				srv, err := repotest.NewTempServerWithCleanup(t, "")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer srv.Stop()
 
-				ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+				ociSrv, err := testutil.NewOCIServer(t, srv.Root())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -355,6 +383,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 					SkipExpectedLock:     true,
 					Images:               images,
 					ArtifactsMetadata:    metadataArtifacts,
+					UseAPI:               useAPI,
 					Auth: tu.Auth{
 						Username: username,
 						Password: password,
@@ -366,6 +395,7 @@ func (suite *CmdSuite) TestEndToEnd() {
 					ArtifactsMetadata: metadataArtifacts,
 					ChartName:         chartName,
 					Version:           version,
+					UseAPI:            useAPI,
 					Auth: tu.Auth{
 						Username: username,
 						Password: password,

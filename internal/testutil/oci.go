@@ -6,9 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
+	"time"
 
+	"golang.org/x/crypto/bcrypt"
+	"helm.sh/helm/v3/pkg/repo/repotest"
 	"oras.land/oras-go/v2/content/oci"
 
+	"github.com/distribution/distribution/v3/configuration"
+	"github.com/distribution/distribution/v3/registry"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -16,6 +22,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/phayes/freeport"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
 )
@@ -256,4 +263,55 @@ func loadImage(path string) (partial.WithRawManifest, error) {
 
 	desc := m.Manifests[0]
 	return l.Image(desc.Digest)
+}
+
+// NewOCIServer returns a new OCI server with basic auth for testing purposes
+func NewOCIServer(t *testing.T, dir string) (*repotest.OCIServer, error) {
+	testHtpasswdFileBasename := "authtest.htpasswd"
+	testUsername, testPassword := "username", "password"
+
+	pwBytes, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal("error generating bcrypt password for test htpasswd file")
+	}
+	htpasswdPath := filepath.Join(dir, testHtpasswdFileBasename)
+	err = os.WriteFile(htpasswdPath, []byte(fmt.Sprintf("%s:%s\n", testUsername, string(pwBytes))), 0644)
+	if err != nil {
+		t.Fatalf("error creating test htpasswd file")
+	}
+
+	// Registry config
+	config := &configuration.Configuration{}
+	port, err := freeport.GetFreePort()
+	if err != nil {
+		t.Fatalf("error finding free port for test registry")
+	}
+
+	config.HTTP.Addr = fmt.Sprintf(":%d", port)
+	config.HTTP.DrainTimeout = time.Duration(10) * time.Second
+	config.Storage = map[string]configuration.Parameters{"inmemory": map[string]interface{}{}}
+	config.Auth = configuration.Auth{
+		"htpasswd": configuration.Parameters{
+			"realm": "localhost",
+			"path":  htpasswdPath,
+		},
+	}
+	config.Log.AccessLog.Disabled = true
+	config.Log.Formatter = "json"
+	config.Log.Level = "panic"
+
+	registryURL := fmt.Sprintf("localhost:%d", port)
+
+	r, err := registry.NewRegistry(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &repotest.OCIServer{
+		Registry:     r,
+		RegistryURL:  registryURL,
+		TestUsername: testUsername,
+		TestPassword: testPassword,
+		Dir:          dir,
+	}, nil
 }
