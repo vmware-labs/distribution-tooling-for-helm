@@ -22,8 +22,8 @@ import (
 )
 
 // resolveImage gets a image and returns its resolved tag version
-func resolveImage(image string) (string, error) {
-	o := crane.GetOptions()
+func resolveImage(image string, opts ...crane.Option) (string, error) {
+	o := crane.GetOptions(opts...)
 
 	ref, err := name.ParseReference(image)
 	if err != nil {
@@ -46,24 +46,32 @@ func resolveImage(image string) (string, error) {
 }
 
 // CosignImage signs a remote artifact with the provided key
-func CosignImage(url string, key string) error {
+func CosignImage(url string, key string, opts ...crane.Option) error {
+	o := crane.GetOptions(opts...)
 	url = strings.TrimPrefix(url, "oci://")
 	// cosign complains if we sign a tag with
 	// WARNING: Image reference 127.0.0.1/test:mytag uses a tag, not a digest, to identify the image to sign.
-	image, err := resolveImage(url)
+	image, err := resolveImage(url, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to sign %q: %v", url, err)
 	}
-	return sign.SignCmd(&options.RootOptions{Timeout: options.DefaultTimeout, Verbose: false}, options.KeyOpts{KeyRef: key}, options.SignOptions{Upload: true}, []string{image})
+	return sign.SignCmd(
+		&options.RootOptions{Timeout: options.DefaultTimeout, Verbose: false},
+		options.KeyOpts{KeyRef: key},
+		options.SignOptions{Upload: true, Registry: options.RegistryOptions{RegistryClientOpts: o.Remote}},
+		[]string{image},
+	)
 }
 
 // CosignVerifyImage verifies a remote artifact signature with the provided key
-func CosignVerifyImage(url string, key string) error {
+func CosignVerifyImage(url string, key string, opts ...crane.Option) error {
+	o := crane.GetOptions(opts...)
 	url = strings.TrimPrefix(url, "oci://")
 
 	v := &verify.VerifyCommand{
-		KeyRef:     key,
-		IgnoreTlog: true,
+		RegistryOptions: options.RegistryOptions{RegistryClientOpts: o.Remote},
+		KeyRef:          key,
+		IgnoreTlog:      true,
 	}
 	v.NameOptions = append(v.NameOptions, name.Insecure)
 	ctx := context.Background()

@@ -13,10 +13,17 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Config defines the configuration of the verify command
 type Config struct {
 	AnnotationsKey string
 	Insecure       bool
+	Auth           Auth
 }
 
 // Lock verifies the images in an Images.lock
@@ -37,6 +44,7 @@ func Lock(chartPath string, lockFile string, cfg Config) error {
 	calculatedLock, err := imagelock.GenerateFromChart(chartPath,
 		imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 		imagelock.WithContext(context.Background()),
+		imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 		imagelock.WithInsecure(cfg.Insecure),
 	)
 

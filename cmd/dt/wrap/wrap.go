@@ -21,25 +21,53 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
 // Config defines the configuration for the Wrap/Unwrap command
 type Config struct {
-	Context        context.Context
-	AnnotationsKey string
-	UsePlainHTTP   bool
-	Insecure       bool
-	Platforms      []string
-	logger         log.SectionLogger
-	TempDirectory  string
-	Version        string
-	Carvelize      bool
-	KeepArtifacts  bool
-	FetchArtifacts bool
+	Context               context.Context
+	AnnotationsKey        string
+	UsePlainHTTP          bool
+	Insecure              bool
+	Platforms             []string
+	logger                log.SectionLogger
+	TempDirectory         string
+	Version               string
+	Carvelize             bool
+	KeepArtifacts         bool
+	FetchArtifacts        bool
+	Auth                  Auth
+	ContainerRegistryAuth Auth
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
 func WithKeepArtifacts(keepArtifacts bool) func(c *Config) {
 	return func(c *Config) {
 		c.KeepArtifacts = keepArtifacts
+	}
+}
+
+// WithAuth configures the Auth of the wrap Config
+func WithAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
+}
+
+// WithContainerRegistryAuth configures the Auth of the wrap Config
+func WithContainerRegistryAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.ContainerRegistryAuth = Auth{
+			Username: username,
+			Password: password,
+		}
 	}
 }
 
@@ -220,19 +248,21 @@ func untarChart(chartFile string, dir string) (string, error) {
 }
 
 func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) (string, error) {
-	chartPath, err := artifacts.PullChart(chartURL, version, dir, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP))
+	d, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", err
+	}
+	chartPath, err := artifacts.PullChart(
+		chartURL, version, dir,
+		artifacts.WithInsecure(cfg.Insecure),
+		artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
+		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+		artifacts.WithCredentialsFileDir(d),
+	)
 	if err != nil {
 		return "", err
 	}
 	return chartPath, nil
-}
-
-func createWrap(chartPath string, cfg *Config) (wrapping.Wrap, error) {
-	tmpDir, err := cfg.GetTemporaryDirectory()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
-	}
-	return wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"))
 }
 
 func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
@@ -244,6 +274,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 		if err := l.ExecuteStep("Verifying Images.lock", func() error {
 			return wrap.VerifyLock(imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 				imagelock.WithContext(cfg.Context),
+				imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 				imagelock.WithInsecure(cfg.Insecure))
 		}); err != nil {
 			return l.Failf("Failed to verify lock: %w", err)
@@ -256,6 +287,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 				return lock.Create(chart.RootDir(), lockFile, log.SilentLog,
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure),
+					imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 					imagelock.WithPlatforms(cfg.Platforms),
 					imagelock.WithContext(cfg.Context),
 				)
@@ -268,10 +300,10 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 	return nil
 }
 
-func fetchArtifacts(chartURL string, destDir string) error {
+func fetchArtifacts(chartURL string, destDir string, cfg *Config) error {
 	if err := artifacts.FetchChartMetadata(
 		context.Background(), chartURL,
-		destDir,
+		destDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 	); err != nil && err != artifacts.ErrTagDoesNotExist {
 		return fmt.Errorf("failed to fetch chart remote metadata: %w", err)
 	}
@@ -295,6 +327,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithLog(childLog),
 				chartutils.WithContext(cfg.Context),
 				chartutils.WithFetchArtifacts(cfg.FetchArtifacts),
+				chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 			); err != nil {
@@ -321,8 +354,13 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 	if err != nil {
 		return err
 	}
-
-	wrap, err := createWrap(chartPath, subCfg)
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
+		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
+	)
 	if err != nil {
 		return l.Failf("failed to create wrap: %v", err)
 	}
@@ -331,7 +369,7 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
-		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir)); err != nil {
+		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
 			return err
 		}
 	}
@@ -405,7 +443,7 @@ This command will pull all the container images and wrap it into a single tarbal
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath := args[0]
 
 			ctx, cancel := cfg.ContextWithSigterm()
@@ -418,10 +456,8 @@ This command will pull all the container images and wrap it into a single tarbal
 
 			parentLog := cfg.Logger()
 
-			l := parentLog.StartSection(fmt.Sprintf("Wrapping Helm chart %q", chartPath))
-
 			if err := wrapChart(chartPath, outputFile,
-				WithLogger(l),
+				WithLogger(parentLog),
 				WithAnnotationsKey(cfg.AnnotationsKey), WithContext(ctx),
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
@@ -430,7 +466,7 @@ This command will pull all the container images and wrap it into a single tarbal
 			); err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
 					// We already logged it, lets be less verbose
-					return fmt.Errorf("failed to wrap Helm chart")
+					return fmt.Errorf("failed to wrap Helm chart: %v", err)
 				}
 				return err
 			}

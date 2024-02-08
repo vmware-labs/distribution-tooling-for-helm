@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/require"
+	"github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"helm.sh/helm/v3/pkg/repo/repotest"
 )
 
@@ -15,7 +16,7 @@ func TestLoginLogout(t *testing.T) {
 	}
 	defer srv.Stop()
 
-	ociSrv, err := repotest.NewOCIServer(t, srv.Root())
+	ociSrv, err := testutil.NewOCIServer(t, srv.Root())
 	if err != nil {
 		t.Fatal(err)
 	}

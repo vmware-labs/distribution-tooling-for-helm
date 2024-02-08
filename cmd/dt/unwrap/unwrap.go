@@ -29,19 +29,47 @@ var (
 
 // Config defines the configuration for the Wrap/Unwrap command
 type Config struct {
-	Context        context.Context
-	AnnotationsKey string
-	UsePlainHTTP   bool
-	Insecure       bool
-	Platforms      []string
-	logger         log.SectionLogger
-	TempDirectory  string
-	Version        string
-	Carvelize      bool
-	KeepArtifacts  bool
-	FetchArtifacts bool
+	Context               context.Context
+	AnnotationsKey        string
+	UsePlainHTTP          bool
+	Insecure              bool
+	Platforms             []string
+	logger                log.SectionLogger
+	TempDirectory         string
+	Version               string
+	Carvelize             bool
+	KeepArtifacts         bool
+	FetchArtifacts        bool
+	Auth                  Auth
+	ContainerRegistryAuth Auth
 
 	SayYes bool
+}
+
+// Auth defines the authentication information to access the container registry
+type Auth struct {
+	Username string
+	Password string
+}
+
+// WithAuth configures the Auth of the unwrap Config
+func WithAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.Auth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
+}
+
+// WithContainerRegistryAuth configures the ContainerRegistryAuth of the unwrap Config
+func WithContainerRegistryAuth(username, password string) func(c *Config) {
+	return func(c *Config) {
+		c.ContainerRegistryAuth = Auth{
+			Username: username,
+			Password: password,
+		}
+	}
 }
 
 // WithSayYes configures the SayYes of the WrapConfig
@@ -240,6 +268,8 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 
 		if pushChartURL == "" {
 			pushChartURL = registryURL
+			// we will push the chart to the same registry as the containers
+			cfg.Auth = cfg.ContainerRegistryAuth
 		}
 		pushChartURL = normalizeOCIURL(pushChartURL)
 		fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, wrap.Chart().Name())
@@ -282,13 +312,17 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
+		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 	); err != nil {
 		return err
 	}
 	l.Infof("All images pushed successfully")
 	if err := l.ExecuteStep("Verifying Images.lock", func() error {
 
-		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey})
+		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{
+			Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey,
+			Auth: verify.Auth{Username: cfg.ContainerRegistryAuth.Username, Password: cfg.ContainerRegistryAuth.Password},
+		})
 	}); err != nil {
 		return fmt.Errorf("failed to verify Helm chart Images.lock: %w", err)
 	}
@@ -343,14 +377,22 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
-	if err := artifacts.PushChart(tempTarFile, pushChartURL, artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP)); err != nil {
+	d, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to get temp dir: %w", err)
+	}
+	if err := artifacts.PushChart(tempTarFile, pushChartURL,
+		artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
+		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+		artifacts.WithCredentialsFileDir(d),
+	); err != nil {
 		return err
 	}
 	fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chart.Name())
 
 	metadataArtifactDir := filepath.Join(chart.RootDir(), artifacts.HelmChartArtifactMetadataDir)
 	if utils.FileExists(metadataArtifactDir) {
-		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version()), metadataArtifactDir)
+		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version()), metadataArtifactDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password))
 	}
 	return nil
 }
@@ -372,7 +414,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			l := cfg.Logger()
 
 			inputChart, registryURL := args[0], args[1]
