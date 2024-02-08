@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/containerd/containerd/remotes/docker"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
@@ -16,12 +18,21 @@ import (
 
 // RegistryClientConfig defines how the client communicates with the remote server
 type RegistryClientConfig struct {
-	UsePlainHTTP     bool
-	UseInsecureHTTPS bool
+	UsePlainHTTP       bool
+	UseInsecureHTTPS   bool
+	Auth               Auth
+	CredentialsFileDir string
 }
 
 // RegistryClientOption defines a RegistryClientConfig setting
 type RegistryClientOption func(*RegistryClientConfig)
+
+// WithRegistryAuth configures the Auth of the RegistryClientConfig
+func WithRegistryAuth(username, password string) func(c *RegistryClientConfig) {
+	return func(c *RegistryClientConfig) {
+		c.Auth = Auth{Username: username, Password: password}
+	}
+}
 
 // Insecure asks the tool to allow insecure HTTPS connections to the remote server.
 func Insecure(c *RegistryClientConfig) {
@@ -39,6 +50,13 @@ func WithInsecure(insecure bool) func(c *RegistryClientConfig) {
 func WithPlainHTTP(usePlain bool) func(c *RegistryClientConfig) {
 	return func(c *RegistryClientConfig) {
 		c.UsePlainHTTP = usePlain
+	}
+}
+
+// WithCredentialsFileDir configures the directory in which to place the temporary credentials file
+func WithCredentialsFileDir(dir string) func(c *RegistryClientConfig) {
+	return func(c *RegistryClientConfig) {
+		c.CredentialsFileDir = dir
 	}
 }
 
@@ -71,26 +89,60 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 			opts = append(opts, registry.ClientOptHTTPClient(httpClient))
 		}
 	}
+	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		f, err := os.CreateTemp(cfg.CredentialsFileDir, "config-*.json")
+		if err != nil {
+			return nil, fmt.Errorf("error creating credentials file: %w", err)
+		}
+		err = f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error closing credentials file: %w", err)
+		}
+		opts = append(opts, registry.ClientOptCredentialsFile(f.Name()))
+		revOpts := docker.ResolverOptions{}
+		authz := docker.NewDockerAuthorizer(docker.WithAuthCreds(func(_ string) (string, string, error) {
+			return cfg.Auth.Username, cfg.Auth.Password, nil
+		}))
+		revOpts.Hosts = docker.ConfigureDefaultRegistries(
+			docker.WithAuthorizer(authz),
+			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
+		)
+		rev := docker.NewResolver(revOpts)
+
+		opts = append(opts, registry.ClientOptResolver(rev))
+	}
 	return registry.NewClient(opts...)
+
 }
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
+	u, err := url.Parse(chartURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+	cfg := &action.Configuration{}
+	cc := NewRegistryClientConfig(opts...)
+	reg, err := getRegistryClient(cc)
+	if err != nil {
+		return "", fmt.Errorf("missing registry client: %w", err)
+	}
+	cfg.RegistryClient = reg
+	if cc.Auth.Username != "" && cc.Auth.Password != "" {
+		if err := reg.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
+			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
+		}
+		defer reg.Logout(u.Host)
+	}
+	client := action.NewPullWithOpts(action.WithConfig(cfg))
+
 	dir, err := os.MkdirTemp(destDir, "chart-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
 	}
-	cfg := &action.Configuration{}
-	client := action.NewPullWithOpts(action.WithConfig(cfg))
 	client.Settings = cli.New()
 	client.DestDir = dir
 	client.Untar = true
-
-	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
-	if err != nil {
-		return "", fmt.Errorf("missing registry client: %w", err)
-	}
-	client.SetRegistryClient(reg)
 	client.Version = version
 	_, err = client.Run(chartURL)
 	if err != nil {
@@ -118,7 +170,6 @@ func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption
 		return fmt.Errorf("missing registry client: %w", err)
 	}
 	cfg.RegistryClient = reg
-
 	client := action.NewPushWithOpts(action.WithPushConfig(cfg))
 
 	client.Settings = cli.New()
@@ -153,13 +204,16 @@ func RemoteChartExist(chartURL string, version string, opts ...RegistryClientOpt
 }
 
 // FetchChartMetadata retrieves the chart metadata artifact from the registry
-func FetchChartMetadata(ctx context.Context, url string, destination string) error {
+func FetchChartMetadata(ctx context.Context, url string, destination string, opts ...Option) error {
 	reference := strings.TrimPrefix(url, "oci://")
-	return pullAssetMetadata(ctx, reference, destination, WithResolveReference(false))
+	allOpts := append(opts, WithResolveReference(false))
+	return pullAssetMetadata(ctx, reference, destination, allOpts...)
 }
 
 // PushChartMetadata pushes the chart metadata artifact to the registry
-func PushChartMetadata(ctx context.Context, url string, chartDir string) error {
+func PushChartMetadata(ctx context.Context, url string, chartDir string, opts ...Option) error {
 	reference := strings.TrimPrefix(url, "oci://")
-	return pushAssetMetadata(ctx, reference, chartDir, WithResolveReference(false))
+	allOpts := append(opts, WithResolveReference(false))
+
+	return pushAssetMetadata(ctx, reference, chartDir, allOpts...)
 }
