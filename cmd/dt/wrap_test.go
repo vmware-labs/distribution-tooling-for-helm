@@ -22,7 +22,7 @@ import (
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/carvel"
-	dtLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 	"gopkg.in/yaml.v3"
@@ -120,7 +120,7 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 	}
 
 	if cfg.UseAPI {
-		l := dtLog.NewLogrusSectionLogger()
+		l := logrus.NewSectionLogger()
 		l.SetWriter(io.Discard)
 		opts := []wrap.Option{
 			wrap.WithLogger(l),

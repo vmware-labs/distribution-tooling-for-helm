@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
 
-	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
 
@@ -20,7 +20,7 @@ type Configuration struct {
 	AnnotationsKey string
 	Log            log.Logger
 	Context        context.Context
-	ProgressBar    widgets.ProgressBar
+	ProgressBar    log.ProgressBar
 	ArtifactsDir   string
 	FetchArtifacts bool
 	MaxRetries     int
@@ -74,7 +74,7 @@ func WithMaxRetries(retries int) func(cfg *Configuration) {
 }
 
 // WithProgressBar provides a ProgressBar for long running operations
-func WithProgressBar(pb widgets.ProgressBar) func(cfg *Configuration) {
+func WithProgressBar(pb log.ProgressBar) func(cfg *Configuration) {
 	return func(cfg *Configuration) {
 		cfg.ProgressBar = pb
 	}
@@ -85,11 +85,11 @@ func NewConfiguration(opts ...Option) *Configuration {
 	cfg := &Configuration{
 		AnnotationsKey: imagelock.DefaultAnnotationsKey,
 		Context:        context.Background(),
-		ProgressBar:    widgets.NewSilentProgressBar(),
+		ProgressBar:    silent.NewProgressBar(),
 		ArtifactsDir:   "",
 		FetchArtifacts: false,
 		MaxRetries:     3,
-		Log:            log.NewSilentLogger(),
+		Log:            silent.NewLogger(),
 		InsecureMode:   false,
 	}
 	for _, opt := range opts {

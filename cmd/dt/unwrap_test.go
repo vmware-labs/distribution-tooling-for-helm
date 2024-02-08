@@ -20,7 +20,8 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/unwrap"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
-	dtLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
+
 	"helm.sh/helm/v3/pkg/repo/repotest"
 )
 
@@ -49,7 +50,7 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 		args = append(args, "--push-chart-url", chartTargetRegistry)
 	}
 	if cfg.UseAPI {
-		l := dtLog.NewLogrusSectionLogger()
+		l := logrus.NewSectionLogger()
 		l.SetWriter(io.Discard)
 		opts := []unwrap.Option{
 			unwrap.WithLogger(l),
@@ -247,7 +248,7 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 				targetRegistry := newUniqueTargetRegistry()
 				args := []string{"unwrap", wrapDir, targetRegistry, "--plain", "--yes", "--use-plain-http"}
 				if useAPI {
-					l := dtLog.NewLogrusSectionLogger()
+					l := logrus.NewSectionLogger()
 					l.SetWriter(io.Discard)
 					opts := []unwrap.Option{
 						unwrap.WithLogger(l),

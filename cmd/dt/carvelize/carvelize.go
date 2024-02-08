@@ -15,6 +15,8 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
+
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
@@ -36,7 +38,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			chartPath := args[0]
 			l := cfg.Logger()
 			// Allows silencing called methods
-			silentLog := log.SilentLog
+			silentLog := silent.NewLogger()
 
 			lockFile, err := chartutils.GetImageLockFilePath(chartPath)
 			if err != nil {

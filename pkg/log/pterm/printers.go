@@ -1,4 +1,4 @@
-package widgets
+package pterm
 
 import "github.com/pterm/pterm"
 
