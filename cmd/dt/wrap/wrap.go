@@ -257,7 +257,7 @@ func fetchRemoteChart(chartURL string, version string, dir string, cfg *Config) 
 		artifacts.WithInsecure(cfg.Insecure),
 		artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
 		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
-		artifacts.WithCredentialsFileDir(d),
+		artifacts.WithTempDir(d),
 	)
 	if err != nil {
 		return "", err
