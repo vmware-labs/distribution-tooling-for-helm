@@ -388,7 +388,7 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 	if err := artifacts.PushChart(tempTarFile, pushChartURL,
 		artifacts.WithInsecure(cfg.Insecure), artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
 		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
-		artifacts.WithCredentialsFileDir(d),
+		artifacts.WithTempDir(d),
 	); err != nil {
 		return err
 	}
