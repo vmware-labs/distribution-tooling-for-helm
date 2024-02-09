@@ -18,14 +18,19 @@ import (
 
 // RegistryClientConfig defines how the client communicates with the remote server
 type RegistryClientConfig struct {
-	UsePlainHTTP       bool
-	UseInsecureHTTPS   bool
-	Auth               Auth
-	CredentialsFileDir string
+	UsePlainHTTP     bool
+	UseInsecureHTTPS bool
+	Auth             Auth
+	TempDir          string
 }
 
 // RegistryClientOption defines a RegistryClientConfig setting
 type RegistryClientOption func(*RegistryClientConfig)
+
+type registryClientWrap struct {
+	client          *registry.Client
+	credentialsFile string
+}
 
 // WithRegistryAuth configures the Auth of the RegistryClientConfig
 func WithRegistryAuth(username, password string) func(c *RegistryClientConfig) {
@@ -53,10 +58,10 @@ func WithPlainHTTP(usePlain bool) func(c *RegistryClientConfig) {
 	}
 }
 
-// WithCredentialsFileDir configures the directory in which to place the temporary credentials file
-func WithCredentialsFileDir(dir string) func(c *RegistryClientConfig) {
+// WithTempDir configures the directory in which to place the temporary credentials file
+func WithTempDir(dir string) func(c *RegistryClientConfig) {
 	return func(c *RegistryClientConfig) {
-		c.CredentialsFileDir = dir
+		c.TempDir = dir
 	}
 }
 
@@ -73,7 +78,8 @@ func NewRegistryClientConfig(opts ...RegistryClientOption) *RegistryClientConfig
 	return cfg
 }
 
-func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
+func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, error) {
+	wrap := &registryClientWrap{}
 	opts := []registry.ClientOption{}
 	if cfg.UsePlainHTTP {
 		opts = append(opts, registry.ClientOptPlainHTTP())
@@ -90,10 +96,11 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 		}
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		f, err := os.CreateTemp(cfg.CredentialsFileDir, "config-*.json")
+		f, err := os.CreateTemp(cfg.TempDir, "dt-config-*.json")
 		if err != nil {
 			return nil, fmt.Errorf("error creating credentials file: %w", err)
 		}
+		wrap.credentialsFile = f.Name()
 		err = f.Close()
 		if err != nil {
 			return nil, fmt.Errorf("error closing credentials file: %w", err)
@@ -111,7 +118,13 @@ func getRegistryClient(cfg *RegistryClientConfig) (*registry.Client, error) {
 
 		opts = append(opts, registry.ClientOptResolver(rev))
 	}
-	return registry.NewClient(opts...)
+	r, err := registry.NewClient(opts...)
+	if err != nil {
+		return nil, err
+	}
+	wrap.client = r
+
+	return wrap, nil
 
 }
 
@@ -123,16 +136,19 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 	}
 	cfg := &action.Configuration{}
 	cc := NewRegistryClientConfig(opts...)
-	reg, err := getRegistryClient(cc)
+	reg, err := getRegistryClientWrap(cc)
 	if err != nil {
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
-	cfg.RegistryClient = reg
-	if cc.Auth.Username != "" && cc.Auth.Password != "" {
-		if err := reg.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
+	cfg.RegistryClient = reg.client
+	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
+		if err := reg.client.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
 			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
 		}
-		defer reg.Logout(u.Host)
+		defer func() {
+			_ = reg.client.Logout(u.Host)
+			_ = os.Remove(reg.credentialsFile)
+		}()
 	}
 	client := action.NewPullWithOpts(action.WithConfig(cfg))
 
@@ -165,11 +181,11 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 // PushChart pushes the local chart tarFile to the remote URL provided
 func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
 	cfg := &action.Configuration{}
-	reg, err := getRegistryClient(NewRegistryClientConfig(opts...))
+	reg, err := getRegistryClientWrap(NewRegistryClientConfig(opts...))
 	if err != nil {
 		return fmt.Errorf("missing registry client: %w", err)
 	}
-	cfg.RegistryClient = reg
+	cfg.RegistryClient = reg.client
 	client := action.NewPushWithOpts(action.WithPushConfig(cfg))
 
 	client.Settings = cli.New()
@@ -183,11 +199,11 @@ func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption
 
 func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientConfig) (string, error) {
 	client := action.NewShowWithConfig(action.ShowChart, &action.Configuration{})
-	reg, err := getRegistryClient(cfg)
+	reg, err := getRegistryClientWrap(cfg)
 	if err != nil {
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
-	client.SetRegistryClient(reg)
+	client.SetRegistryClient(reg.client)
 	client.Version = version
 	cp, err := client.ChartPathOptions.LocateChart(chartURL, cli.New())
 
