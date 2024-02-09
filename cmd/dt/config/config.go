@@ -11,6 +11,9 @@ import (
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	ll "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
+
+	pl "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/pterm"
 )
 
 // Config defines the configuration of the dt tool
@@ -42,9 +45,9 @@ func (c *Config) Logger() log.SectionLogger {
 
 		var l log.SectionLogger
 		if c.UsePlainLog {
-			l = log.NewLogrusSectionLogger()
+			l = ll.NewSectionLogger()
 		} else {
-			l = log.NewPtermSectionLogger()
+			l = pl.NewSectionLogger()
 		}
 		lvl, err := log.ParseLevel(c.LogLevel)
 

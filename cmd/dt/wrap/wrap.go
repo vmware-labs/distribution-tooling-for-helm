@@ -17,6 +17,10 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
+
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
+
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
@@ -157,7 +161,7 @@ func (c *Config) GetLogger() log.SectionLogger {
 	if c.logger != nil {
 		return c.logger
 	}
-	return log.NewLogrusSectionLogger()
+	return logrus.NewSectionLogger()
 }
 
 // WithPlatforms configures the Platforms of the WrapConfig
@@ -179,7 +183,7 @@ func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
 		Context:        context.Background(),
 		TempDirectory:  "",
-		logger:         log.NewLogrusSectionLogger(),
+		logger:         logrus.NewSectionLogger(),
 		AnnotationsKey: imagelock.DefaultAnnotationsKey,
 		Platforms:      []string{},
 	}
@@ -284,7 +288,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 		if err := l.ExecuteStep(
 			"Images.lock file does not exist. Generating it from annotations...",
 			func() error {
-				return lock.Create(chart.RootDir(), lockFile, log.SilentLog,
+				return lock.Create(chart.RootDir(), lockFile, silent.NewLogger(),
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure),
 					imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
