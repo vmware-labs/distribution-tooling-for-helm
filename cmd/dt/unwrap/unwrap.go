@@ -47,7 +47,9 @@ type Config struct {
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 
-	SayYes bool
+	// Interactive enables interacting with the user
+	Interactive bool
+	SayYes      bool
 }
 
 // Auth defines the authentication information to access the container registry
@@ -87,6 +89,13 @@ func WithSayYes(sayYes bool) func(c *Config) {
 func WithKeepArtifacts(keepArtifacts bool) func(c *Config) {
 	return func(c *Config) {
 		c.KeepArtifacts = keepArtifacts
+	}
+}
+
+// WithInteractive configures the Interactive of the WrapConfig
+func WithInteractive(interactive bool) func(c *Config) {
+	return func(c *Config) {
+		c.Interactive = interactive
 	}
 }
 
@@ -204,10 +213,21 @@ func NewConfig(opts ...Option) *Config {
 }
 
 // Chart unwraps a Helm chart
-func Chart(inputChart, registryURL, pushChartURL string, opts ...Option) error {
+func Chart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
 	return unwrapChart(inputChart, registryURL, pushChartURL, opts...)
 }
-func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) error {
+
+func askYesNoQuestion(msg string, cfg *Config) bool {
+	if cfg.SayYes {
+		return true
+	}
+	if !cfg.Interactive {
+		return false
+	}
+	return widgets.ShowYesNoQuestion(msg)
+}
+
+func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
 
 	cfg := NewConfig(opts...)
 
@@ -215,11 +235,11 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 	parentLog := cfg.GetLogger()
 
 	if registryURL == "" {
-		return fmt.Errorf("the registry cannot be empty")
+		return "", fmt.Errorf("the registry cannot be empty")
 	}
 	tempDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %w", err)
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	l := parentLog.StartSection(fmt.Sprintf("Unwrapping Helm chart %q", inputChart))
@@ -239,12 +259,12 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 		),
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	wrap, err := wrapping.Load(chartPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", wrap.ChartDir(), registryURL), func() error {
 		return relocator.RelocateChartDir(
@@ -252,24 +272,28 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey),
 		)
 	}); err != nil {
-		return l.Failf("failed to relocate %q: %w", chartPath, err)
+		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
 	}
 	l.Infof("Helm chart relocated successfully")
 
-	lenImages := showImagesSummary(wrap, l)
+	images := getImageList(wrap, l)
 
-	if lenImages > 0 && (cfg.SayYes || widgets.ShowYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"))) {
-		if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
-			return pushChartImagesAndVerify(ctx, wrap, cfg)
-		}); err != nil {
-			return l.Failf("Failed to push images: %w", err)
+	if len(images) > 0 {
+		// If we are not in interactive mode, we do not show the list of images
+		if cfg.Interactive {
+			showImagesSummary(images, l)
 		}
-		l.Printf(widgets.TerminalSpacer)
+		if askYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"), cfg) {
+			if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
+				return pushChartImagesAndVerify(ctx, wrap, NewConfig(append(opts, WithLogger(subLog))...))
+			}); err != nil {
+				return "", l.Failf("Failed to push images: %w", err)
+			}
+			l.Printf(widgets.TerminalSpacer)
+		}
 	}
-	var successMessage = "Helm chart unwrapped successfully"
 
-	if cfg.SayYes || widgets.ShowYesNoQuestion(l.PrefixText("Do you want to push the Helm chart to the OCI registry?")) {
-
+	if askYesNoQuestion(l.PrefixText("Do you want to push the Helm chart to the OCI registry?"), cfg) {
 		if pushChartURL == "" {
 			pushChartURL = registryURL
 			// we will push the chart to the same registry as the containers
@@ -286,19 +310,13 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) e
 				return pushChart(ctx, wrap, pushChartURL, cfg)
 			})
 		}); err != nil {
-			return l.Failf("Failed to push Helm chart: %w", err)
+			return "", l.Failf("Failed to push Helm chart: %w", err)
 		}
 
 		l.Infof("Helm chart successfully pushed")
-
-		successMessage = fmt.Sprintf(`%s: You can use it now by running "helm install %s --generate-name"`, successMessage, fullChartURL)
+		return fullChartURL, nil
 	}
-
-	l.Printf(widgets.TerminalSpacer)
-
-	parentLog.Successf(successMessage)
-
-	return nil
+	return "", nil
 }
 
 func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Config) error {
@@ -334,24 +352,28 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 	return nil
 }
 
-func showImagesSummary(wrap wrapping.Lockable, l log.SectionLogger) int {
+func getImageList(wrap wrapping.Lockable, l log.SectionLogger) imagelock.ImageList {
 	lock, err := wrap.GetImagesLock()
+
 	if err != nil {
 		l.Debugf("failed to load list of images: failed to load lock file: %v", err)
-		return 0
+		return imagelock.ImageList{}
 	}
 	if len(lock.Images) == 0 {
 		l.Warnf("The bundle does not include any image")
-		return 0
+		return imagelock.ImageList{}
 	}
-	_ = l.Section(fmt.Sprintf("The wrap includes the following %d images:\n", len(lock.Images)), func(log.SectionLogger) error {
-		for _, img := range lock.Images {
+	return lock.Images
+}
+
+func showImagesSummary(images imagelock.ImageList, l log.SectionLogger) {
+	_ = l.Section(fmt.Sprintf("The wrap includes the following %d images:\n", len(images)), func(log.SectionLogger) error {
+		for _, img := range images {
 			l.Printf(img.Image)
 		}
 		l.Printf(widgets.TerminalSpacer)
 		return nil
 	})
-	return len(lock.Images)
 }
 
 func normalizeOCIURL(url string) string {
@@ -429,15 +451,26 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create temporary directory: %v", err)
 			}
-			return unwrapChart(inputChart, registryURL, pushChartURL,
+			fullChartURL, err := unwrapChart(inputChart, registryURL, pushChartURL,
 				WithLogger(l),
 				WithSayYes(sayYes),
 				WithContext(ctx),
 				WithVersion(version),
+				WithInteractive(true),
 				WithInsecure(cfg.Insecure),
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
 			)
+			if err != nil {
+				return err
+			}
+			var successMessage = "Helm chart unwrapped successfully"
+			if fullChartURL != "" {
+				successMessage = fmt.Sprintf(`%s: You can use it now by running "helm install %s --generate-name"`, successMessage, fullChartURL)
+			}
+			l.Printf(widgets.TerminalSpacer)
+			l.Successf(successMessage)
+			return nil
 		},
 	}
 

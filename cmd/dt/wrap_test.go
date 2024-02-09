@@ -128,9 +128,11 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 			wrap.WithCarvelize(cfg.GenerateCarvelBundle),
 			wrap.WithFetchArtifacts(cfg.FetchArtifacts),
 			wrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			wrap.WithOutputFile(expectedWrapFile),
 			wrap.WithContainerRegistryAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 		}
-		require.NoError(t, wrap.Chart(inputChart, expectedWrapFile, opts...))
+		_, err := wrap.Chart(inputChart, opts...)
+		require.NoError(t, err)
 	} else {
 		if len(cfg.Images) == 0 {
 			dt(args...).AssertSuccessMatch(t, "No images found in Images.lock")
