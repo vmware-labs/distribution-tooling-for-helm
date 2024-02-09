@@ -96,7 +96,7 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 		}
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		f, err := os.CreateTemp(cfg.TempDir, "config-*.json")
+		f, err := os.CreateTemp(cfg.TempDir, "dt-config-*.json")
 		if err != nil {
 			return nil, fmt.Errorf("error creating credentials file: %w", err)
 		}
