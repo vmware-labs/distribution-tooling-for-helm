@@ -141,7 +141,7 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 		return "", fmt.Errorf("missing registry client: %w", err)
 	}
 	cfg.RegistryClient = reg.client
-	if cc.Auth.Username != "" && cc.Auth.Password != "" {
+	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
 		if err := reg.client.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
 			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
 		}
