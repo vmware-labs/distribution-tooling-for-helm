@@ -9,6 +9,8 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
+
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
 )
 
@@ -60,7 +62,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				if err := pushImages(
 					chart,
 					imagesDir,
-					chartutils.WithLog(log.SilentLog),
+					chartutils.WithLog(silent.NewLogger()),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
 					chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),

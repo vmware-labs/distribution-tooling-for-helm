@@ -1,3 +1,4 @@
+// Package widgets provides a set of reusable widgets for the distribution-tooling-for-helm CLI
 package widgets
 
 import (

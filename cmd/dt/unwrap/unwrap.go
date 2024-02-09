@@ -18,6 +18,10 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
+
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
+
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/relocator"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
@@ -166,7 +170,7 @@ func (c *Config) GetLogger() log.SectionLogger {
 	if c.logger != nil {
 		return c.logger
 	}
-	return log.NewLogrusSectionLogger()
+	return logrus.NewSectionLogger()
 }
 
 // WithPlatforms configures the Platforms of the WrapConfig
@@ -188,7 +192,7 @@ func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
 		Context:        context.Background(),
 		TempDirectory:  "",
-		logger:         log.NewLogrusSectionLogger(),
+		logger:         logrus.NewSectionLogger(),
 		AnnotationsKey: imagelock.DefaultAnnotationsKey,
 		Platforms:      []string{},
 	}
@@ -307,7 +311,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 	if err := push.ChartImages(
 		wrap,
 		wrap.ImagesDir(),
-		chartutils.WithLog(log.SilentLog),
+		chartutils.WithLog(silent.NewLogger()),
 		chartutils.WithContext(ctx),
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),

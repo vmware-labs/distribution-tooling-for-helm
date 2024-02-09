@@ -11,6 +11,7 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
 )
 
 // NewCmd returns a new dt lock command
@@ -46,7 +47,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				return fmt.Errorf("failed to obtain Images.lock location: %w", err)
 			}
 			if err := l.ExecuteStep("Generating Images.lock from annotations...", func() error {
-				return Create(chartPath, outputFile, log.SilentLog, imagelock.WithPlatforms(platforms),
+				return Create(chartPath, outputFile, silent.NewLogger(), imagelock.WithPlatforms(platforms),
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure))
 			}); err != nil {

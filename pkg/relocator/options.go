@@ -2,6 +2,7 @@ package relocator
 
 import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
+	silentLog "github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 )
@@ -17,7 +18,7 @@ type RelocateConfig struct {
 // NewRelocateConfig returns a new RelocateConfig with default settings
 func NewRelocateConfig() *RelocateConfig {
 	return &RelocateConfig{
-		Log:              log.SilentLog,
+		Log:              silentLog.NewLogger(),
 		RelocateLockFile: true,
 		ImageLockConfig:  *imagelock.NewImagesLockConfig(),
 	}
