@@ -59,7 +59,8 @@ func testChartUnwrap(t *testing.T, sb *tu.Sandbox, inputChart string, targetRegi
 			unwrap.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 			unwrap.WithContainerRegistryAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 		}
-		require.NoError(t, unwrap.Chart(inputChart, targetRegistry, chartTargetRegistry, opts...))
+		_, err := unwrap.Chart(inputChart, targetRegistry, chartTargetRegistry, opts...)
+		require.NoError(t, err)
 	} else {
 		dt(args...).AssertSuccessMatch(t, "")
 	}
@@ -256,7 +257,8 @@ func (suite *CmdSuite) TestUnwrapCommand() {
 						unwrap.WithSayYes(true),
 						unwrap.WithContainerRegistryAuth(username, password),
 					}
-					require.NoError(unwrap.Chart(wrapDir, targetRegistry, "", opts...))
+					_, err := unwrap.Chart(wrapDir, targetRegistry, "", opts...)
+					require.NoError(err)
 				} else {
 					dt(args...).AssertSuccessMatch(suite.T(), "")
 				}
