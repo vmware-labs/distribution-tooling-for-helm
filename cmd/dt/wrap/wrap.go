@@ -46,12 +46,20 @@ type Config struct {
 	FetchArtifacts        bool
 	Auth                  Auth
 	ContainerRegistryAuth Auth
+	OutputFile            string
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
 func WithKeepArtifacts(keepArtifacts bool) func(c *Config) {
 	return func(c *Config) {
 		c.KeepArtifacts = keepArtifacts
+	}
+}
+
+// WithOutputFile configures the OutputFile of the WrapConfig
+func WithOutputFile(outputFile string) func(c *Config) {
+	return func(c *Config) {
+		c.OutputFile = outputFile
 	}
 }
 
@@ -195,8 +203,8 @@ func NewConfig(opts ...Option) *Config {
 }
 
 // Chart wraps a Helm chart
-func Chart(inputPath string, outputFile string, opts ...Option) error {
-	return wrapChart(inputPath, outputFile, opts...)
+func Chart(inputPath string, opts ...Option) (string, error) {
+	return wrapChart(inputPath, opts...)
 }
 
 // ResolveInputChartPath resolves the input chart into a local uncompressed chart path
@@ -344,7 +352,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 	return nil
 }
 
-func wrapChart(inputPath string, outputFile string, opts ...Option) error {
+func wrapChart(inputPath string, opts ...Option) (string, error) {
 	cfg := NewConfig(opts...)
 
 	ctx := cfg.Context
@@ -356,17 +364,17 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 
 	chartPath, err := ResolveInputChartPath(inputPath, subCfg)
 	if err != nil {
-		return err
+		return "", err
 	}
 	tmpDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %w", err)
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 	)
 	if err != nil {
-		return l.Failf("failed to create wrap: %v", err)
+		return "", l.Failf("failed to create wrap: %v", err)
 	}
 
 	chart := wrap.Chart()
@@ -374,14 +382,16 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
 		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	chartRoot := chart.RootDir()
 	if err := validateWrapLock(wrap, subCfg); err != nil {
-		return err
+		return "", err
 	}
+
+	outputFile := cfg.OutputFile
 
 	if outputFile == "" {
 		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Version())
@@ -391,7 +401,7 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 		}
 	}
 	if err := pullImages(wrap, subCfg); err != nil {
-		return err
+		return "", err
 	}
 
 	if cfg.Carvelize {
@@ -402,7 +412,7 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 				chartutils.WithLog(childLog),
 			)
 		}); err != nil {
-			return l.Failf("%w", err)
+			return "", l.Failf("%w", err)
 		}
 		l.Infof("Carvel bundle created successfully")
 	}
@@ -415,14 +425,11 @@ func wrapChart(inputPath string, outputFile string, opts ...Option) error {
 			})
 		},
 	); err != nil {
-		return l.Failf("failed to wrap Helm chart: %w", err)
+		return "", l.Failf("failed to wrap Helm chart: %w", err)
 	}
 	l.Infof("Compressed into %q", outputFile)
 
-	l.Printf(widgets.TerminalSpacer)
-
-	parentLog.Successf("Helm chart wrapped into %q", outputFile)
-	return nil
+	return outputFile, nil
 }
 
 // NewCmd builds a new wrap command
@@ -460,20 +467,27 @@ This command will pull all the container images and wrap it into a single tarbal
 
 			parentLog := cfg.Logger()
 
-			if err := wrapChart(chartPath, outputFile,
+			wrappedChart, err := wrapChart(chartPath,
 				WithLogger(parentLog),
 				WithAnnotationsKey(cfg.AnnotationsKey), WithContext(ctx),
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
+				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
-			); err != nil {
+			)
+
+			if err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
 					// We already logged it, lets be less verbose
 					return fmt.Errorf("failed to wrap Helm chart: %v", err)
 				}
 				return err
 			}
+
+			parentLog.Printf(widgets.TerminalSpacer)
+			parentLog.Successf("Helm chart wrapped into %q", wrappedChart)
+
 			return nil
 		},
 	}
