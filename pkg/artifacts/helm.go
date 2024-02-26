@@ -120,17 +120,17 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 }
 
 // registryClientWithLogin returns an authenticated registry client
-func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*registry.Client, error) {
+func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*registry.Client, error, func()) {
 	parsedURL, err := url.Parse(chartURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid url: %w", err)
+		return nil, fmt.Errorf("invalid url: %w", err), func() {}
 	}
 
 	cc := NewRegistryClientConfig(opts...)
 
 	reg, err := getRegistryClientWrap(cc)
 	if err != nil {
-		return nil, fmt.Errorf("missing registry client: %w", err)
+		return nil, fmt.Errorf("missing registry client: %w", err), func() {}
 	}
 
 	var loginOpts []registry.LoginOption
@@ -143,25 +143,26 @@ func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*re
 		}
 
 		if err := reg.client.Login(parsedURL.Host, loginOpts...); err != nil {
-			return nil, fmt.Errorf("error logging in to %s: %w", parsedURL.Host, err)
+			return nil, fmt.Errorf("error logging in to %s: %w", parsedURL.Host, err), func() {}
 		}
 
-		defer func() {
-			_ = reg.client.Logout(parsedURL.Host)
-			_ = os.Remove(reg.credentialsFile)
-		}()
 	}
-	return reg.client, nil
+	return reg.client, nil, func() {
+		_ = reg.client.Logout(parsedURL.Host)
+		_ = os.Remove(reg.credentialsFile)
+	}
 }
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
 	cfg := &action.Configuration{}
 
-	registryClient, err := registryClientWithLogin(chartURL, opts...)
+	registryClient, err, logout := registryClientWithLogin(chartURL, opts...)
 	if err != nil {
 		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
+
+	defer logout()
 
 	cfg.RegistryClient = registryClient
 
@@ -197,10 +198,12 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
 	cfg := &action.Configuration{}
 
-	registryClient, err := registryClientWithLogin(pushChartURL, opts...)
+	registryClient, err, logout := registryClientWithLogin(pushChartURL, opts...)
 	if err != nil {
 		return fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
+
+	defer logout()
 
 	cfg.RegistryClient = registryClient
 
@@ -218,10 +221,12 @@ func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption
 func showRemoteHelmChart(chartURL string, version string, opts ...RegistryClientOption) (string, error) {
 	cfg := &action.Configuration{}
 
-	registryClient, err := registryClientWithLogin(chartURL, opts...)
+	registryClient, err, logout := registryClientWithLogin(chartURL, opts...)
 	if err != nil {
 		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
+
+	defer logout()
 
 	cfg.RegistryClient = registryClient
 
