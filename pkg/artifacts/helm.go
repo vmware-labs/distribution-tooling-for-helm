@@ -200,7 +200,7 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
 	cfg := &action.Configuration{}
 
-	registryClient, err, logout := registryClientWithLogin(pushChartURL, opts...)
+	registryClient, logout, err := registryClientWithLogin(pushChartURL, opts...)
 	if err != nil {
 		return fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
@@ -223,7 +223,7 @@ func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption
 func showRemoteHelmChart(chartURL string, version string, opts ...RegistryClientOption) (string, error) {
 	cfg := &action.Configuration{}
 
-	registryClient, err, logout := registryClientWithLogin(chartURL, opts...)
+	registryClient, logout, err := registryClientWithLogin(chartURL, opts...)
 	if err != nil {
 		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
