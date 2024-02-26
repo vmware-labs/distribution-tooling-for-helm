@@ -79,7 +79,7 @@ func NewRegistryClientConfig(opts ...RegistryClientOption) *RegistryClientConfig
 
 func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, error) {
 	wrap := &registryClientWrap{}
-	opts := []registry.ClientOption{}
+	var opts []registry.ClientOption
 	if cfg.UsePlainHTTP {
 		opts = append(opts, registry.ClientOptPlainHTTP())
 	} else {
@@ -117,31 +117,54 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 	wrap.client = r
 
 	return wrap, nil
+}
 
+// registryClientWithLogin returns an authenticated registry client
+func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*registry.Client, error) {
+	parsedURL, err := url.Parse(chartURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url: %w", err)
+	}
+
+	cc := NewRegistryClientConfig(opts...)
+
+	reg, err := getRegistryClientWrap(cc)
+	if err != nil {
+		return nil, fmt.Errorf("missing registry client: %w", err)
+	}
+
+	var loginOpts []registry.LoginOption
+
+	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
+		loginOpts = append(loginOpts, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password))
+
+		if cc.UseInsecureHTTPS {
+			loginOpts = append(loginOpts, registry.LoginOptInsecure(true))
+		}
+
+		if err := reg.client.Login(parsedURL.Host, loginOpts...); err != nil {
+			return nil, fmt.Errorf("error logging in to %s: %w", parsedURL.Host, err)
+		}
+
+		defer func() {
+			_ = reg.client.Logout(parsedURL.Host)
+			_ = os.Remove(reg.credentialsFile)
+		}()
+	}
+	return reg.client, nil
 }
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
-	u, err := url.Parse(chartURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
-	}
 	cfg := &action.Configuration{}
-	cc := NewRegistryClientConfig(opts...)
-	reg, err := getRegistryClientWrap(cc)
+
+	registryClient, err := registryClientWithLogin(chartURL, opts...)
 	if err != nil {
-		return "", fmt.Errorf("missing registry client: %w", err)
+		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
-	cfg.RegistryClient = reg.client
-	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
-		if err := reg.client.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
-			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
-		}
-		defer func() {
-			_ = reg.client.Logout(u.Host)
-			_ = os.Remove(reg.credentialsFile)
-		}()
-	}
+
+	cfg.RegistryClient = registryClient
+
 	client := action.NewPullWithOpts(action.WithConfig(cfg))
 
 	dir, err := os.MkdirTemp(destDir, "chart-*")
@@ -173,11 +196,14 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 // PushChart pushes the local chart tarFile to the remote URL provided
 func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
 	cfg := &action.Configuration{}
-	reg, err := getRegistryClientWrap(NewRegistryClientConfig(opts...))
+
+	registryClient, err := registryClientWithLogin(pushChartURL, opts...)
 	if err != nil {
-		return fmt.Errorf("missing registry client: %w", err)
+		return fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
-	cfg.RegistryClient = reg.client
+
+	cfg.RegistryClient = registryClient
+
 	client := action.NewPushWithOpts(action.WithPushConfig(cfg))
 
 	client.Settings = cli.New()
@@ -189,25 +215,30 @@ func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption
 	return nil
 }
 
-func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientConfig) (string, error) {
-	client := action.NewShowWithConfig(action.ShowChart, &action.Configuration{})
-	reg, err := getRegistryClientWrap(cfg)
-	if err != nil {
-		return "", fmt.Errorf("missing registry client: %w", err)
-	}
-	client.SetRegistryClient(reg.client)
-	client.Version = version
-	cp, err := client.ChartPathOptions.LocateChart(chartURL, cli.New())
+func showRemoteHelmChart(chartURL string, version string, opts ...RegistryClientOption) (string, error) {
+	cfg := &action.Configuration{}
 
+	registryClient, err := registryClientWithLogin(chartURL, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
+	}
+
+	cfg.RegistryClient = registryClient
+
+	client := action.NewShowWithConfig(action.ShowChart, cfg)
+	client.Version = version
+
+	cp, err := client.ChartPathOptions.LocateChart(chartURL, cli.New())
 	if err != nil {
 		return "", err
 	}
+
 	return client.Run(cp)
 }
 
 // RemoteChartExist checks if the provided chart exists
 func RemoteChartExist(chartURL string, version string, opts ...RegistryClientOption) bool {
-	_, err := showRemoteHelmChart(chartURL, version, NewRegistryClientConfig(opts...))
+	_, err := showRemoteHelmChart(chartURL, version, opts...)
 	return err == nil
 }
 
