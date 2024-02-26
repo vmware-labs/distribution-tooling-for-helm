@@ -106,17 +106,10 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 			return nil, fmt.Errorf("error closing credentials file: %w", err)
 		}
 		opts = append(opts, registry.ClientOptCredentialsFile(f.Name()))
-		revOpts := docker.ResolverOptions{}
-		authz := docker.NewDockerAuthorizer(docker.WithAuthCreds(func(_ string) (string, string, error) {
-			return cfg.Auth.Username, cfg.Auth.Password, nil
-		}))
-		revOpts.Hosts = docker.ConfigureDefaultRegistries(
-			docker.WithAuthorizer(authz),
-			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
-		)
-		rev := docker.NewResolver(revOpts)
 
-		opts = append(opts, registry.ClientOptResolver(rev))
+		if cfg.UsePlainHTTP {
+			opts = append(opts, registry.ClientOptPlainHTTP())
+		}
 	}
 	r, err := registry.NewClient(opts...)
 	if err != nil {
