@@ -120,17 +120,17 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 }
 
 // registryClientWithLogin returns an authenticated registry client
-func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*registry.Client, error, func()) {
+func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*registry.Client, func(), error) {
 	parsedURL, err := url.Parse(chartURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid url: %w", err), func() {}
+		return nil, func() {}, fmt.Errorf("invalid url: %w", err)
 	}
 
 	cc := NewRegistryClientConfig(opts...)
 
 	reg, err := getRegistryClientWrap(cc)
 	if err != nil {
-		return nil, fmt.Errorf("missing registry client: %w", err), func() {}
+		return nil, func() {}, fmt.Errorf("missing registry client: %w", err)
 	}
 
 	var loginOpts []registry.LoginOption
@@ -143,21 +143,23 @@ func registryClientWithLogin(chartURL string, opts ...RegistryClientOption) (*re
 		}
 
 		if err := reg.client.Login(parsedURL.Host, loginOpts...); err != nil {
-			return nil, fmt.Errorf("error logging in to %s: %w", parsedURL.Host, err), func() {}
+			return nil, func() {}, fmt.Errorf("error logging in to %s: %w", parsedURL.Host, err)
 		}
-
 	}
-	return reg.client, nil, func() {
+
+	cleanup := func() {
 		_ = reg.client.Logout(parsedURL.Host)
 		_ = os.Remove(reg.credentialsFile)
 	}
+
+	return reg.client, cleanup, nil
 }
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
 	cfg := &action.Configuration{}
 
-	registryClient, err, logout := registryClientWithLogin(chartURL, opts...)
+	registryClient, logout, err := registryClientWithLogin(chartURL, opts...)
 	if err != nil {
 		return "", fmt.Errorf("failed getting a logged in registry client: %w", err)
 	}
