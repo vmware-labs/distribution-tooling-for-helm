@@ -141,7 +141,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 	sampleImages, err := suite.testServer.LoadImagesFromFile("../../testdata/images.json")
 	suite.Require().NoError(err)
 
-	t.Run("Loads from Helm chart", func(t *testing.T) {
+	t.Run("Loads from Helm chart", func(_ *testing.T) {
 
 		scenarioName := "custom-chart"
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
@@ -175,7 +175,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 		assert.Equal(referenceLock, lock)
 	})
-	t.Run("Loads Helm chart with dependencies", func(t *testing.T) {
+	t.Run("Loads Helm chart with dependencies", func(_ *testing.T) {
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario("../../testdata/scenarios/chart1", chartDir,
@@ -195,7 +195,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		assert.Equal(existingLock, lock)
 	})
 
-	t.Run("Retrieves only the specified platforms", func(t *testing.T) {
+	t.Run("Retrieves only the specified platforms", func(_ *testing.T) {
 		scenarioName := "custom-chart"
 		chartName := "test"
 
@@ -311,7 +311,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		assert.ErrorContains(err, "failed to obtain image platform")
 	})
 
-	t.Run("Fails when no archs are retrieved", func(t *testing.T) {
+	t.Run("Fails when no archs are retrieved", func(_ *testing.T) {
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario("../../testdata/scenarios/chart1", chartDir,
@@ -323,7 +323,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		require.Nil(lock)
 	})
 
-	t.Run("Fails when missing Helm chart dependencies", func(t *testing.T) {
+	t.Run("Fails when missing Helm chart dependencies", func(_ *testing.T) {
 		type chartDependency struct {
 			Name       string
 			Repository string
@@ -347,7 +347,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		assert.ErrorContains(err, "the Helm chart defines dependencies but they are not present in the charts directory")
 	})
 
-	t.Run("Fails to load from invalid directory", func(t *testing.T) {
+	t.Run("Fails to load from invalid directory", func(_ *testing.T) {
 		chartRoot := sb.TempFile()
 		require.NoFileExists(chartRoot)
 
@@ -495,7 +495,7 @@ images:
 
 		assert := suite.Assert()
 
-		t.Run("Deserializes from YAML File", func(t *testing.T) {
+		t.Run("Deserializes from YAML File", func(_ *testing.T) {
 			f := sb.TempFile()
 			require.NoError(os.WriteFile(f, []byte(expected), 0644))
 			newLock, err := FromYAMLFile(f)
@@ -503,7 +503,7 @@ images:
 			assert.Equal(il, newLock)
 		})
 
-		t.Run("Fails on invalid YAML file", func(t *testing.T) {
+		t.Run("Fails on invalid YAML file", func(_ *testing.T) {
 			nonExisting := sb.TempFile()
 			require.NoFileExists(nonExisting)
 			_, err := FromYAMLFile(nonExisting)

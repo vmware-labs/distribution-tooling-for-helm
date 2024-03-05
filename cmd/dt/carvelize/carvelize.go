@@ -34,7 +34,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath := args[0]
 			l := cfg.Logger()
 			// Allows silencing called methods

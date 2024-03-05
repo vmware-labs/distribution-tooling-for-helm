@@ -19,7 +19,7 @@ var mainConfig = config.NewConfig()
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: filepath.Base(os.Args[0]),
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			_ = cmd.Help()
 		},
 	}

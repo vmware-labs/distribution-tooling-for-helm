@@ -32,7 +32,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath := args[0]
 			l := cfg.Logger()
 
