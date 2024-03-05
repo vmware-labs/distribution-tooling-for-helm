@@ -17,6 +17,8 @@ import (
 
 // RelocationResult describes the result of performing a relocation
 type RelocationResult struct {
+	// Name is the name of the values file
+	Name string
 	// Data is the relocated data
 	Data []byte
 	// Count is the number of relocated images
@@ -26,11 +28,14 @@ type RelocationResult struct {
 func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	valuesReplRes, err := relocateValues(chart, prefix)
 	if err != nil {
-		return fmt.Errorf("failed to relocate values.yaml: %v", err)
+		return fmt.Errorf("failed to relocate chart: %v", err)
 	}
-	if valuesReplRes.Count > 0 {
-		if err := os.WriteFile(chart.AbsFilePath("values.yaml"), valuesReplRes.Data, 0644); err != nil {
-			return fmt.Errorf("failed to write values.yaml: %v", err)
+
+	for _, result := range valuesReplRes {
+		if result.Count > 0 {
+			if err := os.WriteFile(chart.AbsFilePath(result.Name), result.Data, 0644); err != nil {
+				return fmt.Errorf("failed to write %s: %v", result.Name, err)
+			}
 		}
 	}
 
@@ -67,12 +72,9 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) error {
 	prefix = normalizeRelocateURL(prefix)
 
-	cfg := NewRelocateConfig()
-	for _, opt := range opts {
-		opt(cfg)
-	}
+	cfg := NewRelocateConfig(opts...)
 
-	chart, err := cu.LoadChart(chartPath, cu.WithAnnotationsKey(cfg.ImageLockConfig.AnnotationsKey))
+	chart, err := cu.LoadChart(chartPath, cu.WithAnnotationsKey(cfg.ImageLockConfig.AnnotationsKey), cu.WithValuesFiles(cfg.ValuesFiles...))
 	if err != nil {
 		return fmt.Errorf("failed to load Helm chart: %v", err)
 	}

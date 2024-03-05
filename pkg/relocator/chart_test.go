@@ -17,6 +17,7 @@ import (
 func TestRelocateChartDir(t *testing.T) {
 	scenarioName := "chart1"
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+	valuesFiles := []string{"values.yaml", "values.prod.yaml"}
 
 	chartDir := sb.TempFile()
 	serverURL := "localhost"
@@ -27,21 +28,24 @@ func TestRelocateChartDir(t *testing.T) {
 	repositoryPrefix := "airgap"
 	fullNewURL := fmt.Sprintf("%s/%s", newServerURL, repositoryPrefix)
 
-	err := RelocateChartDir(chartDir, fullNewURL)
+	err := RelocateChartDir(chartDir, fullNewURL, WithValuesFiles(valuesFiles...))
 	require.NoError(t, err)
 
 	t.Run("Values Relocated", func(t *testing.T) {
-		data, err := os.ReadFile(filepath.Join(chartDir, "values.yaml"))
-		require.NoError(t, err)
-		relocatedValues, err := tu.NormalizeYAML(string(data))
-		require.NoError(t, err)
+		for _, valuesFile := range valuesFiles {
+			t.Logf("checking %s file", valuesFile)
+			data, err := os.ReadFile(filepath.Join(chartDir, valuesFile))
+			require.NoError(t, err)
+			relocatedValues, err := tu.NormalizeYAML(string(data))
+			require.NoError(t, err)
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "values.yaml.tmpl"), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
-		require.NoError(t, err)
+			expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
+			require.NoError(t, err)
 
-		expectedValues, err := tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
-		assert.Equal(t, expectedValues, relocatedValues)
+			expectedValues, err := tu.NormalizeYAML(expectedData)
+			require.NoError(t, err)
+			assert.Equal(t, expectedValues, relocatedValues)
+		}
 	})
 	t.Run("Annotations Relocated", func(t *testing.T) {
 		c, err := loader.Load(chartDir)
