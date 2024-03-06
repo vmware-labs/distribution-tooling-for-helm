@@ -11,7 +11,7 @@ import (
 
 // NewCmd builds a new relocate command
 func NewCmd(cfg *config.Config) *cobra.Command {
-	var valuesFiles []string
+	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",
 		Short: "Relocates a Helm chart",
@@ -45,7 +45,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", []string{"values.yaml"}, "values files to relocate images (can specify multiple)")
+	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 
 	return cmd
 }

@@ -438,8 +438,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		sayYes       bool
 		pushChartURL string
 		version      string
-		valuesFiles  []string
 	)
+	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
 		Use:   "unwrap FILE OCI_URI",
 		Short: "Unwraps a wrapped Helm chart",
@@ -488,7 +488,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when unwrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&pushChartURL, "push-chart-url", pushChartURL, "push the unwrapped Helm chart to the given URL")
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
-	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", []string{"values.yaml"}, "values files to relocate images (can specify multiple)")
+	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 
 	return cmd
 }
