@@ -23,7 +23,7 @@ Use it cautiously. Very often the complete list of images cannot be guessed from
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath := args[0]
 			l := cfg.Logger()
 

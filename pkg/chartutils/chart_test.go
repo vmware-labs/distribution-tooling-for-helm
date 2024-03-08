@@ -70,9 +70,10 @@ func (suite *ChartUtilsTestSuite) TestLoadChart() {
 				}
 			})
 			t.Run("ValuesFile", func(t *testing.T) {
-				f := chart.ValuesFile()
+				f := chart.ValuesFiles()
 				require.NotNil(t, f)
-				assert.Equal(t, f.Name, "values.yaml")
+				assert.Equal(t, len(f), 1)
+				assert.Equal(t, f[0].Name, "values.yaml")
 			})
 			t.Run("Dependencies", func(t *testing.T) {
 				dependencies := chart.Dependencies()

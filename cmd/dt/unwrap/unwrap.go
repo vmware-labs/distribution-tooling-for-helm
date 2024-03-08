@@ -46,6 +46,7 @@ type Config struct {
 	FetchArtifacts        bool
 	Auth                  Auth
 	ContainerRegistryAuth Auth
+	ValuesFiles           []string
 
 	// Interactive enables interacting with the user
 	Interactive bool
@@ -196,6 +197,13 @@ func WithTempDirectory(tempDir string) func(c *Config) {
 	}
 }
 
+// WithValuesFiles configures the values files of the wrapped chart
+func WithValuesFiles(files ...string) func(c *Config) {
+	return func(c *Config) {
+		c.ValuesFiles = files
+	}
+}
+
 // NewConfig returns a new WrapConfig with default values
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
@@ -204,6 +212,7 @@ func NewConfig(opts ...Option) *Config {
 		logger:         logrus.NewSectionLogger(),
 		AnnotationsKey: imagelock.DefaultAnnotationsKey,
 		Platforms:      []string{},
+		ValuesFiles:    []string{"values.yaml"},
 	}
 
 	for _, opt := range opts {
@@ -269,7 +278,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 	if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", wrap.ChartDir(), registryURL), func() error {
 		return relocator.RelocateChartDir(
 			wrap.ChartDir(), registryURL, relocator.WithLog(l),
-			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey),
+			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey), relocator.WithValuesFiles(cfg.ValuesFiles...),
 		)
 	}); err != nil {
 		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
@@ -430,6 +439,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		pushChartURL string
 		version      string
 	)
+	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
 		Use:   "unwrap FILE OCI_URI",
 		Short: "Unwraps a wrapped Helm chart",
@@ -460,6 +470,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithInsecure(cfg.Insecure),
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
+				WithValuesFiles(valuesFiles...),
 			)
 			if err != nil {
 				return err
@@ -477,6 +488,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when unwrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&pushChartURL, "push-chart-url", pushChartURL, "push the unwrapped Helm chart to the given URL")
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
+	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 
 	return cmd
 }

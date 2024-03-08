@@ -11,7 +11,8 @@ import (
 
 // NewCmd builds a new relocate command
 func NewCmd(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
+	valuesFiles := []string{"values.yaml"}
+	cmd := &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",
 		Short: "Relocates a Helm chart",
 		Long:  "Relocates a Helm chart into a new OCI registry. This command will replace the existing registry references with the new registry both in the Images.lock and values.yaml files",
@@ -20,7 +21,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		Args:          cobra.ExactArgs(2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			chartPath, repository := args[0], args[1]
 			if repository == "" {
 				return fmt.Errorf("repository cannot be empty")
@@ -33,6 +34,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 					repository,
 					relocator.WithLog(l), relocator.Recursive,
 					relocator.WithAnnotationsKey(cfg.AnnotationsKey),
+					relocator.WithValuesFiles(valuesFiles...),
 				)
 			}); err != nil {
 				return l.Failf("failed to relocate Helm chart %q: %w", chartPath, err)
@@ -42,4 +44,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
+
+	return cmd
 }
