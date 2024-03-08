@@ -26,6 +26,7 @@ type Configuration struct {
 	MaxRetries     int
 	InsecureMode   bool
 	Auth           Auth
+	ValuesFiles    []string
 }
 
 // WithInsecureMode configures Insecure transport
@@ -91,6 +92,7 @@ func NewConfiguration(opts ...Option) *Configuration {
 		MaxRetries:     3,
 		Log:            silent.NewLogger(),
 		InsecureMode:   false,
+		ValuesFiles:    []string{"values.yaml"},
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -113,5 +115,12 @@ func WithLog(l log.Logger) func(cfg *Configuration) {
 func WithAnnotationsKey(str string) func(cfg *Configuration) {
 	return func(cfg *Configuration) {
 		cfg.AnnotationsKey = str
+	}
+}
+
+// WithValuesFiles customizes the values files in the chart
+func WithValuesFiles(files ...string) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.ValuesFiles = files
 	}
 }

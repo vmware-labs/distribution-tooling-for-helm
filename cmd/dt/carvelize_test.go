@@ -67,7 +67,7 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 	res := dt(args...)
 	res.AssertSuccess(t)
 
-	t.Run("Generates Carvel bundle", func(t *testing.T) {
+	t.Run("Generates Carvel bundle", func(_ *testing.T) {
 		newBundleData, err := os.ReadFile(filepath.Join(chartDir, carvel.CarvelBundleFilePath))
 		require.NoError(err)
 		var newBundle map[string]interface{}
@@ -76,7 +76,7 @@ func (suite *CmdSuite) TestCarvelizeCommand() {
 		require.Equal(expectedBundle, newBundle)
 	})
 
-	t.Run("Generates Carvel images", func(t *testing.T) {
+	t.Run("Generates Carvel images", func(_ *testing.T) {
 		newImagesData, err := os.ReadFile(filepath.Join(chartDir, carvel.CarvelImagesFilePath))
 		require.NoError(err)
 		var newImagesLock map[string]interface{}

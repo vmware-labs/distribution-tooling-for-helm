@@ -38,7 +38,7 @@ func (suite *CmdSuite) TestRelocateCommand() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	renderLockedChart := func(chartDir string, scenarioName string, serverURL string) string {
+	renderLockedChart := func(chartDir string, _ string, serverURL string) string {
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
@@ -51,7 +51,7 @@ func (suite *CmdSuite) TestRelocateCommand() {
 		suite.Require().NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
 		return chartDir
 	}
-	suite.T().Run("Relocate Helm chart", func(t *testing.T) {
+	suite.T().Run("Relocate Helm chart", func(_ *testing.T) {
 		relocateURL := "custom.repo.example.com"
 		originChart := renderLockedChart(sb.TempFile(), scenarioName, serverURL)
 		expectedRelocatedDir := renderLockedChart(sb.TempFile(), scenarioName, relocateURL)

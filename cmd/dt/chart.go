@@ -12,7 +12,7 @@ var chartCmd = &cobra.Command{
 	Short:         "Helm chart management commands",
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		_ = cmd.Help()
 	},
 }

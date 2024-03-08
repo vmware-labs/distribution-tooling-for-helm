@@ -13,15 +13,22 @@ type RelocateConfig struct {
 	Log              log.Logger
 	RelocateLockFile bool
 	Recursive        bool
+	ValuesFiles      []string
 }
 
 // NewRelocateConfig returns a new RelocateConfig with default settings
-func NewRelocateConfig() *RelocateConfig {
-	return &RelocateConfig{
+func NewRelocateConfig(opts ...RelocateOption) *RelocateConfig {
+	cfg := &RelocateConfig{
 		Log:              silentLog.NewLogger(),
 		RelocateLockFile: true,
 		ImageLockConfig:  *imagelock.NewImagesLockConfig(),
+		ValuesFiles:      []string{"values.yaml"},
 	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	return cfg
 }
 
 // RelocateOption defines a RelocateConfig option
@@ -50,5 +57,12 @@ func WithRelocateLockFile(relocateLock bool) func(rc *RelocateConfig) {
 func WithLog(l log.Logger) func(rc *RelocateConfig) {
 	return func(rc *RelocateConfig) {
 		rc.Log = l
+	}
+}
+
+// WithValuesFiles configures the values files to use for relocation
+func WithValuesFiles(files ...string) func(rc *RelocateConfig) {
+	return func(rc *RelocateConfig) {
+		rc.ValuesFiles = files
 	}
 }

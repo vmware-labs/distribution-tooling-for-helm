@@ -67,7 +67,7 @@ func TarContext(parentCtx context.Context, sourceDir string, filename string, cf
 	prefix := cfg.Prefix
 	skip := cfg.Skip
 	if skip == nil {
-		skip = func(f string) bool { return false }
+		skip = func(_ string) bool { return false }
 	}
 	dir := filepath.Dir(filename)
 	if !FileExists(dir) {

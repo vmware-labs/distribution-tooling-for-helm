@@ -92,7 +92,7 @@ func RenderScenario(origin string, destDir string, data map[string]interface{}) 
 		return fmt.Errorf("faled to list template partials")
 	}
 	for _, p := range matches {
-		err := filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(p, func(path string, info os.FileInfo, _ error) error {
 			if strings.HasSuffix(path, partialExtension) {
 				return nil
 			}

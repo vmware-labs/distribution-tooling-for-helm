@@ -20,7 +20,7 @@ var Commit = ""
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Prints the version",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		msg := fmt.Sprintf("Distribution Tooling for Helm %s\n", Version)
 		if BuildDate != "" {
 			msg += fmt.Sprintf("Built on: %s\n", BuildDate)

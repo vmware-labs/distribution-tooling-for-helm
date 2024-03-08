@@ -34,7 +34,7 @@ func init() {
 
 // ExecuteWithSpinner runs the provided function while executing spinner
 func ExecuteWithSpinner(spinner *Spinner, message string, fn func() error) error {
-	return putils.RunWithSpinner(spinner.WithRemoveWhenDone(true).WithText(message), func(spinner *pterm.SpinnerPrinter) error {
+	return putils.RunWithSpinner(spinner.WithRemoveWhenDone(true).WithText(message), func(_ *pterm.SpinnerPrinter) error {
 		return fn()
 	})
 }

@@ -43,7 +43,7 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 
 	scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
-	t.Run("Pulls images", func(t *testing.T) {
+	t.Run("Pulls images", func(_ *testing.T) {
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
@@ -67,7 +67,7 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 		}
 	})
 
-	t.Run("Error when no images in Images.lock", func(t *testing.T) {
+	t.Run("Error when no images in Images.lock", func(_ *testing.T) {
 		chartDir := sb.TempFile()
 
 		images := []tu.ImageData{}

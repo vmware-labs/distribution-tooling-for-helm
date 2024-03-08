@@ -18,6 +18,7 @@ type Chart struct {
 	chart          *chart.Chart
 	rootDir        string
 	annotationsKey string
+	valuesFiles    []string
 }
 
 // ChartFullPath returns the wrapped chart ChartFullPath
@@ -112,9 +113,13 @@ func (c *Chart) File(name string) *chart.File {
 	return getChartFile(c.chart, name)
 }
 
-// ValuesFile returns the values.yaml chart.File
-func (c *Chart) ValuesFile() *chart.File {
-	return c.File("values.yaml")
+// ValuesFiles returns all the values chart.File
+func (c *Chart) ValuesFiles() []*chart.File {
+	files := make([]*chart.File, 0, len(c.valuesFiles))
+	for _, valuesFile := range c.valuesFiles {
+		files = append(files, c.File(valuesFile))
+	}
+	return files
 }
 
 // AbsFilePath returns the absolute path to the Chart relative file name
@@ -134,7 +139,7 @@ func (c *Chart) GetAnnotatedImages() (imagelock.ImageList, error) {
 
 // Dependencies returns the chart dependencies
 func (c *Chart) Dependencies() []*Chart {
-	cfg := NewConfiguration(WithAnnotationsKey(c.annotationsKey))
+	cfg := NewConfiguration(WithAnnotationsKey(c.annotationsKey), WithValuesFiles(c.valuesFiles...))
 	deps := make([]*Chart, 0)
 
 	for _, dep := range c.chart.Dependencies() {
@@ -160,5 +165,10 @@ func LoadChart(path string, opts ...Option) (*Chart, error) {
 }
 
 func newChart(c *chart.Chart, chartRoot string, cfg *Configuration) *Chart {
-	return &Chart{chart: c, rootDir: chartRoot, annotationsKey: cfg.AnnotationsKey}
+	return &Chart{
+		chart:          c,
+		rootDir:        chartRoot,
+		annotationsKey: cfg.AnnotationsKey,
+		valuesFiles:    cfg.ValuesFiles,
+	}
 }
