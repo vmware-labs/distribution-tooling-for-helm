@@ -186,7 +186,7 @@ require (
 	google.golang.org/api v0.162.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240205150955-31a09d347014 // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.9.0 // indirect
-	gopkg.in/go-jose/go-jose.v2 v2.6.2 // indirect
+	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	oras.land/oras-go v1.2.5 // indirect
 	sigs.k8s.io/release-utils v0.7.7 // indirect
