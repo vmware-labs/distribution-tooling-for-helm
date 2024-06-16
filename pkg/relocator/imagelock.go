@@ -9,10 +9,10 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
-func relocateImages(images imagelock.ImageList, prefix string) (count int, err error) {
+func relocateImages(images imagelock.ImageList, newRegistry string) (count int, err error) {
 	var allErrors error
 	for _, img := range images {
-		norm, err := utils.RelocateImageURL(img.Image, prefix, true)
+		norm, err := utils.RelocateImageRegistry(img.Image, newRegistry, true)
 		if err != nil {
 			allErrors = errors.Join(allErrors, err)
 			continue
@@ -24,8 +24,8 @@ func relocateImages(images imagelock.ImageList, prefix string) (count int, err e
 }
 
 // RelocateLock rewrites the images urls in the provided lock using prefix
-func RelocateLock(lock *imagelock.ImagesLock, prefix string) (*RelocationResult, error) {
-	count, err := relocateImages(lock.Images, prefix)
+func RelocateLock(lock *imagelock.ImagesLock, newRegistry string) (*RelocationResult, error) {
+	count, err := relocateImages(lock.Images, newRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to relocate Images.lock file: %v", err)
 	}
@@ -37,12 +37,12 @@ func RelocateLock(lock *imagelock.ImagesLock, prefix string) (*RelocationResult,
 }
 
 // RelocateLockFile relocates images urls in the provided Images.lock using prefix
-func RelocateLockFile(file string, prefix string) error {
+func RelocateLockFile(file string, newRegistry string) error {
 	lock, err := imagelock.FromYAMLFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
-	result, err := RelocateLock(lock, prefix)
+	result, err := RelocateLock(lock, newRegistry)
 	if err != nil {
 		return err
 	}

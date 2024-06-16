@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"helm.sh/helm/v3/pkg/repo/repotest"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/wrap"

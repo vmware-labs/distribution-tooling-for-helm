@@ -147,6 +147,55 @@ func RelocateImageURL(url string, prefix string, includeIndentifier bool) (strin
 	return newURL, nil
 }
 
+// RelocateImageRegistry rewrites the provided image URL by replacing its
+// registry with the newRegistry. If includeIdentifier is true, the tag or
+// digest of the image is included in the returned URL. The function returns
+// an error if the URL cannot be parsed or the new repository cannot be created.
+func RelocateImageRegistry(url string, newRegistry string,
+	includeIndentifier bool) (string, error) {
+	ref, err := name.ParseReference(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to relocate url: %v", err)
+	}
+
+	// Create a new repository with the new registry and the repository path
+	// from the parsed reference
+	newRepo, err := name.NewRepository(fmt.Sprintf("%s/%s", newRegistry,
+		ref.Context().RepositoryStr()))
+	if err != nil {
+		return "", fmt.Errorf("failed to create new repository: %v", err)
+	}
+
+	var newRef name.Reference
+	switch v := ref.(type) {
+	case name.Tag:
+		// If the parsed reference is a Tag, create a new Tag with the new
+		// repository and the tag from the parsed reference
+		newRef, err = name.NewTag(fmt.Sprintf("%s:%s", newRepo.Name(),
+			v.TagStr()), name.WeakValidation)
+	case name.Digest:
+		// If the parsed reference is a Digest, create a new Digest with the
+		// new repository and the digest from the parsed reference
+		newRef, err = name.NewDigest(fmt.Sprintf("%s@%s", newRepo.Name(),
+			v.DigestStr()), name.WeakValidation)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to create new reference: %v", err)
+	}
+
+	newURL := newRef.Context().Name()
+	if includeIndentifier && newRef.Identifier() != "" {
+		separator := ":"
+		if _, ok := newRef.(name.Digest); ok {
+			separator = "@"
+		}
+		newURL = fmt.Sprintf("%s%s%s", newURL, separator, newRef.Identifier())
+	}
+
+	// Return the full name of the new reference, which includes the tag or digest
+	return newURL, nil
+}
+
 // ExecuteWithRetry executes a function retrying until it succeeds or the number of retries is reached
 func ExecuteWithRetry(retries int, cb func(try int, prevErr error) error) error {
 	retry := 0
