@@ -10,8 +10,3 @@ icon: https://bitnami.com/downloads/logos/bitnami-mark.png
 name: common
 type: library
 version: 2.6.0
-dependencies:
-  - name: common2
-    repository: oci://registry-1.docker.io/bitnamicharts
-    version: 2.x.x
-

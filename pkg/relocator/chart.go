@@ -25,8 +25,8 @@ type RelocationResult struct {
 	Count int
 }
 
-func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
-	valuesReplRes, err := relocateValues(chart, prefix)
+func relocateChart(chart *cu.Chart, newRegistry string, cfg *RelocateConfig) error {
+	valuesReplRes, err := relocateValues(chart, newRegistry)
 	if err != nil {
 		return fmt.Errorf("failed to relocate chart: %v", err)
 	}
@@ -42,7 +42,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	var allErrors error
 
 	// TODO: Compare annotations with values replacements
-	annotationsRelocResult, err := relocateAnnotations(chart, prefix)
+	annotationsRelocResult, err := relocateAnnotations(chart, newRegistry)
 	if err != nil {
 		allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm chart: %v", err))
 	} else {
@@ -58,9 +58,17 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 
 	lockFile := chart.LockFilePath()
 	if utils.FileExists(lockFile) {
-		err = RelocateLockFile(lockFile, prefix)
+		err = RelocateLockFile(lockFile, newRegistry)
 		if err != nil {
 			allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Images.lock file: %v", err))
+		}
+	}
+
+	if cfg.Recursive {
+		for _, dep := range chart.Dependencies() {
+			if err := relocateChart(dep, newRegistry, cfg); err != nil {
+				allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm SubChart %q: %v", dep.Chart().ChartFullPath(), err))
+			}
 		}
 	}
 
@@ -69,8 +77,8 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 
 // RelocateChartDir relocates the chart (Chart.yaml annotations, Images.lock and values.yaml) specified
 // by chartPath using the provided prefix
-func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) error {
-	prefix = normalizeRelocateURL(prefix)
+func RelocateChartDir(chartPath string, newRegistry string, opts ...RelocateOption) error {
+	newRegistry = normalizeRelocateURL(newRegistry)
 
 	cfg := NewRelocateConfig(opts...)
 
@@ -79,31 +87,22 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 		return fmt.Errorf("failed to load Helm chart: %v", err)
 	}
 
-	err = relocateChart(chart, prefix, cfg)
+	err = relocateChart(chart, newRegistry, cfg)
 	if err != nil {
 		return err
 	}
 	if utils.FileExists(filepath.Join(chartPath, carvel.CarvelImagesFilePath)) {
-		err = relocateCarvelBundle(chartPath, prefix)
+		err = relocateCarvelBundle(chartPath, newRegistry)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	var allErrors error
-
-	if cfg.Recursive {
-		for _, dep := range chart.Dependencies() {
-			if err := relocateChart(dep, prefix, cfg); err != nil {
-				allErrors = errors.Join(allErrors, fmt.Errorf("failed to reloacte Helm SubChart %q: %v", dep.Chart().ChartFullPath(), err))
-			}
-		}
-	}
-	return allErrors
+	return err
 }
 
-func relocateCarvelBundle(chartRoot string, prefix string) error {
+func relocateCarvelBundle(chartRoot string, newRegistry string) error {
 
 	//TODO: Do better detection here, imgpkg probably has something
 	carvelImagesFile := filepath.Join(chartRoot, carvel.CarvelImagesFilePath)
@@ -111,7 +110,7 @@ func relocateCarvelBundle(chartRoot string, prefix string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load Carvel images lock: %v", err)
 	}
-	result, err := RelocateCarvelImagesLock(&lock, prefix)
+	result, err := RelocateCarvelImagesLock(&lock, newRegistry)
 	if err != nil {
 		return err
 	}
@@ -125,9 +124,9 @@ func relocateCarvelBundle(chartRoot string, prefix string) error {
 }
 
 // RelocateCarvelImagesLock rewrites the images urls in the provided lock using prefix
-func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, prefix string) (*RelocationResult, error) {
+func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, newRegistry string) (*RelocationResult, error) {
 
-	count, err := relocateCarvelImages(lock.Images, prefix)
+	count, err := relocateCarvelImages(lock.Images, newRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to relocate Carvel images lock file: %v", err)
 	}
@@ -141,10 +140,10 @@ func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, prefix string) (*Relo
 
 }
 
-func relocateCarvelImages(images []lockconfig.ImageRef, prefix string) (count int, err error) {
+func relocateCarvelImages(images []lockconfig.ImageRef, newRegistry string) (count int, err error) {
 	var allErrors error
 	for i, img := range images {
-		norm, err := utils.RelocateImageURL(img.Image, prefix, true)
+		norm, err := utils.RelocateImageURL(img.Image, newRegistry, true)
 		if err != nil {
 			allErrors = errors.Join(allErrors, err)
 			continue

@@ -194,7 +194,21 @@ func TestRelocateImageURL(t *testing.T) {
 				url:    "example.com:80/foo/bar/bitnami/app",
 				prefix: newReg,
 			},
-			want: fmt.Sprintf("%s/bitnami/app", newReg),
+			want: fmt.Sprintf("%s/foo/bar/bitnami/app", newReg),
+		},
+		"Replaces registry with doubly nested repository prefex": {
+			args: args{
+				url:    "www.example.com/docker/abc/imagename",
+				prefix: newReg,
+			},
+			want: fmt.Sprintf("%s/docker/abc/imagename", newReg),
+		},
+		"Replaces registry with triply nested repository prefix": {
+			args: args{
+				url:    "www.example.com/docker/abc/testimages/imagename",
+				prefix: newReg,
+			},
+			want: fmt.Sprintf("%s/docker/abc/testimages/imagename", newReg),
 		},
 		"Replaces library repositoy": {
 			args: args{
@@ -213,7 +227,7 @@ func TestRelocateImageURL(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := RelocateImageURL(tt.args.url, tt.args.prefix, tt.args.includeIndentifier)
+			got, err := RelocateImageRegistry(tt.args.url, tt.args.prefix, tt.args.includeIndentifier)
 			validateError(t, tt.expectedErr, err)
 
 			if got != tt.want {
