@@ -63,6 +63,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 						chartutils.WithContext(ctx),
 						chartutils.WithProgressBar(childLog.ProgressBar()),
 						chartutils.WithArtifactsDir(chart.ImageArtifactsDir()),
+						chartutils.WithInsecureMode(cfg.Insecure),
 					); err != nil {
 						return childLog.Failf("%v", err)
 					}
@@ -109,7 +110,6 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 
 func pullImages(chart wrapping.Lockable, imagesDir string, opts ...chartutils.Option) error {
 	lock, err := chart.GetImagesLock()
-
 	if err != nil {
 		return fmt.Errorf("failed to read Images.lock file")
 	}
