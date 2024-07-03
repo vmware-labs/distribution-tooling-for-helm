@@ -136,7 +136,6 @@ func getChartFile(c *chart.Chart, name string) *chart.File {
 	for _, f := range c.Raw {
 		if f.Name == name {
 			return f
-
 		}
 	}
 	return nil
@@ -165,7 +164,7 @@ func ReadLockFromChart(chartPath string) (*imagelock.ImagesLock, error) {
 		if err := utils.FindFileInTar(context.Background(), chartPath, "Images.lock", func(tr *tar.Reader) error {
 			lock, err = imagelock.FromYAML(tr)
 			return err
-		}, utils.TarConfig{StripComponents: 1}); err != nil {
+		}, utils.TarConfig{StripComponents: 2}); err != nil {
 			return nil, err
 		}
 		if lock == nil {
