@@ -214,7 +214,6 @@ func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	var err error
 
 	tmpDir, err := cfg.GetTemporaryDirectory()
-
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
@@ -342,6 +341,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
+				chartutils.WithInsecureMode(cfg.Insecure),
 			); err != nil {
 				return childLog.Failf("%v", err)
 			}
@@ -439,7 +439,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
-	var examples = `  # Wrap a Helm chart from a local folder
+	examples := `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
   # Wrap a Helm chart in an OCI registry
@@ -476,7 +476,6 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
 			)
-
 			if err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
 					// We already logged it, lets be less verbose

@@ -11,7 +11,6 @@ import (
 )
 
 func (suite *CmdSuite) TestInfoCommand() {
-
 	t := suite.T()
 	require := suite.Require()
 	assert := suite.Assert()
@@ -29,17 +28,21 @@ func (suite *CmdSuite) TestInfoCommand() {
 		appVersion := "2.3.4"
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
+		wrapDir := sb.TempFile()
 		chartDir := sb.TempFile()
 
-		images, err := writeSampleImages(imageName, imageTag, filepath.Join(chartDir, "images"))
+		images, err := writeSampleImages(imageName, imageTag, filepath.Join(wrapDir, "images"))
+		require.NoError(err)
+		err = utils.CopyDir(filepath.Join(wrapDir, "images"), chartDir)
 		require.NoError(err)
 
-		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "AppVersion": appVersion, "RepositoryURL": serverURL},
-		))
-
+		for _, chartPath := range []string{filepath.Join(wrapDir, "chart"), chartDir} {
+			require.NoError(tu.RenderScenario(scenarioDir, chartPath,
+				map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": version, "AppVersion": appVersion, "RepositoryURL": serverURL},
+			))
+		}
 		tarFile := sb.TempFile()
-		if err := utils.Tar(chartDir, tarFile, utils.TarConfig{
+		if err := utils.Tar(wrapDir, tarFile, utils.TarConfig{
 			Prefix: chartName,
 		}); err != nil {
 			require.NoError(err)
@@ -83,7 +86,6 @@ func (suite *CmdSuite) TestInfoCommand() {
 				require.NoError(err)
 
 				assert.Equal(lockFileData, yamlInfoData)
-
 			})
 
 		}

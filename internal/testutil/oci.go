@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"helm.sh/helm/v3/pkg/repo/repotest"
 	"oras.land/oras-go/v2/content/oci"
+
+	"helm.sh/helm/v3/pkg/repo/repotest"
 
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
