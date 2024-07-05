@@ -181,8 +181,8 @@ func parseValuesImageElement(data map[string]interface{}) *ValuesImageElement {
 	for _, k := range imageElementKeys {
 		v, ok := data[k]
 		if !ok {
-			// digest is optional
-			if k == "digest" {
+			// digest and registry are optional
+			if k == "digest" || k == "registry" {
 				continue
 			}
 			return nil
@@ -192,10 +192,6 @@ func parseValuesImageElement(data map[string]interface{}) *ValuesImageElement {
 			return nil
 		}
 		elemData[k] = vStr
-	}
-	// An empty registry may be acceptable, but not an empty repository
-	if elemData["repository"] == "" {
-		return nil
 	}
 	return valuesImageElementFromMap(elemData)
 }
