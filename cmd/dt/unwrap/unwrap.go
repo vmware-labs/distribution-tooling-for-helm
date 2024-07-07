@@ -42,6 +42,8 @@ type Config struct {
 	TempDirectory         string
 	Version               string
 	Carvelize             bool
+	SkipImageRefs         bool
+	SkipImages            bool
 	KeepArtifacts         bool
 	FetchArtifacts        bool
 	Auth                  Auth
@@ -136,6 +138,20 @@ func WithAnnotationsKey(annotationsKey string) func(c *Config) {
 func WithCarvelize(carvelize bool) func(c *Config) {
 	return func(c *Config) {
 		c.Carvelize = carvelize
+	}
+}
+
+// WithSkipImageRefs configures the WithSkipImageRefs of the WrapConfig
+func WithSkipImageRefs(skipimagerefs bool) func(c *Config) {
+	return func(c *Config) {
+		c.SkipImageRefs = skipimagerefs
+	}
+}
+
+// WithSkipImages configures the WithSkipImages of the WrapConfig
+func WithSkipImages(skipimages bool) func(c *Config) {
+	return func(c *Config) {
+		c.SkipImages = skipimages
 	}
 }
 
@@ -279,6 +295,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		return relocator.RelocateChartDir(
 			wrap.ChartDir(), registryURL, relocator.WithLog(l),
 			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey), relocator.WithValuesFiles(cfg.ValuesFiles...),
+			relocator.WithSkipImageRefs(cfg.SkipImageRefs),
 		)
 	}); err != nil {
 		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
@@ -287,7 +304,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 
 	images := getImageList(wrap, l)
 
-	if len(images) > 0 {
+	if len(images) > 0 && !cfg.SkipImages {
 		// If we are not in interactive mode, we do not show the list of images
 		if cfg.Interactive {
 			showImagesSummary(images, l)
@@ -435,9 +452,11 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 // NewCmd returns a new unwrap command
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
-		sayYes       bool
-		pushChartURL string
-		version      string
+		sayYes        bool
+		pushChartURL  string
+		version       string
+		skipImageRefs bool
+		skipImages    bool
 	)
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
@@ -471,6 +490,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
 				WithValuesFiles(valuesFiles...),
+				WithSkipImageRefs(skipImageRefs),
+				WithSkipImages(skipImages),
 			)
 			if err != nil {
 				return err
@@ -489,6 +510,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&pushChartURL, "push-chart-url", pushChartURL, "push the unwrapped Helm chart to the given URL")
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
+	cmd.PersistentFlags().BoolVar(&skipImageRefs, "skip-image-refs", skipImageRefs, "Skip updating image references in values.yaml and Images.lock")
+	cmd.PersistentFlags().BoolVar(&skipImages, "skip-images", skipImageRefs, "Skip pushing images")
 
 	return cmd
 }
