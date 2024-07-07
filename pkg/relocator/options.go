@@ -13,6 +13,7 @@ type RelocateConfig struct {
 	Log              log.Logger
 	RelocateLockFile bool
 	Recursive        bool
+	SkipImageRefs    bool
 	ValuesFiles      []string
 }
 
@@ -20,6 +21,7 @@ type RelocateConfig struct {
 func NewRelocateConfig(opts ...RelocateOption) *RelocateConfig {
 	cfg := &RelocateConfig{
 		Log:              silentLog.NewLogger(),
+		SkipImageRefs:    false,
 		RelocateLockFile: true,
 		ImageLockConfig:  *imagelock.NewImagesLockConfig(),
 		ValuesFiles:      []string{"values.yaml"},
@@ -43,6 +45,13 @@ func Recursive(c *RelocateConfig) {
 func WithAnnotationsKey(str string) func(rc *RelocateConfig) {
 	return func(rc *RelocateConfig) {
 		rc.ImageLockConfig.AnnotationsKey = str
+	}
+}
+
+// WithSkipImageRefs configures the skipImageRefs configuration
+func WithSkipImageRefs(skipimagerefs bool) func(rc *RelocateConfig) {
+	return func(rc *RelocateConfig) {
+		rc.SkipImageRefs = skipimagerefs
 	}
 }
 
