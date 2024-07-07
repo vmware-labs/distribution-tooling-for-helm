@@ -26,6 +26,11 @@ type RelocationResult struct {
 }
 
 func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
+	var allErrors error
+	if cfg.SkipImageRefs {
+		return allErrors
+	}
+
 	valuesReplRes, err := relocateValues(chart, prefix)
 	if err != nil {
 		return fmt.Errorf("failed to relocate chart: %v", err)
@@ -38,8 +43,6 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 			}
 		}
 	}
-
-	var allErrors error
 
 	// TODO: Compare annotations with values replacements
 	annotationsRelocResult, err := relocateAnnotations(chart, prefix)
