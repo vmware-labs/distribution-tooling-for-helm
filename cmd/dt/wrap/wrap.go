@@ -44,6 +44,7 @@ type Config struct {
 	Carvelize             bool
 	KeepArtifacts         bool
 	FetchArtifacts        bool
+	SkipImages            bool
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 	OutputFile            string
@@ -126,6 +127,13 @@ func WithCarvelize(carvelize bool) func(c *Config) {
 func WithFetchArtifacts(fetchArtifacts bool) func(c *Config) {
 	return func(c *Config) {
 		c.FetchArtifacts = fetchArtifacts
+	}
+}
+
+// WithSkipImages configures the WithSkipImages of the WrapConfig
+func WithSkipImages(skipimages bool) func(c *Config) {
+	return func(c *Config) {
+		c.SkipImages = skipimages
 	}
 }
 
@@ -400,10 +408,11 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}
 	}
-	if err := pullImages(wrap, subCfg); err != nil {
-		return "", err
+	if !cfg.SkipImages {
+		if err := pullImages(wrap, subCfg); err != nil {
+			return "", err
+		}
 	}
-
 	if cfg.Carvelize {
 		if err := l.Section(fmt.Sprintf("Generating Carvel bundle for Helm chart %q", chartPath), func(childLog log.SectionLogger) error {
 			return carvelize.GenerateBundle(
@@ -439,7 +448,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
-	examples := `  # Wrap a Helm chart from a local folder
+	var skipImages bool
+	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
   # Wrap a Helm chart in an OCI registry
@@ -475,6 +485,7 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
+				WithSkipImages(skipImages),
 			)
 			if err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
@@ -496,6 +507,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
+	cmd.PersistentFlags().BoolVar(&skipImages, "skip-images", skipImages, "skip fetching images")
 
 	return cmd
 }
