@@ -27,7 +27,7 @@ type RelocationResult struct {
 
 func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	var allErrors error
-	if cfg.SkipImageRefs {
+	if cfg.SkipImageRelocation {
 		return allErrors
 	}
 
