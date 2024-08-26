@@ -44,7 +44,7 @@ type Config struct {
 	Carvelize             bool
 	KeepArtifacts         bool
 	FetchArtifacts        bool
-	SkipImages            bool
+	SkipPullImages        bool
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 	OutputFile            string
@@ -130,10 +130,10 @@ func WithFetchArtifacts(fetchArtifacts bool) func(c *Config) {
 	}
 }
 
-// WithSkipImages configures the WithSkipImages of the WrapConfig
-func WithSkipImages(skipimages bool) func(c *Config) {
+// WithSkipPullImages configures the WithSkipPullImages of the WrapConfig
+func WithSkipPullImages(skipPullImages bool) func(c *Config) {
 	return func(c *Config) {
-		c.SkipImages = skipimages
+		c.SkipPullImages = skipPullImages
 	}
 }
 
@@ -408,7 +408,7 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}
 	}
-	if !cfg.SkipImages {
+	if !cfg.SkipPullImages {
 		if err := pullImages(wrap, subCfg); err != nil {
 			return "", err
 		}
@@ -448,7 +448,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
-	var skipImages bool
+	var skipPullImages bool
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
@@ -485,7 +485,7 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
-				WithSkipImages(skipImages),
+				WithSkipPullImages(skipPullImages),
 			)
 			if err != nil {
 				if _, ok := err.(*log.LoggedError); ok {
@@ -507,7 +507,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
-	cmd.PersistentFlags().BoolVar(&skipImages, "skip-images", skipImages, "skip fetching images")
+	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "skip pulling images when wrapping a Helm Chart")
 
 	return cmd
 }
