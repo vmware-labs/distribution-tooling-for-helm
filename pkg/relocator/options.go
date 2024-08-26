@@ -9,22 +9,22 @@ import (
 
 // RelocateConfig defines the configuration used in the relocator functions
 type RelocateConfig struct {
-	ImageLockConfig  imagelock.Config
-	Log              log.Logger
-	RelocateLockFile bool
-	Recursive        bool
-	SkipImageRefs    bool
-	ValuesFiles      []string
+	ImageLockConfig     imagelock.Config
+	Log                 log.Logger
+	RelocateLockFile    bool
+	Recursive           bool
+	SkipImageRelocation bool
+	ValuesFiles         []string
 }
 
 // NewRelocateConfig returns a new RelocateConfig with default settings
 func NewRelocateConfig(opts ...RelocateOption) *RelocateConfig {
 	cfg := &RelocateConfig{
-		Log:              silentLog.NewLogger(),
-		SkipImageRefs:    false,
-		RelocateLockFile: true,
-		ImageLockConfig:  *imagelock.NewImagesLockConfig(),
-		ValuesFiles:      []string{"values.yaml"},
+		Log:                 silentLog.NewLogger(),
+		SkipImageRelocation: false,
+		RelocateLockFile:    true,
+		ImageLockConfig:     *imagelock.NewImagesLockConfig(),
+		ValuesFiles:         []string{"values.yaml"},
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -48,10 +48,10 @@ func WithAnnotationsKey(str string) func(rc *RelocateConfig) {
 	}
 }
 
-// WithSkipImageRefs configures the skipImageRefs configuration
-func WithSkipImageRefs(skipimagerefs bool) func(rc *RelocateConfig) {
+// WithSkipImageRelocation configures the SkipImageRelocation configuration
+func WithSkipImageRelocation(skipImageRelocation bool) func(rc *RelocateConfig) {
 	return func(rc *RelocateConfig) {
-		rc.SkipImageRefs = skipimagerefs
+		rc.SkipImageRelocation = skipImageRelocation
 	}
 }
 

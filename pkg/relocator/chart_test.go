@@ -85,13 +85,13 @@ func TestRelocateChartDir(t *testing.T) {
 
 	})
 
-	// create a new chart dir to reset for the SkipImageRef tests
+	// create a new chart dir to reset for the SkipImageRelocation tests
 	chartDir = sb.TempFile()
 	require.NoError(t, tu.RenderScenario(scenarioDir, chartDir, map[string]interface{}{"ServerURL": serverURL}))
-	err = RelocateChartDir(chartDir, "", WithValuesFiles(valuesFiles...), WithSkipImageRefs(true))
+	err = RelocateChartDir(chartDir, "", WithValuesFiles(valuesFiles...), WithSkipImageRelocation(true))
 	require.NoError(t, err)
 
-	t.Run("Values Relocated SkipImageRef", func(t *testing.T) {
+	t.Run("Values Relocated SkipImageRelocation", func(t *testing.T) {
 		for _, valuesFile := range valuesFiles {
 			t.Logf("checking %s file", valuesFile)
 			data, err := os.ReadFile(filepath.Join(chartDir, valuesFile))
@@ -125,7 +125,7 @@ func TestRelocateChartDir(t *testing.T) {
 		assert.Equal(t, expectedAnnotations, relocatedAnnotations)
 	})
 
-	t.Run("ImageLock Relocated SkipImageRef", func(t *testing.T) {
+	t.Run("ImageLock Relocated SkipImageRelocation", func(t *testing.T) {
 		data, err := os.ReadFile(filepath.Join(chartDir, "Images.lock"))
 		assert.NoError(t, err)
 		var lockData map[string]interface{}
