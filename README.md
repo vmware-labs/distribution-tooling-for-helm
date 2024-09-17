@@ -10,7 +10,7 @@ Distribute your Helm charts with two easy commands
 # Wrap
 $ helm dt wrap oci://docker.io/bitnamicharts/kibana
   ...
-  🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
+  🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
 
 # Unwrap
 $ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
@@ -86,8 +86,8 @@ $ helm dt wrap oci://docker.io/bitnamicharts/kibana
     ✔  Images.lock file written to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock"
     »  Pulling images into "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
+    ✔  Helm chart wrapped to "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
 ```
 
 Note that depending on the number of images needed by the Helm chart (remember, a wrap has the full set of image dependencies, not only the ones set on _values.yaml_) the size of the generated wrap might be considerably large:
@@ -102,12 +102,12 @@ If you want to make changes on the Helm chart, you can pass a directory to the w
 ```console
 $ helm dt wrap examples/mariadb/
  »  Wrapping Helm chart "examples/mariadb/"
-    ✔  Images.lock file "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock" does not exist
-    ✔  Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
-    »  Pulling images into "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/images"
+    ✔  Images.lock file "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock" does not exist
+    ✔  Images.lock file written to "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
+    »  Pulling images into "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
+    ✔  Helm chart wrapped to "/tmp/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
 ```
 
 If your chart and docker images include artifacts such as signatures or metadata, you can also include them in the wrap using the `--fetch-artifacts` flag.
@@ -122,9 +122,9 @@ For example:
 ```console
 $ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana
  ...
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz"
 
-$ tar -tzf "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz" | grep artifacts
+$ tar -tzf "/tmp/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz" | grep artifacts
 kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.sig
 kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata
 kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata.sig
@@ -144,9 +144,9 @@ $ helm dt wrap oci://docker.io/bitnamicharts/magento --skip-pull-images
  »  Wrapping Helm chart "oci://docker.io/bitnamicharts/magento"
     ✔  Helm chart downloaded to "/var/folders/cr/jn5532p51390yx_6ctd7c6_40000gn/T/chart-2437949055/chart-1972871498/magento"
     ✔  Images.lock file written to "/var/folders/cr/jn5532p51390yx_6ctd7c6_40000gn/T/chart-2437949055/wrap/chart/Images.lock"
-    ✔  Compressed into "/Users/martinpe/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
+    ✔  Compressed into "/tmp/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
 
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
  ```
 
 ### Unwrapping Helm charts
@@ -207,7 +207,7 @@ We can run the following command to create the `Images.lock` for the above Helm 
 
 ```console
 $ helm dt images lock examples/mariadb
-INFO[0005] Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
+INFO[0005] Images.lock file written to "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
 ```
 
 And it should look similar to this:
@@ -315,7 +315,7 @@ Based on the `Images.lock` file, this command downloads all listed images into t
 
 ```console
 $ helm dt images pull examples/mariadb
-INFO[0000] Pulling images into "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/images"
+INFO[0000] Pulling images into "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/images"
 INFO[0022] All images pulled successfully
 INFO[0022] Success
 ```
