@@ -288,8 +288,7 @@ func getImageLayoutDir(imagesDir string, dgst imagelock.DigestInfo) string {
 
 func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o crane.Options) (string, error) {
 	imgDir := getImageLayoutDir(imagesDir, digest)
-	
-	var src = fmt.Sprintf("%s@%s", image, digest.Digest)
+	src := fmt.Sprintf("%s@%s", image, digest.Digest)
 	if strings.Contains(image, string(digest.Digest)) {
 		src = image
 	}
