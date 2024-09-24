@@ -288,8 +288,11 @@ func getImageLayoutDir(imagesDir string, dgst imagelock.DigestInfo) string {
 
 func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o crane.Options) (string, error) {
 	imgDir := getImageLayoutDir(imagesDir, digest)
-
-	src := fmt.Sprintf("%s@%s", image, digest.Digest)
+	
+	var src = fmt.Sprintf("%s@%s", image, digest.Digest)
+	if strings.Contains(image, string(digest.Digest)) {
+		src = image
+	}
 	ref, err := name.ParseReference(src, o.Name...)
 	if err != nil {
 		return "", fmt.Errorf("parsing reference %q: %w", src, err)
