@@ -80,38 +80,44 @@ func NewRegistryClientConfig(opts ...RegistryClientOption) *RegistryClientConfig
 }
 
 func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, error) {
-	wrap := &registryClientWrap{}
+	var credentialsFile string
 	opts := []registry.ClientOption{}
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: cfg.UseInsecureHTTPS, // #nosec G402
+			},
+		},
+	}
+
 	if cfg.UsePlainHTTP {
 		opts = append(opts, registry.ClientOptPlainHTTP())
 	} else {
-		if cfg.UseInsecureHTTPS { // #nosec G402
-			httpClient := &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{
-						InsecureSkipVerify: true,
-					},
-				},
-			}
-			opts = append(opts, registry.ClientOptHTTPClient(httpClient))
-		}
+		opts = append(opts, registry.ClientOptHTTPClient(httpClient))
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
 		f, err := os.CreateTemp(cfg.TempDir, "dt-config-*.json")
 		if err != nil {
 			return nil, fmt.Errorf("error creating credentials file: %w", err)
 		}
-		wrap.credentialsFile = f.Name()
+
 		err = f.Close()
 		if err != nil {
 			return nil, fmt.Errorf("error closing credentials file: %w", err)
 		}
-		opts = append(opts, registry.ClientOptCredentialsFile(f.Name()))
+
+		credentialsFile = f.Name()
+		opts = append(opts, registry.ClientOptCredentialsFile(credentialsFile))
 		revOpts := docker.ResolverOptions{}
-		authz := docker.NewDockerAuthorizer(docker.WithAuthCreds(func(_ string) (string, string, error) {
-			return cfg.Auth.Username, cfg.Auth.Password, nil
-		}))
+		authz := docker.NewDockerAuthorizer(
+			docker.WithAuthClient(httpClient),
+			docker.WithAuthCreds(func(_ string) (string, string, error) {
+				return cfg.Auth.Username, cfg.Auth.Password, nil
+			}),
+		)
 		revOpts.Hosts = docker.ConfigureDefaultRegistries(
+			docker.WithClient(httpClient),
 			docker.WithAuthorizer(authz),
 			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
 		)
@@ -123,9 +129,11 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 	if err != nil {
 		return nil, err
 	}
-	wrap.client = r
 
-	return wrap, nil
+	return &registryClientWrap{
+		client:          r,
+		credentialsFile: credentialsFile,
+	}, nil
 
 }
 
@@ -181,21 +189,19 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 
 // PushChart pushes the local chart tarFile to the remote URL provided
 func PushChart(tarFile string, pushChartURL string, opts ...RegistryClientOption) error {
-	cfg := &action.Configuration{}
 	reg, err := getRegistryClientWrap(NewRegistryClientConfig(opts...))
 	if err != nil {
 		return fmt.Errorf("missing registry client: %w", err)
 	}
-	cfg.RegistryClient = reg.client
-	client := action.NewPushWithOpts(action.WithPushConfig(cfg))
 
+	client := action.NewPushWithOpts(
+		action.WithPushConfig(&action.Configuration{RegistryClient: reg.client}),
+	)
 	client.Settings = cli.New()
 
-	if _, err := client.Run(tarFile, pushChartURL); err != nil {
-		return fmt.Errorf("failed to push Helm chart: %w", err)
-	}
+	_, err = client.Run(tarFile, pushChartURL)
 
-	return nil
+	return err
 }
 
 func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientConfig) (string, error) {

@@ -7,10 +7,10 @@
 Distribute your Helm charts with two easy commands
 
 ```console
-# Wrap 
+# Wrap
 $ helm dt wrap oci://docker.io/bitnamicharts/kibana
   ...
-  🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-10.4.8.wrap.tgz"
+  🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
 
 # Unwrap
 $ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
@@ -36,7 +36,7 @@ $ helm plugin install https://github.com/vmware-labs/distribution-tooling-for-he
 
 > **Note:** Windows installation
 >
-> If installing on Windows, the above command must be run in a bash emulator such as Git Bash. 
+> If installing on Windows, the above command must be run in a bash emulator such as Git Bash.
 
 ### Downloading and using standalone
 
@@ -67,7 +67,7 @@ For the sake of following this guide, let's pull one of the Bitnami Helm charts 
 ```console
 $ git clone git@github.com:vmware-labs/distribution-tooling-for-helm.git
 $ cd distribution-tooling-for-helm
-$ bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d examples --untar" 
+$ bash -c "mkdir examples & helm pull oci://docker.io/bitnamicharts/mariadb -d examples --untar"
 ```
 
 The two simplest and most powerful commands on this tool are `wrap` and `unwrap`. With these two commands **you can relocate any Helm chart to any OCI registry in two steps**.
@@ -102,12 +102,12 @@ If you want to make changes on the Helm chart, you can pass a directory to the w
 ```console
 $ helm dt wrap examples/mariadb/
  »  Wrapping Helm chart "examples/mariadb/"
-    ✔  Images.lock file "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock" does not exist
-    ✔  Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
-    »  Pulling images into "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/images"
+    ✔  Images.lock file "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock" does not exist
+    ✔  Images.lock file written to "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
+    »  Pulling images into "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
+    ✔  Helm chart wrapped to "/tmp/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/mariadb-13.0.0.wrap.tgz"
 ```
 
 If your chart and docker images include artifacts such as signatures or metadata, you can also include them in the wrap using the `--fetch-artifacts` flag.
@@ -135,6 +135,19 @@ kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.metadata.sig
 >
 > Chart signatures are not bundled as they would be invalidated at chart unwrap because of the relocation. All the container images wrapped will maintain their signatures and metadata.
 
+#### Light wraps
+
+Sometimes you might actually want to wrap your Helm charts without fetching the container images. This is not exactly a wrap from the point of view of the initial conception of this tool but we acknowledge that this case can be useful when you already know that the Helm charts exist in the target registry. Hence you can skip wrapping the container images by using the `--skip-pull-images` flag:
+
+```console
+$ helm dt wrap oci://docker.io/bitnamicharts/magento --skip-pull-images
+ »  Wrapping Helm chart "oci://docker.io/bitnamicharts/magento"
+    ✔  Helm chart downloaded to "/var/folders/cr/jn5532p51390yx_6ctd7c6_40000gn/T/chart-2437949055/chart-1972871498/magento"
+    ✔  Images.lock file written to "/var/folders/cr/jn5532p51390yx_6ctd7c6_40000gn/T/chart-2437949055/wrap/chart/Images.lock"
+    ✔  Compressed into "/tmp/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
+
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/magento-28.0.4.wrap.tgz"
+ ```
 
 ### Unwrapping Helm charts
 
@@ -222,7 +235,7 @@ We can run the following command to create the `Images.lock` for the above Helm 
 
 ```console
 $ helm dt images lock examples/mariadb
-INFO[0005] Images.lock file written to "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
+INFO[0005] Images.lock file written to "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/Images.lock"
 ```
 
 And it should look similar to this:
@@ -278,7 +291,7 @@ $ helm dt images lock ../charts/jenkins --annotations-key artifacthub.io/images
 The above `lock` command can be constrained to specific architectures. This is pretty useful to create lighter wraps as many of the images will be dropped when wrapping.
 
 ```console
-$ helm dt images lock ../charts/jenkins --platform linux/amd64
+$ helm dt images lock ../charts/jenkins --platforms linux/amd64
 ```
 
 If we now look at generated `Images.lock` we will notice that it contains only `linux/amd64` digests:
@@ -330,7 +343,7 @@ Based on the `Images.lock` file, this command downloads all listed images into t
 
 ```console
 $ helm dt images pull examples/mariadb
-INFO[0000] Pulling images into "/Users/martinpe/workspace/distribution-tooling-for-helm/examples/mariadb/images"
+INFO[0000] Pulling images into "/tmp/workspace/distribution-tooling-for-helm/examples/mariadb/images"
 INFO[0022] All images pulled successfully
 INFO[0022] Success
 ```
@@ -370,6 +383,8 @@ images:
     image: acme.com/federal/bitnami/mysqld-exporter:0.15.0-debian-11-r5
     image: acme.com/federal/bitnami/os-shell:11-debian-11-r22
 ```
+
+Note that in some scenarios one might actually not be interested in relocating the images. Perhaps one is only interested in pushing the Helm chart to a different registry but retaining the images. For such scenarios the `--skip-relocation` flag can be used when unwrapping the chart.
 
 ### Pushing images
 
@@ -476,7 +491,7 @@ INFO[0000] Helm chart annotated successfully
 
 ### Converting a Helm chart into a Carvel bundle (EXPERIMENTAL)
 
-From `dt` v0.2.0 we have introduced a new command to create a [Carvel bundle](https://carvel.dev/imgpkg/docs/v0.37.x/resources/#bundle) from any Helm chart. 
+From `dt` v0.2.0 we have introduced a new command to create a [Carvel bundle](https://carvel.dev/imgpkg/docs/v0.37.x/resources/#bundle) from any Helm chart.
 
 
 ```console

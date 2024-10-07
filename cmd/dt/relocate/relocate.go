@@ -13,6 +13,7 @@ import (
 func NewCmd(cfg *config.Config) *cobra.Command {
 
 	valuesFiles := []string{"values.yaml"}
+	skipImageRelocation := false
 	cmd := &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",
 		Short: "Relocates a Helm chart",
@@ -36,6 +37,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 					relocator.WithLog(l), relocator.Recursive,
 					relocator.WithAnnotationsKey(cfg.AnnotationsKey),
 					relocator.WithValuesFiles(valuesFiles...),
+					relocator.WithSkipImageRelocation(skipImageRelocation),
 				)
 			}); err != nil {
 				return l.Failf("failed to relocate Helm chart %q: %w", chartPath, err)
@@ -47,6 +49,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
+	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-relocation", skipImageRelocation, "skip relocating image references in the different files")
 
 	return cmd
 }

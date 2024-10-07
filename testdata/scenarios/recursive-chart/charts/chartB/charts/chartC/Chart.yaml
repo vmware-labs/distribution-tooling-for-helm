@@ -1,0 +1,8 @@
+name: chartC
+version: 3.0.0
+annotations:
+  category: CMS
+  licenses: Apache-2.0
+  images: |
+    - name: imagec
+      image: registry-1.docker.io/bitnami/imagec:1.0.8-debian-12-r7

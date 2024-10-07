@@ -26,6 +26,11 @@ type RelocationResult struct {
 }
 
 func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
+	var allErrors error
+	if cfg.SkipImageRelocation {
+		return allErrors
+	}
+
 	valuesReplRes, err := relocateValues(chart, prefix)
 	if err != nil {
 		return fmt.Errorf("failed to relocate chart: %v", err)
@@ -38,8 +43,6 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 			}
 		}
 	}
-
-	var allErrors error
 
 	// TODO: Compare annotations with values replacements
 	annotationsRelocResult, err := relocateAnnotations(chart, prefix)
@@ -95,11 +98,12 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 
 	if cfg.Recursive {
 		for _, dep := range chart.Dependencies() {
-			if err := relocateChart(dep, prefix, cfg); err != nil {
+			if err := RelocateChartDir(dep.ChartDir(), prefix, opts...); err != nil {
 				allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm SubChart %q: %v", dep.Chart().ChartFullPath(), err))
 			}
 		}
 	}
+
 	return allErrors
 }
 
