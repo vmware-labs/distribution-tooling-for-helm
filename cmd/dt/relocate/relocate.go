@@ -11,6 +11,7 @@ import (
 
 // NewCmd builds a new relocate command
 func NewCmd(cfg *config.Config) *cobra.Command {
+
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",

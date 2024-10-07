@@ -15,17 +15,17 @@ import (
 )
 
 // ChartImages pushes the images from the Images.lock
-func ChartImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
-	return pushImages(wrap, imagesDir, opts...)
+func ChartImages(wrap wrapping.Wrap, imagesDir string, registryURL string, pushRepository string, opts ...chartutils.Option) error {
+	return pushImages(wrap, imagesDir, registryURL, pushRepository, opts...)
 }
 
-func pushImages(wrap wrapping.Wrap, imagesDir string, opts ...chartutils.Option) error {
+func pushImages(wrap wrapping.Wrap, imagesDir string, registryURL string, pushRepository string, opts ...chartutils.Option) error {
 	lock, err := wrap.GetImagesLock()
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
 
-	return chartutils.PushImages(lock, imagesDir, opts...)
+	return chartutils.PushImages(lock, imagesDir, registryURL, pushRepository, opts...)
 }
 
 // NewCmd builds a new push command
@@ -62,6 +62,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				if err := pushImages(
 					chart,
 					imagesDir,
+					"",
+					"",
 					chartutils.WithLog(silent.NewLogger()),
 					chartutils.WithContext(ctx),
 					chartutils.WithProgressBar(subLog.ProgressBar()),
