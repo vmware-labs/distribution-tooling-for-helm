@@ -86,8 +86,8 @@ $ helm dt wrap oci://docker.io/bitnamicharts/kibana --version 11.2.23
     ✔  Images.lock file written to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock"
     »  Pulling images into "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/Users/martinpe/workspace/kibana/kibana-11.2.23.wrap.tgz"
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/kibana/kibana-11.2.23.wrap.tgz"
+    ✔  Helm chart wrapped to "/tmp/workspace/kibana/kibana-11.2.23.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-11.2.23.wrap.tgz"
 ```
 
 Note that depending on the number of images needed by the Helm chart (remember, a wrap has the full set of image dependencies, not only the ones set on _values.yaml_) the size of the generated wrap might be considerably large:
@@ -122,9 +122,9 @@ For example:
 ```console
 $ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana --version 11.2.23
  ...
- 🎉  Helm chart wrapped into "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz"
 
-$ tar -tzf "/Users/martinpe/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz" | grep artifacts
+$ tar -tzf "/tmp/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz" | grep artifacts
 kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.sig
 kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.metadata
 kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.metadata.sig
