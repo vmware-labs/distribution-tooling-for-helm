@@ -298,7 +298,7 @@ require (
 	go.starlark.net v0.0.0-20240123142251-f86470692795 // indirect
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20240205201215-2c58cdc269a3
-	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.19.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
