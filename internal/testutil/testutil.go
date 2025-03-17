@@ -31,8 +31,8 @@ var (
 )
 
 var fns = template.FuncMap{
-	"isLast": func(index int, len int) bool {
-		return index+1 == len
+	"isLast": func(index int, length int) bool {
+		return index+1 == length
 	},
 }
 
