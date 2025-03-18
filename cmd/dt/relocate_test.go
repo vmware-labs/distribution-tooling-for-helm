@@ -92,7 +92,7 @@ func (suite *CmdSuite) TestRelocateCommandRecursively() {
 
 		return chartDir
 	}
-	suite.T().Run("Relocate Helm chart", func(t *testing.T) {
+	suite.T().Run("Relocate Helm chart", func(_ *testing.T) {
 		relocateURL := "custom.repo.example.com"
 		originChart := renderLockedChart(sb.TempFile(), scenarioName, serverURL)
 
