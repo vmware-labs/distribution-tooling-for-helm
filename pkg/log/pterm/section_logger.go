@@ -66,9 +66,10 @@ func (l *SectionLogger) Section(title string, fn func(log.SectionLogger) error) 
 
 // StartSection starts a new log section, with nested indentation
 func (l *SectionLogger) StartSection(str string) log.SectionLogger {
-	l.printMessage(log.AlwaysLevel, Fold, str)
+	l.printMessage(log.AlwaysLevel, Fold, "%s", str)
 	return l.nest()
 }
+
 func (l *SectionLogger) nest() log.SectionLogger {
 	newLog := &SectionLogger{nestLevel: l.nestLevel + 1, Logger: NewLogger()}
 	newLog.prefix = strings.Repeat(" ", newLog.nestLevel*nestSpacing)
