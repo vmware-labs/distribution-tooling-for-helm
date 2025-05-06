@@ -174,7 +174,7 @@ func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
 	packOpts.Layers = descs
 
 	pack := func() (ocispec.Descriptor, error) {
-		root, err := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1_RC4, oras.MediaTypeUnknownArtifact, packOpts)
+		root, err := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, oras.MediaTypeUnknownArtifact, packOpts)
 		if err != nil {
 			return ocispec.Descriptor{}, err
 		}
