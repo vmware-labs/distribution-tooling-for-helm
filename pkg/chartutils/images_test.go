@@ -158,7 +158,7 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 			require.NoError(err)
 			lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
 			require.NoError(err)
-			require.NoError(PushImages(lock, imagesDir))
+			require.NoError(PushImages(lock, imagesDir, "", ""))
 
 			// Verify the images were pushed
 			for _, img := range images {
