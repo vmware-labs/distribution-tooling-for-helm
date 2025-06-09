@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
@@ -123,8 +124,12 @@ func (v *ValuesImageElement) Relocate(prefix string) error {
 		return fmt.Errorf("failed to parse relocated URL: %v", err)
 	}
 
-	v.Registry = newRef.Context().Registry.RegistryStr()
-	v.Repository = newRef.Context().RepositoryStr()
+	if slices.Contains(v.foundFields, "registry") {
+		v.Registry = newRef.Context().Registry.RegistryStr()
+		v.Repository = newRef.Context().RepositoryStr()
+	} else {
+		v.Repository = newRef.Context().Name()
+	}
 	return nil
 }
 
@@ -183,6 +188,14 @@ func parseValuesImageElement(data map[string]interface{}) *ValuesImageElement {
 		if !ok {
 			// digest is optional
 			if k == "digest" {
+				continue
+			}
+			// repository element might contain registry url
+			if k == "registry" {
+				continue
+			}
+			// tag may be implicitly set to .Chart.appVersion
+			if k == "tag" {
 				continue
 			}
 			return nil

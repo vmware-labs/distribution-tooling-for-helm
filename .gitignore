@@ -1,6 +1,7 @@
 /bin/
 /dist/
 /examples/
+/.vscode/
 **~
 **.tgz
 /out/
