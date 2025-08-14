@@ -101,8 +101,8 @@ func GenerateBundle(chartPath string, opts ...chartutils.Option) error {
 
 	imgPkgPath := filepath.Join(chartPath, ".imgpkg")
 	if !utils.FileExists(imgPkgPath) {
-		if mkdirErr := os.Mkdir(imgPkgPath, os.FileMode(0755)); mkdirErr != nil {
-			return fmt.Errorf("failed to create .imgpkg directory: %w", mkdirErr)
+		if err = os.Mkdir(imgPkgPath, os.FileMode(0755)); err != nil {
+			return fmt.Errorf("failed to create .imgpkg directory: %w", err)
 		}
 	}
 

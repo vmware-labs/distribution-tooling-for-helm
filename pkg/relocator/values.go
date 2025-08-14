@@ -10,13 +10,13 @@ import (
 )
 
 func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*RelocationResult, error) {
-	valuesMap, readErr := chartutil.ReadValues(valuesData)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to parse Helm chart values: %v", readErr)
+	valuesMap, err := chartutil.ReadValues(valuesData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Helm chart values: %v", err)
 	}
-	imageElems, findErr := cu.FindImageElementsInValuesMap(valuesMap)
-	if findErr != nil {
-		return nil, fmt.Errorf("failed to find Helm chart image elements from values.yaml: %v", findErr)
+	imageElems, err := cu.FindImageElementsInValuesMap(valuesMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find Helm chart image elements from values.yaml: %v", err)
 	}
 	if len(imageElems) == 0 {
 		return &RelocationResult{Data: valuesData, Count: 0}, nil
@@ -24,8 +24,7 @@ func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*R
 
 	data := make(map[string]string, 0)
 	for _, e := range imageElems {
-		err := e.Relocate(prefix)
-		if err != nil {
+		if err = e.Relocate(prefix); err != nil {
 			return nil, fmt.Errorf("unexpected error relocating: %v", err)
 		}
 		for k, v := range e.YamlReplaceMap() {

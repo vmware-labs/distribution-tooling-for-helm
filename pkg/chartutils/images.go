@@ -205,9 +205,9 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 }
 
 func loadImage(path string) (v1.Image, error) {
-	stat, statErr := os.Stat(path)
-	if statErr != nil {
-		return nil, statErr
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
 	}
 
 	if !stat.IsDir() {
@@ -218,9 +218,9 @@ func loadImage(path string) (v1.Image, error) {
 		return img, nil
 	}
 
-	l, layoutErr := layout.ImageIndexFromPath(path)
-	if layoutErr != nil {
-		return nil, fmt.Errorf("could load %q as OCI layout: %w", path, layoutErr)
+	l, err := layout.ImageIndexFromPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("could load %q as OCI layout: %w", path, err)
 	}
 	m, err := l.IndexManifest()
 	if err != nil {

@@ -411,31 +411,33 @@ func normalizeOCIURL(url string) string {
 }
 
 func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg *Config) error {
-	tmpDir, tmpErr := cfg.GetTemporaryDirectory()
-	if tmpErr != nil {
-		return fmt.Errorf("failed to get temp dir: %w", tmpErr)
+	var tmpDir, dir string
+	var err error
+	tmpDir, err = cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to get temp dir: %w", err)
 	}
 
-	dir, mkdirErr := os.MkdirTemp(tmpDir, "chart-*")
-	if mkdirErr != nil {
-		return fmt.Errorf("failed to create temp directory: %w", mkdirErr)
+	dir, err = os.MkdirTemp(tmpDir, "chart-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
 	chart := wrap.Chart()
 	chartPath := chart.RootDir()
 	tempTarFile := filepath.Join(dir, fmt.Sprintf("%s.tgz", chart.Name()))
-	if err := utils.Tar(chartPath, tempTarFile, utils.TarConfig{
+	if err = utils.Tar(chartPath, tempTarFile, utils.TarConfig{
 		Prefix: chart.Name(),
 	}); err != nil {
 		return fmt.Errorf("failed to untar filename %q: %w", chartPath, err)
 	}
 
-	tmpDir, tmpErr = cfg.GetTemporaryDirectory()
-	if tmpErr != nil {
-		return fmt.Errorf("failed to get temp dir: %w", tmpErr)
+	tmpDir, err = cfg.GetTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("failed to get temp dir: %w", err)
 	}
 
-	if err := artifacts.PushChart(tempTarFile, pushChartURL,
+	if err = artifacts.PushChart(tempTarFile, pushChartURL,
 		artifacts.WithInsecure(cfg.Insecure),
 		artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
 		artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),

@@ -220,18 +220,17 @@ func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	l := cfg.GetLogger()
 	var chartPath string
 
-	tmpDir, tmpErr := cfg.GetTemporaryDirectory()
-	if tmpErr != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", tmpErr)
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	if chartutils.IsRemoteChart(inputPath) {
-		if err := l.ExecuteStep("Fetching remote Helm chart", func() error {
-			var fetchErr error
+		if err = l.ExecuteStep("Fetching remote Helm chart", func() error {
 			version := cfg.Version
-			chartPath, fetchErr = fetchRemoteChart(inputPath, version, tmpDir, cfg)
-			if fetchErr != nil {
-				return fetchErr
+			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir, cfg)
+			if err != nil {
+				return err
 			}
 
 			return nil
@@ -391,8 +390,8 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
-		if fetchErr := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); fetchErr != nil {
-			return "", fetchErr
+		if err = fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
+			return "", err
 		}
 	}
 
