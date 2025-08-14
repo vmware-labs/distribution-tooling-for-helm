@@ -370,46 +370,46 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 
 	subCfg := NewConfig(append(opts, WithLogger(l))...)
 
-	chartPath, pathErr := ResolveInputChartPath(inputPath, subCfg)
-	if pathErr != nil {
-		return "", pathErr
+	chartPath, err := ResolveInputChartPath(inputPath, subCfg)
+	if err != nil {
+		return "", err
 	}
 
-	tmpDir, tmpErr := cfg.GetTemporaryDirectory()
-	if tmpErr != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", tmpErr)
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
-	wrap, wrapErr := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
+	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 	)
-	if wrapErr != nil {
-		return "", l.Failf("failed to create wrap: %v", wrapErr)
+	if err != nil {
+		return "", l.Failf("failed to create wrap: %v", err)
 	}
 
 	chart := wrap.Chart()
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
-		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
-			return "", err
+		if fetchErr := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); fetchErr != nil {
+			return "", fetchErr
 		}
 	}
 
 	chartRoot := chart.RootDir()
-	if err := validateWrapLock(wrap, subCfg); err != nil {
+	if err = validateWrapLock(wrap, subCfg); err != nil {
 		return "", err
 	}
 
 	outputFile := cfg.OutputFile
-
 	if outputFile == "" {
 		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Version())
-		if _, err := filepath.Abs(outputBaseName); err != nil {
+		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
 			l.Debugf("failed to normalize output file: %v", err)
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}
 	}
+
 	if !cfg.SkipPullImages {
 		if err := pullImages(wrap, subCfg); err != nil {
 			return "", err
