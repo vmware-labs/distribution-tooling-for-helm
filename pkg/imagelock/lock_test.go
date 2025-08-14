@@ -197,7 +197,9 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 	t.Run("Retrieves only the specified platforms", func(_ *testing.T) {
 		scenarioName := "custom-chart"
+
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
+
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
@@ -221,9 +223,9 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
 		defer s.Close()
 
-		u, urlErr := url.Parse(s.URL)
-		if urlErr != nil {
-			t.Fatal(urlErr)
+		u, err := url.Parse(s.URL)
+		if err != nil {
+			t.Fatal(err)
 		}
 		images := []*tu.ImageData{
 			{
@@ -237,24 +239,27 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 			require.NoError(crane.Push(craneImg, img.Image, crane.Insecure))
 		}
 		scenarioName := "custom-chart"
+		chartName := "test"     //nolint:govet
+		chartVersion := "1.0.0" //nolint:govet
+		appVersion := "2.2.0"   //nolint:govet
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": u.Host, "Images": images, "Name": "test", "Version": "1.0.0", "AppVersion": "2.2.0"},
+			map[string]interface{}{"ServerURL": u.Host, "Images": images, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion},
 		))
 
 		expectedLock := createLockFromImageData(map[string][]*tu.ImageData{
 			chartName: images,
 		})
-		expectedLock.Chart.Name = "test"
-		expectedLock.Chart.Version = "1.0.0"
-		expectedLock.Chart.AppVersion = "2.2.0"
+		expectedLock.Chart.Name = chartName
+		expectedLock.Chart.Version = chartVersion
+		expectedLock.Chart.AppVersion = appVersion
 		expectedLock.Metadata["generatedAt"] = ""
 
-		lock, lockErr := GenerateFromChart(chartDir, WithInsecure(true))
-		require.NoError(lockErr, "failed to create Images.lock from Helm chart: %v", lockErr)
+		lock, err := GenerateFromChart(chartDir, WithInsecure(true))
+		require.NoError(err, "failed to create Images.lock from Helm chart: %v", err)
 
 		// Not interested on this for the comparison
 		lock.Metadata["generatedAt"] = ""

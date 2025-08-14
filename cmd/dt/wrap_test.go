@@ -209,8 +209,6 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var err error
-			var certDir, keyFile, metadataDir, scenarioDir string
 			var username, password string
 			var registryURL string
 			var useAPI bool
@@ -250,14 +248,14 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 			sb := suite.sb
 
-			certDir, err = sb.Mkdir(sb.TempFile(), 0755)
-			require.NoError(err)
+			certDir, certDirErr := sb.Mkdir(sb.TempFile(), 0755)
+			require.NoError(certDirErr)
 
-			keyFile, _, err = tu.GenerateCosignCertificateFiles(certDir)
-			require.NoError(err)
+			keyFile, _, cosignErr := tu.GenerateCosignCertificateFiles(certDir)
+			require.NoError(cosignErr)
 
-			metadataDir, err = sb.Mkdir(sb.TempFile(), 0755)
-			require.NoError(err)
+			metadataDir, metadataDirErr := sb.Mkdir(sb.TempFile(), 0755)
+			require.NoError(metadataDirErr)
 
 			metadataFileText := "this is a sample text"
 			metadataArtifacts := map[string][]byte{
@@ -277,7 +275,7 @@ func (suite *CmdSuite) TestWrapCommand() {
 			scenarioName := "complete-chart"
 			chartName := "test"
 			version := "1.0.0"
-			scenarioDir, err = filepath.Abs(fmt.Sprintf("../../testdata/scenarios/%s", scenarioName))
+			scenarioDir, err := filepath.Abs(fmt.Sprintf("../../testdata/scenarios/%s", scenarioName))
 			require.NoError(err)
 
 			createSampleChart := func(chartDir string, withLock bool) string {
