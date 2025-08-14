@@ -152,12 +152,11 @@ func UnpackOCILayout(ctx context.Context, srcLayout string, destDir string) erro
 
 // CreateOCILayout creates a oc-layout directory from a source directory containing a set of files
 func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
-
 	dest, err := oci.New(destDir)
-
 	if err != nil {
 		return err
 	}
+
 	store, err := file.New("")
 	if err != nil {
 		return err
@@ -165,7 +164,6 @@ func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
 	defer store.Close()
 
 	packOpts := oras.PackManifestOptions{}
-
 	descs, err := loadDir(ctx, store, nil, srcDir)
 	if err != nil {
 		return err
@@ -174,12 +172,12 @@ func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
 	packOpts.Layers = descs
 
 	pack := func() (ocispec.Descriptor, error) {
-		root, err := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, oras.MediaTypeUnknownArtifact, packOpts)
-		if err != nil {
-			return ocispec.Descriptor{}, err
+		root, orasErr := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, oras.MediaTypeUnknownArtifact, packOpts)
+		if orasErr != nil {
+			return ocispec.Descriptor{}, orasErr
 		}
-		if err = store.Tag(ctx, root, root.Digest.String()); err != nil {
-			return ocispec.Descriptor{}, err
+		if orasErr = store.Tag(ctx, root, root.Digest.String()); orasErr != nil {
+			return ocispec.Descriptor{}, orasErr
 		}
 		return root, nil
 	}
@@ -187,12 +185,8 @@ func CreateOCILayout(ctx context.Context, srcDir, destDir string) error {
 	if err != nil {
 		return err
 	}
-	err = oras.CopyGraph(context.Background(), store, dest, root, oras.CopyGraphOptions{})
 
-	if err != nil {
-		return err
-	}
-	return err
+	return oras.CopyGraph(context.Background(), store, dest, root, oras.CopyGraphOptions{})
 }
 
 func pushArtifact(ctx context.Context, image string, dir string, opts ...crane.Option) error {
@@ -273,6 +267,7 @@ func NewOCIServer(t *testing.T, dir string) (*repotest.OCIServer, error) {
 
 // NewOCIServerWithCustomCreds returns a new OCI server with custom credentials
 func NewOCIServerWithCustomCreds(t *testing.T, dir string, username, password string) (*repotest.OCIServer, error) {
+	//nolint:gosec
 	testHtpasswdFileBasename := "authtest.htpasswd"
 	testUsername, testPassword := username, password
 

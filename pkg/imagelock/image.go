@@ -66,12 +66,12 @@ func (i *ChartImage) Diff(other *ChartImage) error {
 	for _, digest := range other.Digests {
 		existingDigest, err := i.GetDigestForArch(digest.Arch)
 		if err != nil {
-			allErrors = errors.Join(allErrors, fmt.Errorf("Helm chart %q: image %q: %v", other.Chart, other.Image, err))
+			allErrors = errors.Join(allErrors, fmt.Errorf("chart %q: image %q: %v", other.Chart, other.Image, err))
 			continue
 		}
 		if existingDigest.Digest != digest.Digest {
 			allErrors = errors.Join(allErrors,
-				fmt.Errorf("Helm chart %q: image %q: digests do not match:\n- %s\n+ %s",
+				fmt.Errorf("chart %q: image %q: digests do not match:\n- %s\n+ %s",
 					other.Chart, other.Image, digest.Digest, existingDigest.Digest))
 			continue
 		}

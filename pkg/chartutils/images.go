@@ -205,22 +205,22 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 }
 
 func loadImage(path string) (v1.Image, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return nil, err
+	stat, statErr := os.Stat(path)
+	if statErr != nil {
+		return nil, statErr
 	}
 
 	if !stat.IsDir() {
-		img, err := crane.Load(path)
-		if err != nil {
-			return nil, fmt.Errorf("could not load %q as tarball: %w", path, err)
+		img, loadErr := crane.Load(path)
+		if loadErr != nil {
+			return nil, fmt.Errorf("could not load %q as tarball: %w", path, loadErr)
 		}
 		return img, nil
 	}
 
-	l, err := layout.ImageIndexFromPath(path)
-	if err != nil {
-		return nil, fmt.Errorf("could load %q as OCI layout: %w", path, err)
+	l, layoutErr := layout.ImageIndexFromPath(path)
+	if layoutErr != nil {
+		return nil, fmt.Errorf("could load %q as OCI layout: %w", path, layoutErr)
 	}
 	m, err := l.IndexManifest()
 	if err != nil {

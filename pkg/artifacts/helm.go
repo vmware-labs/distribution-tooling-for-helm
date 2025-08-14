@@ -139,15 +139,15 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 
 // PullChart retrieves the specified chart
 func PullChart(chartURL, version string, destDir string, opts ...RegistryClientOption) (string, error) {
-	u, err := url.Parse(chartURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
+	u, urlErr := url.Parse(chartURL)
+	if urlErr != nil {
+		return "", fmt.Errorf("invalid url: %w", urlErr)
 	}
 	cfg := &action.Configuration{}
 	cc := NewRegistryClientConfig(opts...)
-	reg, err := getRegistryClientWrap(cc)
-	if err != nil {
-		return "", fmt.Errorf("missing registry client: %w", err)
+	reg, regErr := getRegistryClientWrap(cc)
+	if regErr != nil {
+		return "", fmt.Errorf("missing registry client: %w", regErr)
 	}
 	cfg.RegistryClient = reg.client
 	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
@@ -161,22 +161,21 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 	}
 	client := action.NewPullWithOpts(action.WithConfig(cfg))
 
-	dir, err := os.MkdirTemp(destDir, "chart-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", err)
+	dir, mkdirErr := os.MkdirTemp(destDir, "chart-*")
+	if mkdirErr != nil {
+		return "", fmt.Errorf("failed to upload Helm chart: failed to create temp directory: %w", mkdirErr)
 	}
 	client.Settings = cli.New()
 	client.DestDir = dir
 	client.Untar = true
 	client.Version = version
-	_, err = client.Run(chartURL)
-	if err != nil {
+	if _, err := client.Run(chartURL); err != nil {
 		return "", fmt.Errorf("failed to pull Helm chart: %w", err)
 	}
 
-	charts, err := filepath.Glob(filepath.Join(dir, "*/Chart.yaml"))
-	if err != nil {
-		return "", fmt.Errorf("failed to located fetched Helm charts: %w", err)
+	charts, globErr := filepath.Glob(filepath.Join(dir, "*/Chart.yaml"))
+	if globErr != nil {
+		return "", fmt.Errorf("failed to located fetched Helm charts: %w", globErr)
 	}
 	if len(charts) == 0 {
 		return "", fmt.Errorf("cannot find any Helm chart")
@@ -212,7 +211,7 @@ func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientCon
 	}
 	client.SetRegistryClient(reg.client)
 	client.Version = version
-	cp, err := client.ChartPathOptions.LocateChart(chartURL, cli.New())
+	cp, err := client.LocateChart(chartURL, cli.New())
 
 	if err != nil {
 		return "", err

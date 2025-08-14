@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
-	cu "github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 )
 
 // RelocateAnnotations rewrites the image urls in the chart annotations using the provided prefix
@@ -20,7 +19,7 @@ func RelocateAnnotations(chartDir string, prefix string, opts ...chartutils.Opti
 	return string(res.Data), nil
 }
 
-func relocateAnnotations(c *cu.Chart, prefix string) (*RelocationResult, error) {
+func relocateAnnotations(c *chartutils.Chart, prefix string) (*RelocationResult, error) {
 	images, err := c.GetAnnotatedImages()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read images from annotations: %v", err)

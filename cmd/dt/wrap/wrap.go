@@ -219,21 +219,21 @@ func Chart(inputPath string, opts ...Option) (string, error) {
 func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	l := cfg.GetLogger()
 	var chartPath string
-	var err error
 
-	tmpDir, err := cfg.GetTemporaryDirectory()
-	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	tmpDir, tmpErr := cfg.GetTemporaryDirectory()
+	if tmpErr != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", tmpErr)
 	}
 
 	if chartutils.IsRemoteChart(inputPath) {
 		if err := l.ExecuteStep("Fetching remote Helm chart", func() error {
+			var fetchErr error
 			version := cfg.Version
-
-			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir, cfg)
-			if err != nil {
-				return err
+			chartPath, fetchErr = fetchRemoteChart(inputPath, version, tmpDir, cfg)
+			if fetchErr != nil {
+				return fetchErr
 			}
+
 			return nil
 		}); err != nil {
 			return "", l.Failf("Failed to download Helm chart: %w", err)
@@ -370,19 +370,21 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 
 	subCfg := NewConfig(append(opts, WithLogger(l))...)
 
-	chartPath, err := ResolveInputChartPath(inputPath, subCfg)
-	if err != nil {
-		return "", err
+	chartPath, pathErr := ResolveInputChartPath(inputPath, subCfg)
+	if pathErr != nil {
+		return "", pathErr
 	}
-	tmpDir, err := cfg.GetTemporaryDirectory()
-	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+
+	tmpDir, tmpErr := cfg.GetTemporaryDirectory()
+	if tmpErr != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", tmpErr)
 	}
-	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
+
+	wrap, wrapErr := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 	)
-	if err != nil {
-		return "", l.Failf("failed to create wrap: %v", err)
+	if wrapErr != nil {
+		return "", l.Failf("failed to create wrap: %v", wrapErr)
 	}
 
 	chart := wrap.Chart()
@@ -403,7 +405,7 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 
 	if outputFile == "" {
 		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Version())
-		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
+		if _, err := filepath.Abs(outputBaseName); err != nil {
 			l.Debugf("failed to normalize output file: %v", err)
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}

@@ -28,22 +28,22 @@ func TestRelocateChartDir(t *testing.T) {
 	repositoryPrefix := "airgap"
 	fullNewURL := fmt.Sprintf("%s/%s", newServerURL, repositoryPrefix)
 
-	err := RelocateChartDir(chartDir, fullNewURL, WithValuesFiles(valuesFiles...))
-	require.NoError(t, err)
+	relocateErr := RelocateChartDir(chartDir, fullNewURL, WithValuesFiles(valuesFiles...))
+	require.NoError(t, relocateErr)
 
 	t.Run("Values Relocated", func(t *testing.T) {
 		for _, valuesFile := range valuesFiles {
 			t.Logf("checking %s file", valuesFile)
-			data, err := os.ReadFile(filepath.Join(chartDir, valuesFile))
-			require.NoError(t, err)
-			relocatedValues, err := tu.NormalizeYAML(string(data))
-			require.NoError(t, err)
+			data, readErr := os.ReadFile(filepath.Join(chartDir, valuesFile))
+			require.NoError(t, readErr)
+			relocatedValues, yamlErr := tu.NormalizeYAML(string(data))
+			require.NoError(t, yamlErr)
 
-			expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
-			require.NoError(t, err)
+			expectedData, renderErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
+			require.NoError(t, renderErr)
 
-			expectedValues, err := tu.NormalizeYAML(expectedData)
-			require.NoError(t, err)
+			expectedValues, normErr := tu.NormalizeYAML(expectedData)
+			require.NoError(t, normErr)
 			assert.Equal(t, expectedValues, relocatedValues)
 		}
 	})
@@ -51,16 +51,16 @@ func TestRelocateChartDir(t *testing.T) {
 		c, err := loader.Load(chartDir)
 		require.NoError(t, err)
 
-		relocatedAnnotations, err := tu.NormalizeYAML(c.Metadata.Annotations["images"])
-		require.NoError(t, err)
+		relocatedAnnotations, yamlErr := tu.NormalizeYAML(c.Metadata.Annotations["images"])
+		require.NoError(t, yamlErr)
 
 		require.NotEqual(t, relocatedAnnotations, "")
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
-		require.NoError(t, err)
+		expectedData, renderErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
+		require.NoError(t, renderErr)
 
-		expectedAnnotations, err := tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
+		expectedAnnotations, normErr := tu.NormalizeYAML(expectedData)
+		require.NoError(t, normErr)
 		assert.Equal(t, expectedAnnotations, relocatedAnnotations)
 	})
 	t.Run("ImageLock Relocated", func(t *testing.T) {
@@ -88,8 +88,8 @@ func TestRelocateChartDir(t *testing.T) {
 	// create a new chart dir to reset for the SkipImageRelocation tests
 	chartDir = sb.TempFile()
 	require.NoError(t, tu.RenderScenario(scenarioDir, chartDir, map[string]interface{}{"ServerURL": serverURL}))
-	err = RelocateChartDir(chartDir, "", WithValuesFiles(valuesFiles...), WithSkipImageRelocation(true))
-	require.NoError(t, err)
+	relocateErr = RelocateChartDir(chartDir, "", WithValuesFiles(valuesFiles...), WithSkipImageRelocation(true))
+	require.NoError(t, relocateErr)
 
 	t.Run("Values Relocated SkipImageRelocation", func(t *testing.T) {
 		for _, valuesFile := range valuesFiles {

@@ -55,7 +55,7 @@ func (c *Chart) ChartDir() string {
 func (c *Chart) VerifyLock(opts ...imagelock.Option) error {
 	chartPath := c.ChartDir()
 	if !utils.FileExists(chartPath) {
-		return fmt.Errorf("Helm chart %q does not exist", chartPath)
+		return fmt.Errorf("chart %q does not exist", chartPath)
 	}
 
 	currentLock, err := c.GetImagesLock()
@@ -71,7 +71,7 @@ func (c *Chart) VerifyLock(opts ...imagelock.Option) error {
 	}
 
 	if err := calculatedLock.Validate(currentLock.Images); err != nil {
-		return fmt.Errorf("Images.lock does not validate:\n%v", err)
+		return fmt.Errorf("validation failed for Images.lock:\n%v", err)
 	}
 	return nil
 }

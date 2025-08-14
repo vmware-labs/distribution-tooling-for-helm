@@ -125,7 +125,7 @@ func (v *ValuesImageElement) Relocate(prefix string) error {
 	}
 
 	if slices.Contains(v.foundFields, "registry") {
-		v.Registry = newRef.Context().Registry.RegistryStr()
+		v.Registry = newRef.Context().RegistryStr()
 		v.Repository = newRef.Context().RepositoryStr()
 	} else {
 		v.Repository = newRef.Context().Name()
