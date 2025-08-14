@@ -53,7 +53,7 @@ func Lock(chartPath string, lockFile string, cfg Config) error {
 	}
 
 	if err := calculatedLock.Validate(currentLock.Images); err != nil {
-		return fmt.Errorf("validation failed for Images.lock:\n%v", err)
+		return fmt.Errorf("validation failed for Images.lock: %w", err)
 	}
 	return nil
 }

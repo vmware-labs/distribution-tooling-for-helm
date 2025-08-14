@@ -125,7 +125,7 @@ func GenerateBundle(chartPath string, opts ...chartutils.Option) error {
 	path := filepath.Join(imgPkgPath, "images.yml")
 	err = carvelImagesLock.WriteToPath(path)
 	if err != nil {
-		return fmt.Errorf("could not write image lock: %v", err)
+		return fmt.Errorf("could not write image lock: %w", err)
 	}
 	l.Infof("Carvel images lock written to %q", path)
 
