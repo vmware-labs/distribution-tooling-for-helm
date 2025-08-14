@@ -89,8 +89,12 @@ func (suite *CmdSuite) TestVerifyCommand() {
 			)
 			require.NoError(err)
 			require.NoError(os.WriteFile(filepath.Join(chartDir, "Images.lock"), []byte(data), 0644))
-			dt("images", "verify", "--insecure", chartDir).AssertErrorMatch(t, fmt.Sprintf(`.*validation failed for Images.lock:
-.*chart "test": image ".*%s": digests do not match:\s*.*- %s\s*\s*\+ %s.*`, images[0].Image, newDigest, oldDigest))
+			dt("images", "verify", "--insecure", chartDir).AssertErrorMatch(t,
+				fmt.Sprintf(
+					`.*validation failed for Images.lock:.*chart "test": image ".*%s": digests do not match:\s*.*- %s\s*\s*\+ %s.*`,
+					images[0].Image, newDigest, oldDigest,
+				),
+			)
 		})
 	})
 	t.Run("Verify Helm chart", func(t *testing.T) {
