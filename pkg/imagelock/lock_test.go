@@ -234,8 +234,8 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 			},
 		}
 		for _, img := range images {
-			craneImg, craneErr := tu.CreateSingleArchImage(img, "linux/amd64")
-			require.NoError(craneErr)
+			craneImg, tErr := tu.CreateSingleArchImage(img, "linux/amd64")
+			require.NoError(tErr)
 			require.NoError(crane.Push(craneImg, img.Image, crane.Insecure))
 		}
 		scenarioName := "custom-chart"

@@ -161,9 +161,9 @@ func ReadLockFromChart(chartPath string) (*imagelock.ImagesLock, error) {
 	var lock *imagelock.ImagesLock
 	if isTar, _ := utils.IsTarFile(chartPath); isTar {
 		if err := utils.FindFileInTar(context.Background(), chartPath, "Images.lock", func(tr *tar.Reader) error {
-			var lockErr error
-			lock, lockErr = imagelock.FromYAML(tr)
-			return lockErr
+			var err error
+			lock, err = imagelock.FromYAML(tr)
+			return err
 		}, utils.TarConfig{StripComponents: 2}); err != nil {
 			return nil, err
 		}

@@ -211,9 +211,10 @@ func loadImage(path string) (v1.Image, error) {
 	}
 
 	if !stat.IsDir() {
-		img, loadErr := crane.Load(path)
-		if loadErr != nil {
-			return nil, fmt.Errorf("could not load %q as tarball: %w", path, loadErr)
+		var img v1.Image
+		img, err = crane.Load(path)
+		if err != nil {
+			return nil, fmt.Errorf("could not load %q as tarball: %w", path, err)
 		}
 		return img, nil
 	}

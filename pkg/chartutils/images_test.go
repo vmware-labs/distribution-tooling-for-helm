@@ -24,16 +24,16 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
 	defer s.Close()
 
-	u, urlErr := url.Parse(s.URL)
-	if urlErr != nil {
-		t.Fatal(urlErr)
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	imageName := "test:mytag"
 
-	images, regErr := tu.AddSampleImagesToRegistry(imageName, u.Host)
-	if regErr != nil {
-		t.Fatal(regErr)
+	images, err := tu.AddSampleImagesToRegistry(imageName, u.Host)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	sb := suite.sb
@@ -52,8 +52,8 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 		))
 		imagesDir := filepath.Join(chartDir, "images")
 
-		lock, lockErr := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
-		require.NoError(lockErr)
+		lock, tErr := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
+		require.NoError(tErr)
 		require.NoError(PullImages(lock, imagesDir))
 
 		require.DirExists(imagesDir)
@@ -77,8 +77,8 @@ func (suite *ChartUtilsTestSuite) TestPullImages() {
 		))
 		imagesDir := filepath.Join(chartDir, "images")
 
-		lock, lockErr := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
-		require.NoError(lockErr)
+		lock, tErr := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
+		require.NoError(tErr)
 		require.Error(PullImages(lock, imagesDir))
 
 		require.DirExists(imagesDir)
@@ -120,8 +120,8 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 			"linux/amd64",
 			"linux/arm",
 		}
-		craneImgs, err := tu.CreateSampleImages(&imageData, architectures)
 
+		craneImgs, err := tu.CreateSampleImages(&imageData, architectures)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,19 +141,18 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 		imagesDir := filepath.Join(chartDir, "images")
 		require.NoError(os.MkdirAll(imagesDir, 0755))
 		for _, img := range craneImgs {
-			d, digestErr := img.Digest()
-			if digestErr != nil {
-				t.Fatal(digestErr)
+			d, tErr := img.Digest()
+			if tErr != nil {
+				t.Fatal(tErr)
 			}
 
 			imgFile := filepath.Join(imagesDir, fmt.Sprintf("%s.layout", d.Hex))
-			if craneErr := crane.SaveOCI(img, imgFile); craneErr != nil {
-				t.Fatal(craneErr)
+			if tErr = crane.SaveOCI(img, imgFile); tErr != nil {
+				t.Fatal(tErr)
 			}
 		}
 
 		t.Run("Push images", func(t *testing.T) {
-			require.NoError(err)
 			lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
 			require.NoError(err)
 			require.NoError(PushImages(lock, imagesDir))
