@@ -65,12 +65,10 @@ func YamlSet(data []byte, values map[string]string) ([]byte, error) {
 	var allErrors error
 	var n yaml.Node
 
-	err := yaml.Unmarshal(data, &n)
-	if err != nil {
+	if err := yaml.Unmarshal(data, &n); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal YAML data: %v", err)
 	}
 	for path, value := range values {
-
 		if err := rawYamlSet(&n, path, value); err != nil {
 			allErrors = errors.Join(allErrors, err)
 		}
@@ -83,8 +81,7 @@ func YamlSet(data []byte, values map[string]string) ([]byte, error) {
 	e := yaml.NewEncoder(&buf)
 	e.SetIndent(2)
 
-	err = e.Encode(&n)
-	if err != nil {
+	if err := e.Encode(&n); err != nil {
 		return nil, fmt.Errorf("failed to format YAML: %v", err)
 	}
 	if err := e.Close(); err != nil {

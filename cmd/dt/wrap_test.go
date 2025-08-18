@@ -75,17 +75,17 @@ func verifyChartWrappedArtifacts(t *testing.T, sb *tu.Sandbox, wrapDir string, i
 		imageArtifactDir := filepath.Join(artifactsDir, fmt.Sprintf("images/%s/%s", wrap.Chart().Name(), imgData.Name))
 		require.DirExists(t, imageArtifactDir)
 		for _, dir := range []string{"sig", "metadata", "metadata.sig"} {
-			imageArtifactDir := filepath.Join(imageArtifactDir, fmt.Sprintf("%s.%s", imageTag, dir))
-			require.DirExists(t, imageArtifactDir)
+			subDir := filepath.Join(imageArtifactDir, fmt.Sprintf("%s.%s", imageTag, dir))
+			require.DirExists(t, subDir)
 			// Basic validation of the oci-layout dir
 			for _, f := range []string{"index.json", "oci-layout"} {
-				require.FileExists(t, filepath.Join(imageArtifactDir, f))
+				require.FileExists(t, filepath.Join(subDir, f))
 			}
-			require.DirExists(t, filepath.Join(imageArtifactDir, "blobs"))
+			require.DirExists(t, filepath.Join(subDir, "blobs"))
 
 			// For the "metadata" dir, check the bundle assets match what we provided
 			if dir == "metadata" {
-				verifyArtifactsContents(t, sb, imageArtifactDir, artifactsData)
+				verifyArtifactsContents(t, sb, subDir, artifactsData)
 			}
 		}
 	}
@@ -96,11 +96,11 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 	t.Helper()
 
 	// Setup a working directory to look for the wrap when not providing a output-filename
-	currentDir, err := os.Getwd()
-	require.NoError(t, err)
+	currentDir, wdErr := os.Getwd()
+	require.NoError(t, wdErr)
 
-	workingDir, err := sb.Mkdir(sb.TempFile(), 0755)
-	require.NoError(t, err)
+	workingDir, mkdirErr := sb.Mkdir(sb.TempFile(), 0755)
+	require.NoError(t, mkdirErr)
 	defer os.Chdir(currentDir)
 
 	require.NoError(t, os.Chdir(workingDir))
@@ -169,8 +169,8 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 		assert.FileExists(t, carvelImagesLockFile)
 	}
 
-	newData, err := os.ReadFile(lockFile)
-	require.NoError(t, err)
+	newData, readErr := os.ReadFile(lockFile)
+	require.NoError(t, readErr)
 	var newLock map[string]interface{}
 	require.NoError(t, yaml.Unmarshal(newData, &newLock))
 	// Clear the timestamp
@@ -215,15 +215,15 @@ func (suite *CmdSuite) TestWrapCommand() {
 			if tc.auth {
 				useAPI = true
 
-				srv, err := repotest.NewTempServerWithCleanup(t, "")
-				if err != nil {
-					t.Fatal(err)
+				srv, srvErr := repotest.NewTempServerWithCleanup(t, "")
+				if srvErr != nil {
+					t.Fatal(srvErr)
 				}
 				defer srv.Stop()
 
-				ociSrv, err := tu.NewOCIServer(t, srv.Root())
-				if err != nil {
-					t.Fatal(err)
+				ociSrv, ociErr := tu.NewOCIServer(t, srv.Root())
+				if ociErr != nil {
+					t.Fatal(ociErr)
 				}
 				go ociSrv.ListenAndServe()
 
@@ -236,9 +236,9 @@ func (suite *CmdSuite) TestWrapCommand() {
 				s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
 				defer s.Close()
 
-				u, err := url.Parse(s.URL)
-				if err != nil {
-					t.Fatal(err)
+				u, urlErr := url.Parse(s.URL)
+				if urlErr != nil {
+					t.Fatal(urlErr)
 				}
 				registryURL = u.Host
 			}
@@ -248,28 +248,27 @@ func (suite *CmdSuite) TestWrapCommand() {
 
 			sb := suite.sb
 
-			certDir, err := sb.Mkdir(sb.TempFile(), 0755)
-			require.NoError(err)
+			certDir, certDirErr := sb.Mkdir(sb.TempFile(), 0755)
+			require.NoError(certDirErr)
 
-			keyFile, _, err := tu.GenerateCosignCertificateFiles(certDir)
-			require.NoError(err)
+			keyFile, _, cosignErr := tu.GenerateCosignCertificateFiles(certDir)
+			require.NoError(cosignErr)
 
-			metadataDir, err := sb.Mkdir(sb.TempFile(), 0755)
-			require.NoError(err)
+			metadataDir, metadataDirErr := sb.Mkdir(sb.TempFile(), 0755)
+			require.NoError(metadataDirErr)
 
-			metdataFileText := "this is a sample text"
-
+			metadataFileText := "this is a sample text"
 			metadataArtifacts := map[string][]byte{
-				"metadata.txt": []byte(metdataFileText),
+				"metadata.txt": []byte(metadataFileText),
 			}
 			for fileName, data := range metadataArtifacts {
-				_, err := sb.Write(filepath.Join(metadataDir, fileName), string(data))
-				require.NoError(err)
+				_, writeErr := sb.Write(filepath.Join(metadataDir, fileName), string(data))
+				require.NoError(writeErr)
 			}
 
-			images, err := tu.AddSampleImagesToRegistry(imageName, registryURL, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(username, password))
-			if err != nil {
-				t.Fatal(err)
+			images, imgErr := tu.AddSampleImagesToRegistry(imageName, registryURL, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(username, password))
+			if imgErr != nil {
+				t.Fatal(imgErr)
 			}
 
 			serverURL := registryURL

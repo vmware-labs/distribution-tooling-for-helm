@@ -67,7 +67,7 @@ func (sb *Sandbox) TempFile(args ...string) string {
 	if len(args) > 0 {
 		tail = args[0]
 	} else {
-		tail = strconv.Itoa(rand.Int())
+		tail = strconv.Itoa(rand.Int()) //nolint:gosec
 		// Too long paths in osx result in errors creating sockets (make the daemon tests break)
 		// https://github.com/golang/go/issues/6895
 		if len(tail) > 10 {

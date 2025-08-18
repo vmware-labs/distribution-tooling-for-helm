@@ -42,18 +42,18 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 
 			chartPath := args[0]
 
-			outputFile, err := getOutputFilename(chartPath)
+			lockFilePath, err := getOutputFilename(chartPath)
 			if err != nil {
 				return fmt.Errorf("failed to obtain Images.lock location: %w", err)
 			}
 			if err := l.ExecuteStep("Generating Images.lock from annotations...", func() error {
-				return Create(chartPath, outputFile, silent.NewLogger(), imagelock.WithPlatforms(platforms),
+				return Create(chartPath, lockFilePath, silent.NewLogger(), imagelock.WithPlatforms(platforms),
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
 					imagelock.WithInsecure(cfg.Insecure))
 			}); err != nil {
-				return l.Failf("Failed to genereate lock: %w", err)
+				return l.Failf("Failed to generate lock: %w", err)
 			}
-			l.Successf("Images.lock file written to %q", outputFile)
+			l.Successf("Images.lock file written to %q", lockFilePath)
 			return nil
 		},
 	}

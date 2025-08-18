@@ -63,7 +63,7 @@ func (p *ProgressBar) formatTitle(title string) string {
 	// We prefix with a leading " " so we align with other printers, that
 	// start with a leading space
 	paddedTitle := " " + p.padding + title
-	maxTitleLength := int(float32(p.ProgressbarPrinter.MaxWidth) * 0.70)
+	maxTitleLength := int(float32(p.MaxWidth) * 0.70)
 	truncatedTitle := utils.TruncateStringWithEllipsis(paddedTitle, maxTitleLength)
 	return fmt.Sprintf("%-*s", maxTitleLength, truncatedTitle)
 }

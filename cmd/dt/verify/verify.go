@@ -29,7 +29,7 @@ type Config struct {
 // Lock verifies the images in an Images.lock
 func Lock(chartPath string, lockFile string, cfg Config) error {
 	if !utils.FileExists(chartPath) {
-		return fmt.Errorf("Helm chart %q does not exist", chartPath)
+		return fmt.Errorf("chart %q does not exist", chartPath)
 	}
 	fh, err := os.Open(lockFile)
 	if err != nil {
@@ -53,7 +53,7 @@ func Lock(chartPath string, lockFile string, cfg Config) error {
 	}
 
 	if err := calculatedLock.Validate(currentLock.Images); err != nil {
-		return fmt.Errorf("Images.lock does not validate:\n%v", err)
+		return fmt.Errorf("validation failed for Images.lock: %w", err)
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			l := cfg.Logger()
 
 			if !utils.FileExists(chartPath) {
-				return fmt.Errorf("Helm chart %q does not exist", chartPath)
+				return fmt.Errorf("chart %q does not exist", chartPath)
 			}
 
 			if lockFile == "" {

@@ -159,16 +159,16 @@ func IsRemoteChart(path string) bool {
 // ReadLockFromChart reads the Images.lock file from the chart
 func ReadLockFromChart(chartPath string) (*imagelock.ImagesLock, error) {
 	var lock *imagelock.ImagesLock
-	var err error
 	if isTar, _ := utils.IsTarFile(chartPath); isTar {
 		if err := utils.FindFileInTar(context.Background(), chartPath, "Images.lock", func(tr *tar.Reader) error {
+			var err error
 			lock, err = imagelock.FromYAML(tr)
 			return err
 		}, utils.TarConfig{StripComponents: 2}); err != nil {
 			return nil, err
 		}
 		if lock == nil {
-			return nil, fmt.Errorf("Images.lock not found in wrap")
+			return nil, fmt.Errorf("wrap does not contain Images.lock")
 		}
 		return lock, nil
 	}
@@ -178,7 +178,7 @@ func ReadLockFromChart(chartPath string) (*imagelock.ImagesLock, error) {
 		return nil, fmt.Errorf("failed to find Images.lock: %v", err)
 	}
 	if !utils.FileExists(f) {
-		return nil, fmt.Errorf("Images.lock file does not exist")
+		return nil, fmt.Errorf("file Images.lock does not exist")
 	}
 	return imagelock.FromYAMLFile(f)
 }

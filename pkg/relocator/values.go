@@ -24,8 +24,7 @@ func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*R
 
 	data := make(map[string]string, 0)
 	for _, e := range imageElems {
-		err := e.Relocate(prefix)
-		if err != nil {
+		if err = e.Relocate(prefix); err != nil {
 			return nil, fmt.Errorf("unexpected error relocating: %v", err)
 		}
 		for k, v := range e.YamlReplaceMap() {

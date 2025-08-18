@@ -1,6 +1,6 @@
 module github.com/vmware-labs/distribution-tooling-for-helm
 
-go 1.24.2
+go 1.25
 
 require (
 	github.com/DataDog/go-tuf v1.0.2-0.5.2

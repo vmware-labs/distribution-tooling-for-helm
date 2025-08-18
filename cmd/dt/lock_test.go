@@ -77,7 +77,7 @@ func (suite *CmdSuite) TestLockCommand() {
 
 			args := []string{"images", "lock", "--insecure", chartDir}
 			res := dt(args...)
-			res.AssertErrorMatch(t, "Failed to genereate lock: failed to write lock")
+			res.AssertErrorMatch(t, "Failed to generate lock: failed to write lock")
 		})
 		t.Run("Handles non-existent chart", func(t *testing.T) {
 			args := []string{"images", "lock", sb.TempFile()}

@@ -96,8 +96,7 @@ func Load(dir string, opts ...chartutils.Option) (Wrap, error) {
 // Create receives a path to a source Helm chart and a destination directory where to wrap it and returns a Wrap
 func Create(chartSrc string, destDir string, opts ...chartutils.Option) (Wrap, error) {
 	// Check we got a chart dir
-	_, err := loader.Load(chartSrc)
-	if err != nil {
+	if _, err := loader.Load(chartSrc); err != nil {
 		return nil, fmt.Errorf("failed to load Helm chart: %v", err)
 	}
 

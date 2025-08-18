@@ -91,8 +91,7 @@ func NewTestServer() (*TestServer, error) {
 			resp, ok := testServer.responsesMap[r.URL.Path]
 			if !ok {
 				w.WriteHeader(404)
-				_, err := w.Write([]byte(fmt.Sprintf("cannot find image %q", r.URL.Path)))
-				if err != nil {
+				if _, err := fmt.Fprintf(w, "cannot find image %q", r.URL.Path); err != nil {
 					log.Fatal(err)
 				}
 				return

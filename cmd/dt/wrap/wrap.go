@@ -219,7 +219,6 @@ func Chart(inputPath string, opts ...Option) (string, error) {
 func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	l := cfg.GetLogger()
 	var chartPath string
-	var err error
 
 	tmpDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
@@ -227,13 +226,13 @@ func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	}
 
 	if chartutils.IsRemoteChart(inputPath) {
-		if err := l.ExecuteStep("Fetching remote Helm chart", func() error {
+		if err = l.ExecuteStep("Fetching remote Helm chart", func() error {
 			version := cfg.Version
-
 			chartPath, err = fetchRemoteChart(inputPath, version, tmpDir, cfg)
 			if err != nil {
 				return err
 			}
+
 			return nil
 		}); err != nil {
 			return "", l.Failf("Failed to download Helm chart: %w", err)
@@ -374,10 +373,12 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	tmpDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
+
 	wrap, err := wrapping.Create(chartPath, filepath.Join(tmpDir, "wrap"),
 		chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 	)
@@ -389,18 +390,17 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
-		if err := fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
+		if err = fetchArtifacts(chartURL, filepath.Join(wrap.RootDir(), artifacts.HelmChartArtifactMetadataDir), subCfg); err != nil {
 			return "", err
 		}
 	}
 
 	chartRoot := chart.RootDir()
-	if err := validateWrapLock(wrap, subCfg); err != nil {
+	if err = validateWrapLock(wrap, subCfg); err != nil {
 		return "", err
 	}
 
 	outputFile := cfg.OutputFile
-
 	if outputFile == "" {
 		outputBaseName := fmt.Sprintf("%s-%s.wrap.tgz", chart.Name(), chart.Version())
 		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
@@ -408,6 +408,7 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 			outputFile = filepath.Join(filepath.Dir(chartRoot), outputBaseName)
 		}
 	}
+
 	if !cfg.SkipPullImages {
 		if err := pullImages(wrap, subCfg); err != nil {
 			return "", err

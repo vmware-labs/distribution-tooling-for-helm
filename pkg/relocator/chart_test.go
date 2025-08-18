@@ -34,52 +34,52 @@ func TestRelocateChartDir(t *testing.T) {
 	t.Run("Values Relocated", func(t *testing.T) {
 		for _, valuesFile := range valuesFiles {
 			t.Logf("checking %s file", valuesFile)
-			data, err := os.ReadFile(filepath.Join(chartDir, valuesFile))
-			require.NoError(t, err)
-			relocatedValues, err := tu.NormalizeYAML(string(data))
-			require.NoError(t, err)
+			data, tErr := os.ReadFile(filepath.Join(chartDir, valuesFile))
+			require.NoError(t, tErr)
+			relocatedValues, tErr := tu.NormalizeYAML(string(data))
+			require.NoError(t, tErr)
 
-			expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
-			require.NoError(t, err)
+			expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": newServerURL, "RepositoryPrefix": repositoryPrefix})
+			require.NoError(t, tErr)
 
-			expectedValues, err := tu.NormalizeYAML(expectedData)
-			require.NoError(t, err)
+			expectedValues, tErr := tu.NormalizeYAML(expectedData)
+			require.NoError(t, tErr)
 			assert.Equal(t, expectedValues, relocatedValues)
 		}
 	})
 	t.Run("Annotations Relocated", func(t *testing.T) {
-		c, err := loader.Load(chartDir)
-		require.NoError(t, err)
+		c, tErr := loader.Load(chartDir)
+		require.NoError(t, tErr)
 
-		relocatedAnnotations, err := tu.NormalizeYAML(c.Metadata.Annotations["images"])
-		require.NoError(t, err)
+		relocatedAnnotations, tErr := tu.NormalizeYAML(c.Metadata.Annotations["images"])
+		require.NoError(t, tErr)
 
 		require.NotEqual(t, relocatedAnnotations, "")
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
-		require.NoError(t, err)
+		expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
+		require.NoError(t, tErr)
 
-		expectedAnnotations, err := tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
+		expectedAnnotations, tErr := tu.NormalizeYAML(expectedData)
+		require.NoError(t, tErr)
 		assert.Equal(t, expectedAnnotations, relocatedAnnotations)
 	})
 	t.Run("ImageLock Relocated", func(t *testing.T) {
-		data, err := os.ReadFile(filepath.Join(chartDir, "Images.lock"))
-		assert.NoError(t, err)
+		data, tErr := os.ReadFile(filepath.Join(chartDir, "Images.lock"))
+		assert.NoError(t, tErr)
 		var lockData map[string]interface{}
 
 		require.NoError(t, yaml.Unmarshal(data, &lockData))
 
-		imagesElemData, err := yaml.Marshal(lockData["images"])
-		require.NoError(t, err)
+		imagesElemData, tErr := yaml.Marshal(lockData["images"])
+		require.NoError(t, tErr)
 
-		relocatedImagesData, err := tu.NormalizeYAML(string(imagesElemData))
-		require.NoError(t, err)
+		relocatedImagesData, tErr := tu.NormalizeYAML(string(imagesElemData))
+		require.NoError(t, tErr)
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "lock_images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
-		require.NoError(t, err)
-		expectedData, err = tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
+		expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, "lock_images.partial.tmpl"), map[string]string{"ServerURL": fullNewURL})
+		require.NoError(t, tErr)
+		expectedData, tErr = tu.NormalizeYAML(expectedData)
+		require.NoError(t, tErr)
 
 		assert.Equal(t, expectedData, relocatedImagesData)
 
@@ -94,54 +94,54 @@ func TestRelocateChartDir(t *testing.T) {
 	t.Run("Values Relocated SkipImageRelocation", func(t *testing.T) {
 		for _, valuesFile := range valuesFiles {
 			t.Logf("checking %s file", valuesFile)
-			data, err := os.ReadFile(filepath.Join(chartDir, valuesFile))
-			require.NoError(t, err)
-			relocatedValues, err := tu.NormalizeYAML(string(data))
-			require.NoError(t, err)
+			data, tErr := os.ReadFile(filepath.Join(chartDir, valuesFile))
+			require.NoError(t, tErr)
+			relocatedValues, tErr := tu.NormalizeYAML(string(data))
+			require.NoError(t, tErr)
 
-			expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": serverURL})
-			require.NoError(t, err)
+			expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, fmt.Sprintf("%s.tmpl", valuesFile)), map[string]string{"ServerURL": serverURL})
+			require.NoError(t, tErr)
 
-			expectedValues, err := tu.NormalizeYAML(expectedData)
-			require.NoError(t, err)
+			expectedValues, tErr := tu.NormalizeYAML(expectedData)
+			require.NoError(t, tErr)
 			assert.Equal(t, expectedValues, relocatedValues)
 		}
 	})
 
 	t.Run("Annotations Relocated ", func(t *testing.T) {
-		c, err := loader.Load(chartDir)
-		require.NoError(t, err)
+		c, tErr := loader.Load(chartDir)
+		require.NoError(t, tErr)
 
-		relocatedAnnotations, err := tu.NormalizeYAML(c.Metadata.Annotations["images"])
-		require.NoError(t, err)
+		relocatedAnnotations, tErr := tu.NormalizeYAML(c.Metadata.Annotations["images"])
+		require.NoError(t, tErr)
 
 		require.NotEqual(t, relocatedAnnotations, "")
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": serverURL})
-		require.NoError(t, err)
+		expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, "images.partial.tmpl"), map[string]string{"ServerURL": serverURL})
+		require.NoError(t, tErr)
 
-		expectedAnnotations, err := tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
+		expectedAnnotations, tErr := tu.NormalizeYAML(expectedData)
+		require.NoError(t, tErr)
 		assert.Equal(t, expectedAnnotations, relocatedAnnotations)
 	})
 
 	t.Run("ImageLock Relocated SkipImageRelocation", func(t *testing.T) {
-		data, err := os.ReadFile(filepath.Join(chartDir, "Images.lock"))
-		assert.NoError(t, err)
+		data, tErr := os.ReadFile(filepath.Join(chartDir, "Images.lock"))
+		assert.NoError(t, tErr)
 		var lockData map[string]interface{}
 
 		require.NoError(t, yaml.Unmarshal(data, &lockData))
 
-		imagesElemData, err := yaml.Marshal(lockData["images"])
-		require.NoError(t, err)
+		imagesElemData, tErr := yaml.Marshal(lockData["images"])
+		require.NoError(t, tErr)
 
-		relocatedImagesData, err := tu.NormalizeYAML(string(imagesElemData))
-		require.NoError(t, err)
+		relocatedImagesData, tErr := tu.NormalizeYAML(string(imagesElemData))
+		require.NoError(t, tErr)
 
-		expectedData, err := tu.RenderTemplateFile(filepath.Join(scenarioDir, "lock_images.partial.tmpl"), map[string]string{"ServerURL": serverURL})
-		require.NoError(t, err)
-		expectedData, err = tu.NormalizeYAML(expectedData)
-		require.NoError(t, err)
+		expectedData, tErr := tu.RenderTemplateFile(filepath.Join(scenarioDir, "lock_images.partial.tmpl"), map[string]string{"ServerURL": serverURL})
+		require.NoError(t, tErr)
+		expectedData, tErr = tu.NormalizeYAML(expectedData)
+		require.NoError(t, tErr)
 
 		assert.Equal(t, expectedData, relocatedImagesData)
 

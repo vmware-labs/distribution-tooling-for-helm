@@ -38,7 +38,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 
 	for _, result := range valuesReplRes {
 		if result.Count > 0 {
-			if err := os.WriteFile(chart.AbsFilePath(result.Name), result.Data, 0644); err != nil {
+			if err = os.WriteFile(chart.AbsFilePath(result.Name), result.Data, 0644); err != nil {
 				return fmt.Errorf("failed to write %s: %v", result.Name, err)
 			}
 		}
@@ -51,7 +51,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	} else {
 		if annotationsRelocResult.Count > 0 {
 			annotationsKeyPath := fmt.Sprintf("$.annotations['%s']", cfg.ImageLockConfig.AnnotationsKey)
-			if err := utils.YamlFileSet(chart.AbsFilePath("Chart.yaml"), map[string]string{
+			if err = utils.YamlFileSet(chart.AbsFilePath("Chart.yaml"), map[string]string{
 				annotationsKeyPath: string(annotationsRelocResult.Data),
 			}); err != nil {
 				allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm chart: failed to write annotations: %v", err))

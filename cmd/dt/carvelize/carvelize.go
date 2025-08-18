@@ -101,8 +101,7 @@ func GenerateBundle(chartPath string, opts ...chartutils.Option) error {
 
 	imgPkgPath := filepath.Join(chartPath, ".imgpkg")
 	if !utils.FileExists(imgPkgPath) {
-		err := os.Mkdir(imgPkgPath, os.FileMode(0755))
-		if err != nil {
+		if err = os.Mkdir(imgPkgPath, os.FileMode(0755)); err != nil {
 			return fmt.Errorf("failed to create .imgpkg directory: %w", err)
 		}
 	}
@@ -126,7 +125,7 @@ func GenerateBundle(chartPath string, opts ...chartutils.Option) error {
 	path := filepath.Join(imgPkgPath, "images.yml")
 	err = carvelImagesLock.WriteToPath(path)
 	if err != nil {
-		return fmt.Errorf("Could not write image lock: %v", err)
+		return fmt.Errorf("could not write image lock: %w", err)
 	}
 	l.Infof("Carvel images lock written to %q", path)
 

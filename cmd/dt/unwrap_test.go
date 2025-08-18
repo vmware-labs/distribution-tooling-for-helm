@@ -386,8 +386,8 @@ func (suite *CmdSuite) TestEndToEnd() {
 					"metadata.txt": []byte(metdataFileText),
 				}
 				for fileName, data := range metadataArtifacts {
-					_, err := sb.Write(filepath.Join(metadataDir, fileName), string(data))
-					require.NoError(err)
+					_, writeErr := sb.Write(filepath.Join(metadataDir, fileName), string(data))
+					require.NoError(writeErr)
 				}
 
 				images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry, tu.WithSignKey(keyFile), tu.WithMetadataDir(metadataDir), tu.WithAuth(contUser, contPass))

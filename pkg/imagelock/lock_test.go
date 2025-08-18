@@ -197,14 +197,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 	t.Run("Retrieves only the specified platforms", func(_ *testing.T) {
 		scenarioName := "custom-chart"
-		chartName := "test"
 
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": serverURL, "Images": sampleImages, "Name": chartName, "RepositoryURL": serverURL},
+			map[string]interface{}{"ServerURL": serverURL, "Images": sampleImages, "Name": "test", "RepositoryURL": serverURL},
 		))
 
 		platforms := []string{"linux/amd64"}
@@ -228,28 +227,27 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		serverURL := u.Host
 		images := []*tu.ImageData{
 			{
 				Name:  "app1",
-				Image: fmt.Sprintf("%s/bitnami/app1:latest", serverURL),
+				Image: fmt.Sprintf("%s/bitnami/app1:latest", u.Host),
 			},
 		}
 		for _, img := range images {
-			craneImg, err := tu.CreateSingleArchImage(img, "linux/amd64")
-			require.NoError(err)
+			craneImg, tErr := tu.CreateSingleArchImage(img, "linux/amd64")
+			require.NoError(tErr)
 			require.NoError(crane.Push(craneImg, img.Image, crane.Insecure))
 		}
 		scenarioName := "custom-chart"
-		chartName := "test"
-		chartVersion := "1.0.0"
-		appVersion := "2.2.0"
+		chartName := "test"     //nolint:govet
+		chartVersion := "1.0.0" //nolint:govet
+		appVersion := "2.2.0"   //nolint:govet
 		scenarioDir := fmt.Sprintf("../../testdata/scenarios/%s", scenarioName)
 
 		chartDir := sb.TempFile()
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
-			map[string]interface{}{"ServerURL": serverURL, "Images": images, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion},
+			map[string]interface{}{"ServerURL": u.Host, "Images": images, "Name": chartName, "Version": chartVersion, "AppVersion": appVersion},
 		))
 
 		expectedLock := createLockFromImageData(map[string][]*tu.ImageData{
@@ -278,14 +276,13 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		serverURL := u.Host
 
 		craneImg, err := crane.Image(map[string][]byte{
 			"platform.txt": []byte("undefined"),
 		})
 		require.NoError(err)
 
-		image := fmt.Sprintf("%s/bitnami/app1:latest", serverURL)
+		image := fmt.Sprintf("%s/bitnami/app1:latest", u.Host)
 
 		require.NoError(crane.Push(craneImg, image, crane.Insecure))
 
@@ -296,7 +293,7 @@ func (suite *ImageLockTestSuite) TestGenerateFromChart() {
 
 		require.NoError(tu.RenderScenario(scenarioDir, chartDir,
 			map[string]interface{}{
-				"ServerURL": serverURL,
+				"ServerURL": u.Host,
 				"Images": []*tu.ImageData{
 					{
 						Name:  "app1",

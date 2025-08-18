@@ -28,7 +28,7 @@ func (l *Logger) SetLevel(level log.Level) {
 
 // SetWriter sets the internal writer used by the log
 func (l *Logger) SetWriter(w io.Writer) {
-	l.Logger.SetOutput(w)
+	l.SetOutput(w)
 }
 
 // Printf prints a message in the log

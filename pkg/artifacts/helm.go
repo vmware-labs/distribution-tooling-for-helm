@@ -151,7 +151,7 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 	}
 	cfg.RegistryClient = reg.client
 	if cc.Auth.Username != "" && cc.Auth.Password != "" && reg.credentialsFile != "" {
-		if err := reg.client.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
+		if err = reg.client.Login(u.Host, registry.LoginOptBasicAuth(cc.Auth.Username, cc.Auth.Password)); err != nil {
 			return "", fmt.Errorf("error logging in to %s: %w", u.Host, err)
 		}
 		defer func() {
@@ -169,8 +169,7 @@ func PullChart(chartURL, version string, destDir string, opts ...RegistryClientO
 	client.DestDir = dir
 	client.Untar = true
 	client.Version = version
-	_, err = client.Run(chartURL)
-	if err != nil {
+	if _, err = client.Run(chartURL); err != nil {
 		return "", fmt.Errorf("failed to pull Helm chart: %w", err)
 	}
 
@@ -212,11 +211,11 @@ func showRemoteHelmChart(chartURL string, version string, cfg *RegistryClientCon
 	}
 	client.SetRegistryClient(reg.client)
 	client.Version = version
-	cp, err := client.ChartPathOptions.LocateChart(chartURL, cli.New())
-
+	cp, err := client.LocateChart(chartURL, cli.New())
 	if err != nil {
 		return "", err
 	}
+
 	return client.Run(cp)
 }
 
