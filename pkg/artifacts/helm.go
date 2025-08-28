@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containerd/containerd/remotes/docker"
-
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
@@ -109,21 +107,6 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 
 		credentialsFile = f.Name()
 		opts = append(opts, registry.ClientOptCredentialsFile(credentialsFile))
-		revOpts := docker.ResolverOptions{}
-		authz := docker.NewDockerAuthorizer(
-			docker.WithAuthClient(httpClient),
-			docker.WithAuthCreds(func(_ string) (string, string, error) {
-				return cfg.Auth.Username, cfg.Auth.Password, nil
-			}),
-		)
-		revOpts.Hosts = docker.ConfigureDefaultRegistries(
-			docker.WithClient(httpClient),
-			docker.WithAuthorizer(authz),
-			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
-		)
-		rev := docker.NewResolver(revOpts)
-
-		opts = append(opts, registry.ClientOptResolver(rev))
 	}
 	r, err := registry.NewClient(opts...)
 	if err != nil {
