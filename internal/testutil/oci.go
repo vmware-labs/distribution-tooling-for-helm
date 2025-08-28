@@ -300,6 +300,7 @@ func NewOCIServerWithCustomCreds(t *testing.T, dir string, username, password st
 	config.Log.AccessLog.Disabled = true
 	config.Log.Formatter = "json"
 	config.Log.Level = "panic"
+	config.Catalog.MaxEntries = 1000
 
 	registryURL := fmt.Sprintf("localhost:%d", port)
 
