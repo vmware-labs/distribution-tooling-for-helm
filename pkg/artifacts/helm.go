@@ -106,7 +106,11 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 		}
 
 		credentialsFile = f.Name()
-		opts = append(opts, registry.ClientOptCredentialsFile(credentialsFile))
+		opts = append(
+			opts,
+			registry.ClientOptCredentialsFile(credentialsFile),
+			registry.ClientOptBasicAuth(cfg.Auth.Username, cfg.Auth.Password),
+		)
 	}
 	r, err := registry.NewClient(opts...)
 	if err != nil {
