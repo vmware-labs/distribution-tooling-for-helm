@@ -3,6 +3,7 @@ package artifacts
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,11 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containerd/containerd/remotes/docker"
-
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
+	"oras.land/oras-go/v2/registry/remote/auth"
 )
 
 // RegistryClientConfig defines how the client communicates with the remote server
@@ -97,33 +97,17 @@ func getRegistryClientWrap(cfg *RegistryClientConfig) (*registryClientWrap, erro
 		opts = append(opts, registry.ClientOptHTTPClient(httpClient))
 	}
 	if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-		f, err := os.CreateTemp(cfg.TempDir, "dt-config-*.json")
-		if err != nil {
-			return nil, fmt.Errorf("error creating credentials file: %w", err)
-		}
-
-		err = f.Close()
-		if err != nil {
-			return nil, fmt.Errorf("error closing credentials file: %w", err)
-		}
-
-		credentialsFile = f.Name()
-		opts = append(opts, registry.ClientOptCredentialsFile(credentialsFile))
-		revOpts := docker.ResolverOptions{}
-		authz := docker.NewDockerAuthorizer(
-			docker.WithAuthClient(httpClient),
-			docker.WithAuthCreds(func(_ string) (string, string, error) {
-				return cfg.Auth.Username, cfg.Auth.Password, nil
+		basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cfg.Auth.Username, cfg.Auth.Password)))
+		opts = append(
+			opts,
+			registry.ClientOptBasicAuth(cfg.Auth.Username, cfg.Auth.Password),
+			registry.ClientOptAuthorizer(auth.Client{
+				Client: httpClient,
+				Header: http.Header{
+					"Authorization": []string{basicAuth},
+				},
 			}),
 		)
-		revOpts.Hosts = docker.ConfigureDefaultRegistries(
-			docker.WithClient(httpClient),
-			docker.WithAuthorizer(authz),
-			docker.WithPlainHTTP(func(_ string) (bool, error) { return cfg.UsePlainHTTP, nil }),
-		)
-		rev := docker.NewResolver(revOpts)
-
-		opts = append(opts, registry.ClientOptResolver(rev))
 	}
 	r, err := registry.NewClient(opts...)
 	if err != nil {

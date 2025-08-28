@@ -2,6 +2,7 @@
 /dist/
 /examples/
 /.vscode/
+/.idea
 **~
 **.tgz
 /out/
