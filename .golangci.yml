@@ -1,3 +1,4 @@
+---
 version: "2"
 linters:
   enable:
@@ -36,7 +37,7 @@ linters:
       min-complexity: 18
     govet:
       enable:
-      - shadow
+        - shadow
     lll:
       line-length: 200
 formatters:

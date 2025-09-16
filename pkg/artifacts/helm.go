@@ -11,10 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"oras.land/oras-go/v2/registry/remote/auth"
+
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
-	"oras.land/oras-go/v2/registry/remote/auth"
 )
 
 // RegistryClientConfig defines how the client communicates with the remote server

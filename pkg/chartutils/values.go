@@ -13,9 +13,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-var (
-	imageElementKeys = []string{"registry", "repository", "tag", "digest"}
-)
+var imageElementKeys = []string{"registry", "repository", "tag", "digest"}
 
 // ValuesImageElement defines a docker image element definition found
 // when parsing values.yaml
@@ -112,11 +110,18 @@ func (v *ValuesImageElement) YamlReplaceMap() map[string]string {
 	return data
 }
 
+// isOriginalRepositoryBare checks if the original repository field was a bare repository name
+// (without registry information) by attempting to parse it as a strict repository
+func (v *ValuesImageElement) isOriginalRepositoryBare() bool {
+	_, err := name.NewRepository(v.Repository, name.StrictValidation)
+	return err == nil
+}
+
 // Relocate modifies the ValuesImageElement Registry and Repository based on the provided prefix
 func (v *ValuesImageElement) Relocate(prefix string) error {
 	newURL, err := utils.RelocateImageURL(v.URL(), prefix, false)
 	if err != nil {
-		return fmt.Errorf("failed to relocate")
+		return fmt.Errorf("failed to relocate: %v", err)
 	}
 
 	newRef, err := name.ParseReference(newURL)
@@ -124,12 +129,24 @@ func (v *ValuesImageElement) Relocate(prefix string) error {
 		return fmt.Errorf("failed to parse relocated URL: %v", err)
 	}
 
-	if slices.Contains(v.foundFields, "registry") {
+	// Determine how to update the fields based on the original structure
+	hasRegistryField := slices.Contains(v.foundFields, "registry")
+	originalRepoWasBare := v.isOriginalRepositoryBare()
+
+	switch {
+	case hasRegistryField:
+		// Original had separate registry/repository fields - maintain that structure
 		v.Registry = newRef.Context().RegistryStr()
 		v.Repository = newRef.Context().RepositoryStr()
-	} else {
+	case !originalRepoWasBare:
+		// Original repository contained registry info - split the new reference
+		v.Registry = newRef.Context().RegistryStr()
+		v.Repository = newRef.Context().RepositoryStr()
+	default:
+		// Original repository was bare - keep new reference as full repository name
 		v.Repository = newRef.Context().Name()
 	}
+
 	return nil
 }
 
