@@ -2,7 +2,7 @@
 
 PROJECT_NAME="distribution-tooling-for-helm"
 BINARY_NAME="dt"
-PROJECT_GH="vmware-labs/$PROJECT_NAME"
+PROJECT_GH="razorsecure/$PROJECT_NAME"
 PLUGIN_MANIFEST="plugin.yaml"
 
 # Convert HELM_BIN and HELM_PLUGIN_DIR to unix if cygpath is
