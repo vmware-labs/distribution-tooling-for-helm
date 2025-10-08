@@ -491,6 +491,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithContext(ctx),
 				WithVersion(version),
 				WithInteractive(true),
+				WithAnnotationsKey(cfg.AnnotationsKey),
 				WithInsecure(cfg.Insecure),
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
