@@ -143,7 +143,7 @@ func GenerateFromChart(chartPath string, opts ...Option) (*ImagesLock, error) {
 // populateImagesFromChart populates the ImagesLock with images and digests from the given chart and its dependencies.
 func populateImagesFromChart(imgLock *ImagesLock, chart *chart.Chart, cfg *Config) error {
 
-	images, err := getDigestedImagesFromChartAnnotations(chart, cfg)
+	images, err := getImagesFromChartAnnotations(chart, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to process Helm chart %q images: %v", chart.Name(), err)
 	}

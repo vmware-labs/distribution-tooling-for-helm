@@ -304,6 +304,7 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 			func() error {
 				return lock.Create(chart.RootDir(), lockFile, silent.NewLogger(),
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
+					imagelock.WithSkipImageDigestResolution(cfg.SkipPullImages),
 					imagelock.WithInsecure(cfg.Insecure),
 					imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
 					imagelock.WithPlatforms(cfg.Platforms),

@@ -138,17 +138,19 @@ func GetImagesFromChartAnnotations(c *chart.Chart, cfg *Config) (ImageList, erro
 	return images, nil
 }
 
-// getDigestedImagesFromChartAnnotations reads the images from the chart annotations and fills up
+// getImagesFromChartAnnotations reads the images from the chart annotations and fills up
 // the per-architecture digests for the images based on the remote registry
-func getDigestedImagesFromChartAnnotations(c *chart.Chart, cfg *Config) (ImageList, error) {
+func getImagesFromChartAnnotations(c *chart.Chart, cfg *Config) (ImageList, error) {
 	var allErrors error
 	images, err := GetImagesFromChartAnnotations(c, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image list: %w", err)
 	}
-	for _, image := range images {
-		if err := image.FetchDigests(cfg); err != nil {
-			allErrors = errors.Join(allErrors, fmt.Errorf("failed to fetch image %q digests: %w", image.Name, err))
+	if !cfg.SkipImageDigestResolution {
+		for _, image := range images {
+			if err := image.FetchDigests(cfg); err != nil {
+				allErrors = errors.Join(allErrors, fmt.Errorf("failed to fetch image %q digests: %w", image.Name, err))
+			}
 		}
 	}
 	return images, allErrors
