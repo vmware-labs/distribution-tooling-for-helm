@@ -12,11 +12,12 @@ type Auth struct {
 
 // Config defines configuration options for ImageLock functions
 type Config struct {
-	InsecureMode   bool
-	AnnotationsKey string
-	Context        context.Context
-	Auth           Auth
-	Platforms      []string
+	InsecureMode              bool
+	AnnotationsKey            string
+	Context                   context.Context
+	Auth                      Auth
+	Platforms                 []string
+	SkipImageDigestResolution bool
 }
 
 // NewImagesLockConfig returns a new ImageLockConfig with default values
@@ -75,5 +76,12 @@ func WithContext(ctx context.Context) func(ic *Config) {
 func WithAnnotationsKey(str string) func(ic *Config) {
 	return func(ic *Config) {
 		ic.AnnotationsKey = str
+	}
+}
+
+// WithSkipImageDigestResolution configures the SkipImageDigestResolution of the Config
+func WithSkipImageDigestResolution(skipImageResolution bool) func(ic *Config) {
+	return func(ic *Config) {
+		ic.SkipImageDigestResolution = skipImageResolution
 	}
 }
