@@ -12,6 +12,7 @@ import (
 
 // NewCmd builds a new annotate command
 func NewCmd(cfg *config.Config) *cobra.Command {
+
 	return &cobra.Command{
 		Use:   "annotate CHART_PATH",
 		Short: "Annotates a Helm chart (Experimental)",
@@ -32,7 +33,6 @@ Use it cautiously. Very often the complete list of images cannot be guessed from
 					chartutils.WithAnnotationsKey(cfg.AnnotationsKey),
 					chartutils.WithLog(l),
 				)
-
 			})
 
 			if err != nil {

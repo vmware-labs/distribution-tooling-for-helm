@@ -124,7 +124,7 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 }
 
 // PushImages push the list of images in imagesDir to the destination specified in the ImagesLock
-func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) error {
+func PushImages(lock *imagelock.ImagesLock, imagesDir string, registryURL string, pushRepository string, opts ...Option) error {
 	cfg := NewConfiguration(opts...)
 	l := cfg.Log
 
@@ -153,8 +153,22 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 		case <-ctx.Done():
 			return fmt.Errorf("cancelled execution")
 		default:
+
+			// registryURL is the original unwrap target
+			// pushRepository is the replacement target for registryURL when set
+			// this is not empty only when called from unwrap cmd
+			if pushRepository != "" && registryURL != "" {
+				ociPrefix := "oci://"
+				registryURL = strings.TrimPrefix(registryURL, ociPrefix)
+				pushRepository = strings.TrimPrefix(pushRepository, ociPrefix)
+				// replace prefix matching registryURL with pushRepository
+				imgData.Image = strings.Replace(imgData.Image, registryURL, pushRepository, 1)
+				l.Debugf("image: %v", imgData.Image)
+			}
+
 			p.Add(1)
 			p.UpdateTitle(fmt.Sprintf("Pushing image %q", imgData.Image))
+
 			err := utils.ExecuteWithRetry(maxRetries, func(try int, prevErr error) error {
 				if try > 0 {
 					// The context is done, so we are not retrying, just return the error
@@ -267,6 +281,7 @@ func buildImageIndex(image *imagelock.ChartImage, imagesDir string) (v1.ImageInd
 }
 
 func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options) error {
+
 	idx, err := buildImageIndex(imgData, imagesDir)
 	if err != nil {
 		return fmt.Errorf("failed to build image index: %w", err)

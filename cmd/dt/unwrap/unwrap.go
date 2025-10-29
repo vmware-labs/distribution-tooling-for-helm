@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
@@ -18,10 +19,8 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log"
-	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
-
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/logrus"
-
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/log/silent"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/relocator"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/wrapping"
@@ -238,8 +237,8 @@ func NewConfig(opts ...Option) *Config {
 }
 
 // Chart unwraps a Helm chart
-func Chart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
-	return unwrapChart(inputChart, registryURL, pushChartURL, opts...)
+func Chart(inputChart, registryURL, pushRepository string, pushChartURL string, opts ...Option) (string, *chartutils.Chart, error) {
+	return unwrapChart(inputChart, registryURL, pushRepository, pushChartURL, opts...)
 }
 
 func askYesNoQuestion(msg string, cfg *Config) bool {
@@ -252,7 +251,7 @@ func askYesNoQuestion(msg string, cfg *Config) bool {
 	return widgets.ShowYesNoQuestion(msg)
 }
 
-func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
+func unwrapChart(inputChart, registryURL, pushRepository string, pushChartURL string, opts ...Option) (string, *chartutils.Chart, error) {
 
 	cfg := NewConfig(opts...)
 
@@ -260,11 +259,12 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 	parentLog := cfg.GetLogger()
 
 	if registryURL == "" {
-		return "", fmt.Errorf("the registry cannot be empty")
+		return "", nil, fmt.Errorf("the registry cannot be empty")
 	}
+
 	tempDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	l := parentLog.StartSection(fmt.Sprintf("Unwrapping Helm chart %q", inputChart))
@@ -284,12 +284,12 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		),
 	)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	wrap, err := wrapping.Load(chartPath)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := l.ExecuteStep(fmt.Sprintf("Relocating %q with prefix %q", wrap.ChartDir(), registryURL), func() error {
 		return relocator.RelocateChartDir(
@@ -298,7 +298,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 			relocator.WithSkipImageRelocation(cfg.SkipImageRelocation),
 		)
 	}); err != nil {
-		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
+		return "", nil, l.Failf("failed to relocate %q: %w", chartPath, err)
 	}
 	l.Infof("Helm chart relocated successfully")
 
@@ -311,23 +311,27 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		}
 		if askYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"), cfg) {
 			if err := l.Section("Pushing Images", func(subLog log.SectionLogger) error {
-				return pushChartImagesAndVerify(ctx, wrap, NewConfig(append(opts, WithLogger(subLog))...))
+				return pushChartImagesAndVerify(ctx, wrap, registryURL, pushRepository, NewConfig(append(opts, WithLogger(subLog))...))
 			}); err != nil {
-				return "", l.Failf("Failed to push images: %w", err)
+				return "", nil, l.Failf("Failed to push images: %w", err)
 			}
 			l.Printf(widgets.TerminalSpacer)
 		}
 	}
 
 	if askYesNoQuestion(l.PrefixText("Do you want to push the Helm chart to the OCI registry?"), cfg) {
+
 		if pushChartURL == "" {
-			pushChartURL = registryURL
-			// we will push the chart to the same registry as the containers
+			if pushRepository == "" {
+				// we will push the chart to the same registry as the containers
+				pushChartURL = registryURL
+			} else {
+				// we will push the chart to the same registry as defined by pushRepository
+				pushChartURL = pushRepository
+			}
 			cfg.Auth = cfg.ContainerRegistryAuth
 		}
 		pushChartURL = normalizeOCIURL(pushChartURL)
-		fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, wrap.Chart().Name())
-
 		if err := l.ExecuteStep(fmt.Sprintf("Pushing Helm chart to %q", pushChartURL), func() error {
 			return utils.ExecuteWithRetry(maxRetries, func(try int, prevErr error) error {
 				if try > 0 {
@@ -336,16 +340,24 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 				return pushChart(ctx, wrap, pushChartURL, cfg)
 			})
 		}); err != nil {
-			return "", l.Failf("Failed to push Helm chart: %w", err)
+			return "", nil, l.Failf("Failed to push Helm chart: %w", err)
 		}
 
 		l.Infof("Helm chart successfully pushed")
-		return fullChartURL, nil
+
+		fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, wrap.Chart().Name())
+
+		// point chart url to the registryURL if pushRepository is set
+		if pushRepository != "" && strings.Contains(pushChartURL, pushRepository) {
+			fullChartURL = strings.Replace(fullChartURL, pushRepository, registryURL, 1)
+		}
+
+		return fullChartURL, wrap.Chart(), nil
 	}
-	return "", nil
+	return "", wrap.Chart(), nil
 }
 
-func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Config) error {
+func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, registryURL string, pushRepository string, cfg *Config) error {
 	lockFile := wrap.LockFilePath()
 
 	l := cfg.GetLogger()
@@ -355,6 +367,8 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 	if err := push.ChartImages(
 		wrap,
 		wrap.ImagesDir(),
+		registryURL,
+		pushRepository,
 		chartutils.WithLog(silent.NewLogger()),
 		chartutils.WithContext(ctx),
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
@@ -459,10 +473,12 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
 		sayYes              bool
 		pushChartURL        string
+		pushRepository      string
 		version             string
 		skipImageRelocation bool
 		skipPullImages      bool
 	)
+
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
 		Use:   "unwrap FILE OCI_URI",
@@ -485,7 +501,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create temporary directory: %v", err)
 			}
-			fullChartURL, err := unwrapChart(inputChart, registryURL, pushChartURL,
+
+			fullChartURL, chart, err := unwrapChart(inputChart, registryURL, pushRepository, pushChartURL,
 				WithLogger(l),
 				WithSayYes(sayYes),
 				WithContext(ctx),
@@ -502,9 +519,11 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			var successMessage = "Helm chart unwrapped successfully"
 			if fullChartURL != "" {
-				successMessage = fmt.Sprintf(`%s: You can use it now by running "helm install %s --generate-name"`, successMessage, fullChartURL)
+				//successMessage = fmt.Sprintf(`%s: You can use it now by running "helm install %s --generate-name"`, successMessage, fullChartURL)
+				successMessage = fmt.Sprintf(`%s: "helm install %s --generate-name --version %s"`, successMessage, fullChartURL, chart.Version())
 			}
 			l.Printf(widgets.TerminalSpacer)
 			l.Successf(successMessage)
@@ -514,6 +533,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when unwrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&pushChartURL, "push-chart-url", pushChartURL, "push the unwrapped Helm chart to the given URL")
+	cmd.PersistentFlags().StringVar(&pushRepository, "push-repository", pushRepository, "the repository to be used instead for write operations e.g (demo.goharbor.io/write/test_repo)")
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
