@@ -512,3 +512,4 @@ So as the community adopts this new proposal and this plugin becomes more mature
 ### What about chart-syncer? Will it continue to work?
 
 Yes, still support [chart-syncer](https://github.com/bitnami-labs/charts-syncer) and we don't have any short-term plans right now about it. But as this tool gains adoption, it becomes natural to think that it should be fairly straightforward to implement Helm chart syncing on top of it.
+
