@@ -2,6 +2,9 @@
 
 `dt`, is a set of utilities available in a standalone mode and as a Helm Plugin for making offline work with Helm charts easier. It is meant to be used for creating reproducible and relocatable packages for Helm charts that can be easily moved across registries without hassles. This is particularly useful for distributing Helm charts into air-gapped environments like those used by Federal governments.
 
+> [!IMPORTANT]  
+> Starting in 2026, this project is licensed under a Broadcom license. For details, see the [_LICENSE_](https://raw.githubusercontent.com/vmware-labs/distribution-tooling-for-helm/refs/heads/main/LICENSE) file
+
 ## TL;DR
 
 Distribute your Helm charts with two easy commands
