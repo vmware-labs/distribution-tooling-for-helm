@@ -82,22 +82,22 @@ Wrapping a chart consists of packaging the chart into a tar.gz, including all co
 Even more exciting, we don't need to download the Helm chart for wrapping it. We can point the tool to any reachable Helm chart and the tool will take care of packaging and downloading everything for us. For example:
 
 ```console
-$ helm dt wrap oci://docker.io/bitnamicharts/kibana
+$ helm dt wrap oci://docker.io/bitnamicharts/kibana --version 11.2.23
  »  Wrapping Helm chart "oci://docker.io/bitnamicharts/kibana"
     ✔  Helm chart downloaded to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana"
     ✔  Images.lock file "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock" does not exist
     ✔  Images.lock file written to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/Images.lock"
     »  Pulling images into "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-1177363375/chart-1516625348/kibana/images"
        ✔  All images pulled successfully
-    ✔  Helm chart wrapped to "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
- 🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-10.4.8.wrap.tgz"
+    ✔  Helm chart wrapped to "/tmp/workspace/kibana/kibana-11.2.23.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/kibana/kibana-11.2.23.wrap.tgz"
 ```
 
 Note that depending on the number of images needed by the Helm chart (remember, a wrap has the full set of image dependencies, not only the ones set on _values.yaml_) the size of the generated wrap might be considerably large:
 
 ```console
-$ ls -l kibana-10.4.8.wrap.tgz
--rw-r--r--  1 martinpe  staff  731200979 Aug  4 15:17 kibana-10.4.8.wrap.tgz
+$ ls -l kibana-11.2.23.wrap.tgz
+-rw-r--r--  1 martinpe  staff  731200979 Aug  4 15:17 kibana-11.2.23.wrap.tgz
 ```
 
 If you want to make changes on the Helm chart, you can pass a directory to the wrap command. For example, if we wanted to wrap the previously pulled mariadb Helm chart, we could just do:
@@ -123,14 +123,14 @@ Currently, `dt` supports moving artifacts that follow certain conventions. That 
 For example:
 
 ```console
-$ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana
+$ helm dt wrap --fetch-artifacts oci://docker.io/bitnamicharts/kibana --version 11.2.23
  ...
- 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz"
+ 🎉  Helm chart wrapped into "/tmp/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz"
 
-$ tar -tzf "/tmp/workspace/distribution-tooling-for-helm/kibana-10.4.8.wrap.tgz" | grep artifacts
-kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.sig
-kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata
-kibana-10.4.8/artifacts/images/kibana/kibana/8.10.4-debian-11-r0.metadata.sig
+$ tar -tzf "/tmp/workspace/distribution-tooling-for-helm/kibana-11.2.23.wrap.tgz" | grep artifacts
+kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.sig
+kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.metadata
+kibana-11.2.23/artifacts/images/kibana/kibana/8.15.2-debian-12-r0.metadata.sig
 ...
 ```
 
@@ -159,14 +159,14 @@ Unwrapping a Helm chart can be done either to a local folder or to a target OCI 
 At that moment your Helm chart will be ready to be used from the target registry without any dependencies to the source. By default, the tool will run in dry-run mode and require you to confirm actions but you can speed everything up with the `--yes` parameter.
 
 ```console
-$ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
- »  Unwrapping Helm chart "kibana-10.4.8.wrap.tgz"
+$ helm dt unwrap kibana-11.2.23.wrap.tgz demo.goharbor.io/helm-plugin/ --yes --version 11.2.23
+ »  Unwrapping Helm chart "kibana-11.2.23.wrap.tgz"
     ✔  Helm chart uncompressed to "/var/folders/mn/j41xvgsx7l90_hn0hlwj9p180000gp/T/chart-586072428/at-wrap2428431258"
     ✔  Helm chart relocated successfully
     »  The wrap includes the following 2 images:
 
-       demo.goharbor.io/helm-plugin/bitnami/kibana:8.9.0-debian-11-r9
-       demo.goharbor.io/helm-plugin/bitnami/os-shell:11-debian-11-r25
+       demo.goharbor.io/helm-plugin/bitnami/kibana:8.15.2-debian-12-r0
+       demo.goharbor.io/helm-plugin/bitnami/os-shell:12-debian-12-r30
 
     »  Pushing Images
        ✔  All images pushed successfully
@@ -178,6 +178,34 @@ $ helm dt unwrap kibana-10.4.8.wrap.tgz demo.goharbor.io/helm-plugin/ --yes
 ```
 
 If your wrap includes bundled artifacts (if you wrapped it using the `--fetch-artifacts` flag), they will be also pushed to the remote registry.
+
+Unwrapping a Helm chart to a different target than the original using `--push-repository` flag.
+By unwrapping the Helm chart to a target OCI registry the `dt` tool will unwrap the wrapped file, proceed to push the container
+images into the registry you have specified by `--push-repository`, relocate the references from the Helm chart and preserve the original target
+registry.
+Finally will push the relocated Helm chart to the registry you have specified on `--push-repository` as well when `--push-chart-url` is not used.
+
+
+```console
+$ helm dt ./kibana-11.2.23.wrap.tgz demo.goharbor.io/read/helm-plugin --push-repository demo.goharbor.io/write/helm-plugin --push-chart-url demo.goharbor.io/write/helm-plugin/bitnami
+ »  Unwrapping Helm chart "./kibana-11.2.23.wrap.tgz"
+    ✔  Helm chart uncompressed to "/var/folders/s1/7qw_wynd0ljdwf9l51dbs2cm0000gq/T/chart-1986792895/dt-wrap174906721"
+    ✔  Helm chart relocated successfully
+    »  The wrap includes the following 2 images:
+
+       demo.goharbor.io/read/helm-plugin/bitnami/kibana:8.15.2-debian-12-r0q
+       demo.goharbor.io/read/helm-plugin/bitnami/os-shell:12-debian-12-r30
+
+    Do you want to push the wrapped images to the OCI registry? [y/N]: Yes
+    »  Pushing Images
+       ✔  All images pushed successfully
+       ✔  Chart "/var/folders/s1/7qw_wynd0ljdwf9l51dbs2cm0000gq/T/chart-1986792895/dt-wrap174906721/chart" lock is valid
+
+    Do you want to push the Helm chart to the OCI registry? [y/N]: Yes
+    ✔  Helm chart successfully pushed
+
+ 🎉  Helm chart unwrapped successfully: You can use it now by running "helm install oci://demo.goharbor.io/read/helm-plugin/kibana --generate-name --version 11.2.23"
+```
 
 ## Advanced Usage
 

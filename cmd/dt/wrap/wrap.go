@@ -450,8 +450,10 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var platforms []string
 	var fetchArtifacts bool
 	var carvelize bool
+
 	var skipPullImages bool
 	var examples = `  # Wrap a Helm chart from a local folder
+
   $ dt wrap examples/mariadb
 
   # Wrap a Helm chart in an OCI registry
