@@ -2,6 +2,10 @@ package chartutils
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"helm.sh/helm/v3/pkg/chartutil"
 )
 
 func TestValuesImageElement_Relocate(t *testing.T) {
@@ -106,6 +110,100 @@ func TestValuesImageElement_Relocate(t *testing.T) {
 				}
 				if tt.elem.Repository != tt.expectedRepo {
 					t.Errorf("Repository = %v, want %v", tt.elem.Repository, tt.expectedRepo)
+				}
+			}
+		})
+	}
+}
+
+func TestFindImageElementsInValuesMap_SkipsNonImageRepositories(t *testing.T) {
+	tests := []struct {
+		name          string
+		valuesYAML    string
+		expectedCount int
+		expectedURLs  []string
+	}{
+		{
+			name: "skips git clone repository URL",
+			valuesYAML: `
+appFromExternalRepo:
+  clone:
+    repository: https://github.com/dotnet/AspNetCore.Docs.git
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "skips http helm chart repository URL (lowercase path, would pass name.ParseReference alone)",
+			valuesYAML: `
+helmRepo:
+  repository: http://charts.example.com/my-chart
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "skips https helm chart repository URL (lowercase path, would pass name.ParseReference alone)",
+			valuesYAML: `
+helmRepo:
+  repository: https://charts.example.com/my-chart
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "skips git+ssh repository URL",
+			valuesYAML: `
+source:
+  repository: git://github.com/org/repo.git
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "detects valid docker image with repository only",
+			valuesYAML: `
+image:
+  repository: bitnami/nginx
+  tag: "1.25"
+`,
+			expectedCount: 1,
+			expectedURLs:  []string{"bitnami/nginx:1.25"},
+		},
+		{
+			name: "detects valid docker image with registry and repository",
+			valuesYAML: `
+image:
+  registry: docker.io
+  repository: bitnami/nginx
+  tag: "1.25"
+`,
+			expectedCount: 1,
+			expectedURLs:  []string{"docker.io/bitnami/nginx:1.25"},
+		},
+		{
+			name: "skips git URL but still detects sibling valid image",
+			valuesYAML: `
+appFromExternalRepo:
+  clone:
+    repository: https://github.com/dotnet/AspNetCore.Docs.git
+image:
+  repository: bitnami/aspnet-core
+  tag: "9.2.1"
+`,
+			expectedCount: 1,
+			expectedURLs:  []string{"bitnami/aspnet-core:9.2.1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valuesMap, err := chartutil.ReadValues([]byte(tt.valuesYAML))
+			require.NoError(t, err)
+
+			elems, err := FindImageElementsInValuesMap(valuesMap)
+			require.NoError(t, err)
+			assert.Len(t, elems, tt.expectedCount)
+
+			for i, expectedURL := range tt.expectedURLs {
+				if i < len(elems) {
+					assert.Equal(t, expectedURL, elems[i].URL())
 				}
 			}
 		})

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
@@ -234,5 +235,17 @@ func parseValuesImageElement(data map[string]interface{}) *ValuesImageElement {
 	if elemData["repository"] == "" {
 		return nil
 	}
-	return valuesImageElementFromMap(elemData)
+
+	// Skip any repository value that contains a URL scheme (e.g. https://, http://, git://).
+	// Such values are non-image references (Git clone URLs, Helm repo URLs, etc.).
+	if strings.Contains(elemData["repository"], "://") {
+		return nil
+	}
+	elem := valuesImageElementFromMap(elemData)
+	// Additional validation: reject any repository value that name.ParseReference cannot
+	// parse as a valid container image reference.
+	if _, err := name.ParseReference(elem.URL()); err != nil {
+		return nil
+	}
+	return elem
 }
