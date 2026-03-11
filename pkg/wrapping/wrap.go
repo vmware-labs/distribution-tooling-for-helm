@@ -1,4 +1,4 @@
-// Package wrapping defines methods to handle Helm chart wraps
+// Package wrapping defines methods to handle Helm chart and container image wraps
 package wrapping
 
 import (
@@ -13,24 +13,6 @@ import (
 
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
-
-// Lockable defines the interface to support getting images locked
-type Lockable interface {
-	LockFilePath() string
-	ImagesDir() string
-	GetImagesLock() (*imagelock.ImagesLock, error)
-}
-
-// Wrap defines the interface to implement a Helm chart wrap
-type Wrap interface {
-	Lockable
-	VerifyLock(...imagelock.Option) error
-
-	Chart() *chartutils.Chart
-	RootDir() string
-	ChartDir() string
-	ImageArtifactsDir() string
-}
 
 // wrap defines a wrapped chart
 type wrap struct {
@@ -48,9 +30,9 @@ func (w *wrap) LockFilePath() string {
 	return filepath.Join(w.ChartDir(), imagelock.DefaultImagesLockFileName)
 }
 
-// ImageArtifactsDir returns the imags artifacts directory
+// ImageArtifactsDir returns the images artifacts directory
 func (w *wrap) ImageArtifactsDir() string {
-	return filepath.Join(w.RootDir(), artifacts.HelmArtifactsFolder, "images")
+	return filepath.Join(w.RootDir(), artifacts.ArtifactsFolder, "images")
 }
 
 // ImagesDir returns the images directory inside the chart root directory
@@ -93,6 +75,11 @@ func Load(dir string, opts ...chartutils.Option) (Wrap, error) {
 	return &wrap{rootDir: dir, chart: chart}, nil
 }
 
+// LoadContainer loads a directory containing a wrapped container and returns a WrapContainer
+func LoadContainer(dir string) (WrapContainer, error) {
+	return &wrapContainer{rootDir: dir}, nil
+}
+
 // Create receives a path to a source Helm chart and a destination directory where to wrap it and returns a Wrap
 func Create(chartSrc string, destDir string, opts ...chartutils.Option) (Wrap, error) {
 	// Check we got a chart dir
@@ -100,7 +87,7 @@ func Create(chartSrc string, destDir string, opts ...chartutils.Option) (Wrap, e
 		return nil, fmt.Errorf("failed to load Helm chart: %v", err)
 	}
 
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create wrap root directory: %w", err)
 	}
 

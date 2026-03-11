@@ -357,6 +357,63 @@ func TestImageLockTestSuite(t *testing.T) {
 	suite.Run(t, new(ImageLockTestSuite))
 }
 
+func (suite *ImageLockTestSuite) TestGenerateFromContainerRef() {
+	t := suite.T()
+
+	t.Run("Normalizes oci:// prefix", func(t *testing.T) {
+		lock, err := GenerateFromContainerRef("oci://registry.io/repo/app:tag",
+			WithSkipImageDigestResolution(true))
+		require.NoError(t, err)
+		require.Len(t, lock.Images, 1)
+		assert.Equal(t, "app", lock.Images[0].Name)
+		assert.Equal(t, "registry.io/repo/app:tag", lock.Images[0].Image)
+	})
+
+	t.Run("Derives name from simple reference", func(t *testing.T) {
+		lock, err := GenerateFromContainerRef("docker.io/library/nginx:1.25",
+			WithSkipImageDigestResolution(true))
+		require.NoError(t, err)
+		require.Len(t, lock.Images, 1)
+		assert.Equal(t, "nginx", lock.Images[0].Name)
+	})
+
+	t.Run("Derives name from reference with digest", func(t *testing.T) {
+		ref := "registry.io/foo/bar@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		lock, err := GenerateFromContainerRef(ref, WithSkipImageDigestResolution(true))
+		require.NoError(t, err)
+		require.Len(t, lock.Images, 1)
+		assert.Equal(t, "bar", lock.Images[0].Name)
+		assert.Equal(t, ref, lock.Images[0].Image)
+	})
+
+	t.Run("Derives name from short reference", func(t *testing.T) {
+		lock, err := GenerateFromContainerRef("myapp:latest",
+			WithSkipImageDigestResolution(true))
+		require.NoError(t, err)
+		require.Len(t, lock.Images, 1)
+		assert.Equal(t, "myapp", lock.Images[0].Name)
+	})
+
+	t.Run("Generated lock has empty chart metadata", func(t *testing.T) {
+		lock, err := GenerateFromContainerRef("registry.io/org/myapp:1.0",
+			WithSkipImageDigestResolution(true))
+		require.NoError(t, err)
+		assert.Empty(t, lock.Chart.Name)
+		assert.Empty(t, lock.Chart.Version)
+		assert.Empty(t, lock.Chart.AppVersion)
+	})
+
+	t.Run("Resolves digests from remote registry", func(t *testing.T) {
+		img := suite.referenceImages[0]
+		imageRef := fmt.Sprintf("%s/%s", suite.testServer.ServerURL, img.Image)
+
+		lock, err := GenerateFromContainerRef(imageRef, Insecure)
+		require.NoError(t, err)
+		require.Len(t, lock.Images, 1)
+		assert.NotEmpty(t, lock.Images[0].Digests, "expected digests to be resolved from the registry")
+	})
+}
+
 func (suite *ImageLockTestSuite) TestFindImageByName() {
 	t := suite.T()
 	il := NewImagesLock()

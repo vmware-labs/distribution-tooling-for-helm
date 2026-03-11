@@ -24,7 +24,7 @@ func relocateAnnotations(c *chartutils.Chart, prefix string) (*RelocationResult,
 	if err != nil {
 		return nil, fmt.Errorf("failed to read images from annotations: %v", err)
 	}
-	count, err := relocateImages(images, prefix)
+	count, err := relocateImages(images, prefix, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to relocate annotations: %v", err)
 	}

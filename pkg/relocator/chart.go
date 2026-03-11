@@ -61,7 +61,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 
 	lockFile := chart.LockFilePath()
 	if utils.FileExists(lockFile) {
-		err = RelocateLockFile(lockFile, prefix)
+		err = RelocateLockFile(lockFile, prefix, true)
 		if err != nil {
 			allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Images.lock file: %v", err))
 		}
@@ -148,7 +148,7 @@ func RelocateCarvelImagesLock(lock *lockconfig.ImagesLock, prefix string) (*Relo
 func relocateCarvelImages(images []lockconfig.ImageRef, prefix string) (count int, err error) {
 	var allErrors error
 	for i, img := range images {
-		norm, err := utils.RelocateImageURL(img.Image, prefix, true)
+		norm, err := utils.RelocateImageURL(img.Image, prefix, true, true)
 		if err != nil {
 			allErrors = errors.Join(allErrors, err)
 			continue

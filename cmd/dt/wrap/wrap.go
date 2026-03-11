@@ -1,7 +1,8 @@
-// Package wrap implements the command to wrap a Helm chart
+// Package wrap implements the command to wrap a Helm chart or container image
 package wrap
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -241,7 +242,7 @@ func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	} else if isTar, _ := utils.IsTarFile(inputPath); isTar {
 		if err := l.ExecuteStep("Uncompressing Helm chart", func() error {
 			var err error
-			chartPath, err = untarChart(inputPath, tmpDir)
+			chartPath, err = untar(inputPath, tmpDir)
 			return err
 		}); err != nil {
 			return "", l.Failf("Failed to uncompress %q: %w", inputPath, err)
@@ -254,7 +255,33 @@ func ResolveInputChartPath(inputPath string, cfg *Config) (string, error) {
 	return chartPath, nil
 }
 
-func untarChart(chartFile string, dir string) (string, error) {
+// ResolveInputContainerPath resolves the input container into a local uncompressed container path
+func ResolveInputContainerPath(inputPath string, cfg *Config) (string, error) {
+	l := cfg.GetLogger()
+	var chartPath string
+
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
+	if isTar, _ := utils.IsTarFile(inputPath); isTar {
+		if err := l.ExecuteStep("Uncompressing container image", func() error {
+			var err error
+			chartPath, err = untar(inputPath, tmpDir)
+			return err
+		}); err != nil {
+			return "", l.Failf("Failed to uncompress %q: %w", inputPath, err)
+		}
+		l.Infof("Container image uncompressed to %q", chartPath)
+	} else {
+		chartPath = inputPath
+	}
+
+	return chartPath, nil
+}
+
+func untar(chartFile string, dir string) (string, error) {
 	sandboxDir, err := os.MkdirTemp(dir, "dt-wrap*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create sandbox directory")
@@ -510,6 +537,174 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "skip pulling images when wrapping a Helm Chart")
+
+	return cmd
+}
+
+// Container wraps a single container image into a portable tarball
+func Container(imageRef string, opts ...Option) (string, error) {
+	return wrapContainer(imageRef, opts...)
+}
+
+func wrapContainer(imageRef string, opts ...Option) (string, error) {
+	cfg := NewConfig(opts...)
+
+	ctx := cfg.Context
+	l := cfg.GetLogger().StartSection(fmt.Sprintf("Wrapping container image %q", imageRef))
+	cfg.logger = l
+
+	tmpDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
+	wrapDir := filepath.Join(tmpDir, "wrap")
+	wc, err := wrapping.CreateContainer(wrapDir)
+	if err != nil {
+		return "", l.Failf("failed to create container wrap: %v", err)
+	}
+
+	// Generate Images.lock from the remote image reference
+	var lock *imagelock.ImagesLock
+	err = l.ExecuteStep("Generating Images.lock from container image...", func() error {
+		var genErr error
+		lock, genErr = imagelock.GenerateFromContainerRef(
+			imageRef,
+			imagelock.WithPlatforms(cfg.Platforms),
+			imagelock.WithInsecure(cfg.Insecure),
+			imagelock.WithSkipImageDigestResolution(cfg.SkipPullImages),
+			imagelock.WithContext(ctx),
+			imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+		)
+		return genErr
+	})
+	if err != nil {
+		return "", l.Failf("failed to generate Images.lock: %w", err)
+	}
+
+	// Write the lock file
+	lockBuf := &bytes.Buffer{}
+	err = lock.ToYAML(lockBuf)
+	if err != nil {
+		return "", l.Failf("failed to serialize Images.lock: %w", err)
+	}
+	err = os.WriteFile(wc.LockFilePath(), lockBuf.Bytes(), 0600)
+	if err != nil {
+		return "", l.Failf("failed to write Images.lock: %w", err)
+	}
+	l.Infof("Images.lock written to %q", wc.LockFilePath())
+
+	if !cfg.SkipPullImages {
+		err = l.Section(fmt.Sprintf("Pulling container image into %q", wc.ImagesDir()), func(childLog dtlog.SectionLogger) error {
+			return chartutils.PullImages(
+				lock,
+				wc.ImagesDir(),
+				chartutils.WithLog(childLog),
+				chartutils.WithContext(ctx),
+				chartutils.WithFetchArtifacts(cfg.FetchArtifacts),
+				chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+				chartutils.WithArtifactsDir(wc.ImageArtifactsDir()),
+				chartutils.WithProgressBar(childLog.ProgressBar()),
+				chartutils.WithInsecureMode(cfg.Insecure),
+			)
+		})
+		if err != nil {
+			return "", l.Failf("failed to pull container image: %w", err)
+		}
+		l.Infof("Container image pulled successfully")
+	}
+
+	baseName, tag, digest := utils.ParseImageReference(imageRef)
+	// Build a short identifier for use in file names: prefer tag
+	identifier := tag
+	if identifier == "" {
+		identifier = digest
+	}
+	outputFile := cfg.OutputFile
+	if outputFile == "" {
+		outputBaseName := fmt.Sprintf("%s-%s.container.wrap.tgz", baseName, identifier)
+		if outputFile, err = filepath.Abs(outputBaseName); err != nil {
+			l.Debugf("failed to normalize output file: %v", err)
+			outputFile = outputBaseName
+		}
+	}
+
+	if err := l.ExecuteStep("Compressing container image wrap...", func() error {
+		return utils.TarContext(ctx, wc.RootDir(), outputFile, utils.TarConfig{
+			Prefix: fmt.Sprintf("%s-%s", baseName, identifier),
+		})
+	}); err != nil {
+		return "", l.Failf("failed to wrap container image: %w", err)
+	}
+	l.Infof("Compressed into %q", outputFile)
+
+	return outputFile, nil
+}
+
+// NewContainerCmd builds a new container wrap command
+func NewContainerCmd(cfg *config.Config) *cobra.Command {
+	var outputFile string
+	var platforms []string
+	var fetchArtifacts bool
+
+	cmd := &cobra.Command{
+		Use:   "wrap OCI_REF",
+		Short: "Wraps a container image",
+		Long: `Wraps a single container image into a portable tarball suitable for air-gapped distribution.
+This command pulls the container image and its metadata/signature artifacts and packages them together
+with an Images.lock file into a single tarball.`,
+		Example: `  # Wrap a container image from Docker Hub
+  $ dt images wrap docker.io/library/nginx:1.25
+
+  # Wrap a container image for specific platforms
+  $ dt images wrap docker.io/library/nginx:1.25 --platforms linux/amd64,linux/arm64
+
+  # Wrap a container image including its signatures and metadata artifacts
+  $ dt images wrap docker.io/library/nginx:1.25 --fetch-artifacts
+`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			imageRef := args[0]
+
+			ctx, cancel := cfg.ContextWithSigterm()
+			defer cancel()
+
+			tmpDir, err := cfg.GetTemporaryDirectory()
+			if err != nil {
+				return fmt.Errorf("failed to create temporary directory: %v", err)
+			}
+
+			parentLog := cfg.Logger()
+
+			wrappedContainer, err := wrapContainer(imageRef,
+				WithLogger(parentLog),
+				WithContext(ctx),
+				WithPlatforms(platforms),
+				WithFetchArtifacts(fetchArtifacts),
+				WithUsePlainHTTP(cfg.UsePlainHTTP),
+				WithInsecure(cfg.Insecure),
+				WithOutputFile(outputFile),
+				WithTempDirectory(tmpDir),
+			)
+			if err != nil {
+				if _, ok := err.(*dtlog.LoggedError); ok {
+					return fmt.Errorf("failed to wrap container image: %v", err)
+				}
+				return err
+			}
+
+			parentLog.Printf(widgets.TerminalSpacer)
+			parentLog.Successf("Container image wrapped into %q", wrappedContainer)
+
+			return nil
+		},
+	}
+
+	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "output tarball path (defaults to <name>-<tag>.container.wrap.tgz)")
+	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file (e.g. linux/amd64,linux/arm64)")
+	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 
 	return cmd
 }

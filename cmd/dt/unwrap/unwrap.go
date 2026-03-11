@@ -242,6 +242,11 @@ func Chart(inputChart, registryURL, pushChartURL string, opts ...Option) (string
 	return unwrapChart(inputChart, registryURL, pushChartURL, opts...)
 }
 
+// Container unwraps a container image
+func Container(inputContainer, registryURL string, opts ...Option) (string, error) {
+	return unwrapContainer(inputContainer, registryURL, opts...)
+}
+
 func askYesNoQuestion(msg string, cfg *Config) bool {
 	if cfg.SayYes {
 		return true
@@ -262,15 +267,11 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 	if registryURL == "" {
 		return "", fmt.Errorf("the registry cannot be empty")
 	}
-	tempDir, err := cfg.GetTemporaryDirectory()
-	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
-	}
 
 	l := parentLog.StartSection(fmt.Sprintf("Unwrapping Helm chart %q", inputChart))
 
 	if cfg.KeepArtifacts {
-		l.Debugf("Temporary assets kept at %q", tempDir)
+		l.Debugf("Temporary assets kept at %q", cfg.TempDirectory)
 	}
 
 	chartPath, err := wrap.ResolveInputChartPath(
@@ -345,6 +346,70 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 	return "", nil
 }
 
+func unwrapContainer(inputContainer, registryURL string, opts ...Option) (string, error) {
+	cfg := NewConfig(opts...)
+
+	ctx := cfg.Context
+	parentLog := cfg.GetLogger()
+
+	if registryURL == "" {
+		return "", fmt.Errorf("the registry cannot be empty")
+	}
+
+	l := parentLog.StartSection(fmt.Sprintf("Unwrapping container image %q", inputContainer))
+
+	if cfg.KeepArtifacts {
+		l.Debugf("Temporary assets kept at %q", cfg.TempDirectory)
+	}
+
+	containerPath, err := wrap.ResolveInputContainerPath(
+		inputContainer,
+		wrap.NewConfig(
+			wrap.WithTempDirectory(cfg.TempDirectory),
+			wrap.WithLogger(l),
+			wrap.WithVersion(cfg.Version),
+			wrap.WithInsecure(cfg.Insecure),
+			wrap.WithUsePlainHTTP(cfg.UsePlainHTTP),
+		),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	wrapContainer, err := wrapping.LoadContainer(containerPath)
+	if err != nil {
+		return "", err
+	}
+	images := getImageList(wrapContainer, l)
+
+	lockFile := wrapContainer.LockFilePath()
+	if utils.FileExists(lockFile) {
+		// For standalone container images we relocate to just <registry>/<image-name>,
+		// dropping any source repository path. Unlike chart wraps, there is no meaningful
+		// namespace to preserve from the original registry.
+		err = relocator.RelocateLockFile(lockFile, registryURL, false)
+		if err != nil {
+			return "", fmt.Errorf("failed to relocate Images.lock file: %v", err)
+		}
+	}
+
+	if len(images) > 0 && !cfg.SkipPullImages {
+		// If we are not in interactive mode, we do not show the list of images
+		if cfg.Interactive {
+			showImagesSummary(images, l)
+		}
+		if askYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"), cfg) {
+			if err := l.Section("Pushing Images", func(subLog dtlog.SectionLogger) error {
+				return pushImages(ctx, wrapContainer, NewConfig(append(opts, WithLogger(subLog))...))
+			}); err != nil {
+				return "", l.Failf("Failed to push images: %w", err)
+			}
+			l.Printf(widgets.TerminalSpacer)
+		}
+	}
+	return "", nil
+}
+
 func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Config) error {
 	lockFile := wrap.LockFilePath()
 
@@ -376,6 +441,25 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 	}
 	l.Infof("Chart %q lock is valid", wrap.ChartDir())
 	return nil
+}
+
+func pushImages(ctx context.Context, wrap wrapping.WrapContainer, cfg *Config) error {
+	lockFile := wrap.LockFilePath()
+
+	l := cfg.GetLogger()
+	if !utils.FileExists(lockFile) {
+		return fmt.Errorf("lock file %q does not exist", lockFile)
+	}
+	lock, err := wrap.GetImagesLock()
+	if err != nil {
+		return err
+	}
+	return chartutils.PushImages(lock, wrap.ImagesDir(), chartutils.WithLog(l),
+		chartutils.WithContext(ctx),
+		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
+		chartutils.WithProgressBar(l.ProgressBar()),
+		chartutils.WithInsecureMode(cfg.Insecure),
+		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password))
 }
 
 func getImageList(wrap wrapping.Lockable, l dtlog.SectionLogger) imagelock.ImageList {
@@ -518,6 +602,53 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
+
+	return cmd
+}
+
+// NewContainerCmd returns a new unwrap command for container images
+func NewContainerCmd(cfg *config.Config) *cobra.Command {
+	var sayYes bool
+	cmd := &cobra.Command{
+		Use:   "unwrap FILE OCI_REF",
+		Short: "Unwraps a wrapped container image",
+		Long:  "Unwraps a container image wrap tarball and pushes the image and its artifacts into a target OCI registry",
+		Example: `  # Unwrap a container image and push it into a registry
+  $ dt images unwrap nginx-1.25.container.wrap.tgz oci://demo.goharbor.io/myrepo
+`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			l := cfg.Logger()
+
+			inputContainer, registryURL := args[0], args[1]
+			ctx, cancel := cfg.ContextWithSigterm()
+			defer cancel()
+
+			tempDir, err := cfg.GetTemporaryDirectory()
+			if err != nil {
+				return fmt.Errorf("failed to create temporary directory: %v", err)
+			}
+			_, err = unwrapContainer(inputContainer, registryURL,
+				WithLogger(l),
+				WithSayYes(sayYes),
+				WithContext(ctx),
+				WithInsecure(cfg.Insecure),
+				WithTempDirectory(tempDir),
+				WithUsePlainHTTP(cfg.UsePlainHTTP),
+				WithInteractive(true),
+			)
+			if err != nil {
+				return err
+			}
+			l.Printf(widgets.TerminalSpacer)
+			l.Successf("Container image unwrapped successfully")
+			return nil
+		},
+	}
+
+	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
 
 	return cmd
 }

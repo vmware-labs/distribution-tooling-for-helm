@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
 // APIVersionV0 is the initial version of the API
@@ -165,4 +168,34 @@ func populateImagesFromChart(imgLock *ImagesLock, chart *chart.Chart, cfg *Confi
 	imgLock.Images = imgLock.Images.Dedup()
 
 	return allErrors
+}
+
+// GenerateFromContainerRef creates an ImagesLock from a single remote container image reference.
+// The lock contains one image entry whose digests are resolved from the remote registry.
+// imageRef must be a valid OCI image reference (e.g. "docker.io/library/nginx:1.25").
+// The Chart metadata fields in the lock are intentionally left empty because this lock
+// describes a standalone container image, not a Helm chart.
+func GenerateFromContainerRef(imageRef string, opts ...Option) (*ImagesLock, error) {
+	cfg := NewImagesLockConfig(opts...)
+
+	// Normalize away any oci:// scheme prefix that callers might pass and derive
+	// a short base name for the image entry.
+	baseName, _, _ := utils.ParseImageReference(imageRef)
+	ref := strings.TrimPrefix(imageRef, "oci://")
+
+	imgLock := NewImagesLock()
+
+	img := &ChartImage{
+		Name:  baseName,
+		Image: ref,
+	}
+
+	if !cfg.SkipImageDigestResolution {
+		if err := img.FetchDigests(cfg); err != nil {
+			return nil, fmt.Errorf("failed to fetch digests for %q: %w", ref, err)
+		}
+	}
+
+	imgLock.Images = append(imgLock.Images, img)
+	return imgLock, nil
 }

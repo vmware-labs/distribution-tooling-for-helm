@@ -63,7 +63,7 @@ func verifyArtifactsContents(t *testing.T, sb *tu.Sandbox, dir string, artifacts
 func verifyChartWrappedArtifacts(t *testing.T, sb *tu.Sandbox, wrapDir string, images []tu.ImageData, artifactsData map[string][]byte) {
 	wrap, err := wrapping.Load(wrapDir)
 	require.NoError(t, err)
-	artifactsDir := filepath.Join(wrapDir, artifacts.HelmArtifactsFolder)
+	artifactsDir := filepath.Join(wrapDir, artifacts.ArtifactsFolder)
 	require.DirExists(t, artifactsDir)
 	require.DirExists(t, filepath.Join(artifactsDir, "images"))
 	for _, imgData := range images {
@@ -185,7 +185,7 @@ func testChartWrap(t *testing.T, sb *tu.Sandbox, inputChart string, expectedLock
 		}
 	} else {
 		// We did not requested fetching artifacts. Make sure they are not grabbed
-		assert.NoDirExists(t, filepath.Join(tmpDir, artifacts.HelmArtifactsFolder))
+		assert.NoDirExists(t, filepath.Join(tmpDir, artifacts.ArtifactsFolder))
 	}
 	return tmpDir
 }

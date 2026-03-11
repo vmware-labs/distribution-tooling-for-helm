@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -119,22 +120,35 @@ func SafeWriteFile(filename string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmpname, filename)
 }
 
-// RelocateImageURL rewrites the provided image url by replacing its prefix
-func RelocateImageURL(url string, prefix string, includeIndentifier bool) (string, error) {
+// relocateRepoRe matches the last one or two path components of a normalized image URL.
+var relocateRepoRe = regexp.MustCompile("^.*?/(([^/]+/)?[^/]+)$")
+
+// RelocateImageURL rewrites the provided image url by replacing its prefix.
+// includeIdentifier controls whether the tag or digest is appended to the result.
+// preserveRepository controls whether the last two path components of the source repository
+// are preserved in the relocated URL (e.g. "myregistry/bitnami/wordpress" keeps "bitnami/wordpress").
+// When false, only the image base name is kept (e.g. "myregistry/wordpress").
+// Use true for Helm chart wraps where the repository structure is meaningful, and false
+// for standalone container image wraps where only the image name matters.
+func RelocateImageURL(url string, prefix string, includeIdentifier, preserveRepository bool) (string, error) {
 	ref, err := name.ParseReference(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to relocate url: %v", err)
 	}
 	normalizedURL := ref.Context().Name()
 
-	// We will preserve the last past of the repository
-	re := regexp.MustCompile("^.*?/(([^/]+/)?[^/]+)$")
-	match := re.FindStringSubmatch(normalizedURL)
-	if match == nil {
-		return "", fmt.Errorf("failed to parse normalized URL")
+	app := path.Base(normalizedURL)
+	newURL := fmt.Sprintf("%s/%s", strings.TrimRight(prefix, "/"), app)
+	if preserveRepository {
+		// We will preserve the last part of the repository
+		match := relocateRepoRe.FindStringSubmatch(normalizedURL)
+		if match == nil {
+			return "", fmt.Errorf("failed to parse normalized URL")
+		}
+		newURL = fmt.Sprintf("%s/%s", strings.TrimRight(prefix, "/"), match[1])
 	}
-	newURL := fmt.Sprintf("%s/%s", strings.TrimRight(prefix, "/"), match[1])
-	if includeIndentifier && ref.Identifier() != "" {
+
+	if includeIdentifier && ref.Identifier() != "" {
 		separator := ":"
 		if _, ok := ref.(name.Digest); ok {
 			separator = "@"
@@ -142,6 +156,37 @@ func RelocateImageURL(url string, prefix string, includeIndentifier bool) (strin
 		newURL = fmt.Sprintf("%s%s%s", newURL, separator, ref.Identifier())
 	}
 	return newURL, nil
+}
+
+// ParseImageReference parses an OCI image reference and returns a filesystem-safe base name,
+// a tag, and a digest. Exactly one of tag or digest will be non-empty:
+//   - If the reference contains a digest (@sha256:...), digest is set and tag is empty.
+//   - If the reference contains a tag, tag is set and digest is empty.
+//   - If neither is present, tag defaults to "latest" and digest is empty.
+//
+// The oci:// scheme prefix is stripped if present.
+func ParseImageReference(imageRef string) (name, tag, digest string) {
+	ref := strings.TrimPrefix(imageRef, "oci://")
+
+	// Extract tag or digest before stripping path separators
+	if idx := strings.Index(ref, "@"); idx != -1 {
+		digest = ref[idx+1:]
+	} else if idx := strings.LastIndex(ref, ":"); idx != -1 {
+		tag = ref[idx+1:]
+	} else {
+		tag = "latest"
+	}
+
+	// Use only the last path segment of the repository
+	base := ref
+	if idx := strings.LastIndex(base, "/"); idx != -1 {
+		base = base[idx+1:]
+	}
+	// Strip tag or digest suffix
+	base = strings.SplitN(base, "@", 2)[0]
+	base = strings.SplitN(base, ":", 2)[0]
+	name = base
+	return name, tag, digest
 }
 
 // ExecuteWithRetry executes a function retrying until it succeeds or the number of retries is reached

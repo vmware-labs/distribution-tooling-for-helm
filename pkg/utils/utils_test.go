@@ -149,7 +149,8 @@ func TestRelocateImageURL(t *testing.T) {
 	type args struct {
 		url                string
 		prefix             string
-		includeIndentifier bool
+		includeIdentifier  bool
+		preserveRepository bool
 	}
 	newReg := "mycustom.docker.registry.com/airgap"
 	dummyTag := "mytag"
@@ -161,8 +162,9 @@ func TestRelocateImageURL(t *testing.T) {
 	}{
 		"Basic replacement": {
 			args: args{
-				url:    "bitnami/wordpress:mytag",
-				prefix: newReg,
+				url:                "bitnami/wordpress:mytag",
+				prefix:             newReg,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/bitnami/wordpress", newReg),
 		},
@@ -170,7 +172,8 @@ func TestRelocateImageURL(t *testing.T) {
 			args: args{
 				url:                fmt.Sprintf("bitnami/wordpress:%s", dummyTag),
 				prefix:             newReg,
-				includeIndentifier: true,
+				includeIdentifier:  true,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/bitnami/wordpress:%s", newReg, dummyTag),
 		},
@@ -178,30 +181,49 @@ func TestRelocateImageURL(t *testing.T) {
 			args: args{
 				url:                fmt.Sprintf("bitnami/wordpress:%s@%s", dummyTag, dummyDigest),
 				prefix:             newReg,
-				includeIndentifier: true,
+				includeIdentifier:  true,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/bitnami/wordpress@%s", newReg, dummyDigest),
 		},
 		"Replaces full URL with single component": {
 			args: args{
-				url:    "example.com:80/foo",
-				prefix: newReg,
+				url:                "example.com:80/foo",
+				prefix:             newReg,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/foo", newReg),
 		},
 		"Replaces full URL with multiple components": {
 			args: args{
-				url:    "example.com:80/foo/bar/bitnami/app",
-				prefix: newReg,
+				url:                "example.com:80/foo/bar/bitnami/app",
+				prefix:             newReg,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/bitnami/app", newReg),
 		},
 		"Replaces library repositoy": {
 			args: args{
-				url:    "foo",
-				prefix: newReg,
+				url:                "foo",
+				prefix:             newReg,
+				preserveRepository: true,
 			},
 			want: fmt.Sprintf("%s/library/foo", newReg),
+		},
+		"Without preserving repository keeps only image name": {
+			args: args{
+				url:    "example.com:80/foo/bar/bitnami/app",
+				prefix: newReg,
+			},
+			want: fmt.Sprintf("%s/app", newReg),
+		},
+		"Without preserving repository including tag": {
+			args: args{
+				url:               fmt.Sprintf("bitnami/wordpress:%s", dummyTag),
+				prefix:            newReg,
+				includeIdentifier: true,
+			},
+			want: fmt.Sprintf("%s/wordpress:%s", newReg, dummyTag),
 		},
 		"Fails on malformed urls": {
 			args: args{
@@ -213,7 +235,7 @@ func TestRelocateImageURL(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := RelocateImageURL(tt.args.url, tt.args.prefix, tt.args.includeIndentifier)
+			got, err := RelocateImageURL(tt.args.url, tt.args.prefix, tt.args.includeIdentifier, tt.args.preserveRepository)
 			validateError(t, tt.expectedErr, err)
 
 			if got != tt.want {
@@ -233,6 +255,61 @@ func validateError(t *testing.T, expectedErr string, err error) {
 
 	} else if err != nil {
 		t.Errorf("got error = %v but expected to succeed", err)
+	}
+}
+
+func TestParseImageReference(t *testing.T) {
+	tests := map[string]struct {
+		imageRef   string
+		wantName   string
+		wantTag    string
+		wantDigest string
+	}{
+		"Simple reference with tag": {
+			imageRef: "docker.io/library/nginx:1.25",
+			wantName: "nginx",
+			wantTag:  "1.25",
+		},
+		"Reference without tag defaults to latest": {
+			imageRef: "docker.io/library/nginx",
+			wantName: "nginx",
+			wantTag:  "latest",
+		},
+		"Digest-pinned reference sets digest and empty tag": {
+			imageRef:   "registry.io/foo/bar@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			wantName:   "bar",
+			wantTag:    "",
+			wantDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		"oci:// prefix is stripped": {
+			imageRef: "oci://registry.io/repo/app:v2",
+			wantName: "app",
+			wantTag:  "v2",
+		},
+		"Short reference without registry": {
+			imageRef: "myapp:latest",
+			wantName: "myapp",
+			wantTag:  "latest",
+		},
+		"Multi-component path keeps only last segment": {
+			imageRef: "example.com/foo/bar/bitnami/app:1.0",
+			wantName: "app",
+			wantTag:  "1.0",
+		},
+		"Digest-pinned with oci:// prefix": {
+			imageRef:   "oci://registry.io/org/app@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			wantName:   "app",
+			wantTag:    "",
+			wantDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotName, gotTag, gotDigest := ParseImageReference(tt.imageRef)
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantTag, gotTag, "tag mismatch")
+			assert.Equal(t, tt.wantDigest, gotDigest, "digest mismatch")
+		})
 	}
 }
 

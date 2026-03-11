@@ -5,7 +5,9 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/lock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/pull"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/push"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/unwrap"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/verify"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/wrap"
 )
 
 var imagesCmd = &cobra.Command{
@@ -19,5 +21,12 @@ var imagesCmd = &cobra.Command{
 }
 
 func init() {
-	imagesCmd.AddCommand(lock.NewCmd(mainConfig), verify.NewCmd(mainConfig), pull.NewCmd(mainConfig), push.NewCmd(mainConfig))
+	imagesCmd.AddCommand(
+		lock.NewCmd(mainConfig),
+		verify.NewCmd(mainConfig),
+		pull.NewCmd(mainConfig),
+		push.NewCmd(mainConfig),
+		wrap.NewContainerCmd(mainConfig),
+		unwrap.NewContainerCmd(mainConfig),
+	)
 }
