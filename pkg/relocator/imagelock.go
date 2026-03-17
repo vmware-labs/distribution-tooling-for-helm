@@ -9,10 +9,10 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
 
-func relocateImages(images imagelock.ImageList, prefix string) (count int, err error) {
+func relocateImages(images imagelock.ImageList, prefix string, preserveRepository bool) (count int, err error) {
 	var allErrors error
 	for _, img := range images {
-		norm, err := utils.RelocateImageURL(img.Image, prefix, true)
+		norm, err := utils.RelocateImageURL(img.Image, prefix, true, preserveRepository)
 		if err != nil {
 			allErrors = errors.Join(allErrors, err)
 			continue
@@ -23,9 +23,12 @@ func relocateImages(images imagelock.ImageList, prefix string) (count int, err e
 	return count, allErrors
 }
 
-// RelocateLock rewrites the images urls in the provided lock using prefix
-func RelocateLock(lock *imagelock.ImagesLock, prefix string) (*RelocationResult, error) {
-	count, err := relocateImages(lock.Images, prefix)
+// RelocateLock rewrites the images urls in the provided lock using prefix.
+// preserveRepository controls whether the source repository path is preserved in the
+// relocated URL. Pass true for Helm chart wraps and false for standalone container image wraps.
+// See utils.RelocateImageURL for details.
+func RelocateLock(lock *imagelock.ImagesLock, prefix string, preserveRepository bool) (*RelocationResult, error) {
+	count, err := relocateImages(lock.Images, prefix, preserveRepository)
 	if err != nil {
 		return nil, fmt.Errorf("failed to relocate Images.lock file: %v", err)
 	}
@@ -36,13 +39,16 @@ func RelocateLock(lock *imagelock.ImagesLock, prefix string) (*RelocationResult,
 	return &RelocationResult{Data: buff.Bytes(), Count: count}, nil
 }
 
-// RelocateLockFile relocates images urls in the provided Images.lock using prefix
-func RelocateLockFile(file string, prefix string) error {
+// RelocateLockFile relocates images urls in the provided Images.lock using prefix.
+// preserveRepository controls whether the source repository path is preserved in the
+// relocated URL. Pass true for Helm chart wraps and false for standalone container image wraps.
+// See utils.RelocateImageURL for details.
+func RelocateLockFile(file string, prefix string, preserveRepository bool) error {
 	lock, err := imagelock.FromYAMLFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to load Images.lock: %v", err)
 	}
-	result, err := RelocateLock(lock, prefix)
+	result, err := RelocateLock(lock, prefix, preserveRepository)
 	if err != nil {
 		return err
 	}

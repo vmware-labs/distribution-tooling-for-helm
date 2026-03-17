@@ -120,7 +120,7 @@ func (v *ValuesImageElement) isOriginalRepositoryBare() bool {
 
 // Relocate modifies the ValuesImageElement Registry and Repository based on the provided prefix
 func (v *ValuesImageElement) Relocate(prefix string) error {
-	newURL, err := utils.RelocateImageURL(v.URL(), prefix, false)
+	newURL, err := utils.RelocateImageURL(v.URL(), prefix, false, true)
 	if err != nil {
 		return fmt.Errorf("failed to relocate: %v", err)
 	}

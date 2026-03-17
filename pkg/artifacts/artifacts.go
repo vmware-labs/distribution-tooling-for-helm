@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	// HelmArtifactsFolder defines the path of the chart artifacts, relative to the bundle root
-	HelmArtifactsFolder = "artifacts"
+	// ArtifactsFolder defines the path of the chart artifacts, relative to the bundle root
+	ArtifactsFolder = "artifacts"
 
 	// HelmChartArtifactMetadataDir defines the relative path to the chart metadata inside the chart root
-	HelmChartArtifactMetadataDir = HelmArtifactsFolder + "/chart/metadata"
+	HelmChartArtifactMetadataDir = ArtifactsFolder + "/chart/metadata"
 )
 
 var (

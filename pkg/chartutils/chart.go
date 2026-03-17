@@ -100,7 +100,7 @@ func (c *Chart) GetImagesLock() (*imagelock.ImagesLock, error) {
 
 // ImageArtifactsDir returns the imags artifacts directory
 func (c *Chart) ImageArtifactsDir() string {
-	return filepath.Join(c.RootDir(), artifacts.HelmArtifactsFolder, "images")
+	return filepath.Join(c.RootDir(), artifacts.ArtifactsFolder, "images")
 }
 
 // ImagesDir returns the images directory inside the chart root directory

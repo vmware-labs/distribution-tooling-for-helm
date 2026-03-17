@@ -18,6 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/dtlog"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/imagelock"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 )
@@ -164,7 +165,7 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					l.Debugf("Failed to push image: %v", prevErr)
 					p.Warnf("Failed to push image: retrying %d/%d", try, maxRetries)
 				}
-				if err := pushImage(imgData, imagesDir, o); err != nil {
+				if err := pushImage(imgData, imagesDir, l, o); err != nil {
 					return err
 				}
 				if err := artifacts.PushImageSignatures(context.Background(),
@@ -266,7 +267,7 @@ func buildImageIndex(image *imagelock.ChartImage, imagesDir string) (v1.ImageInd
 	return mutate.AppendManifests(base, adds...), nil
 }
 
-func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options) error {
+func pushImage(imgData *imagelock.ChartImage, imagesDir string, log dtlog.Logger, o crane.Options) error {
 	idx, err := buildImageIndex(imgData, imagesDir)
 	if err != nil {
 		return fmt.Errorf("failed to build image index: %w", err)
@@ -280,6 +281,8 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, o crane.Options)
 	if err := remote.WriteIndex(ref, idx, o.Remote...); err != nil {
 		return fmt.Errorf("failed to write image index: %w", err)
 	}
+
+	log.Debugf("Image pushed to %q", ref)
 
 	return nil
 }
