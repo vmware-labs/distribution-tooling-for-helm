@@ -268,10 +268,15 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		return "", fmt.Errorf("the registry cannot be empty")
 	}
 
+	tempDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
 	l := parentLog.StartSection(fmt.Sprintf("Unwrapping Helm chart %q", inputChart))
 
 	if cfg.KeepArtifacts {
-		l.Debugf("Temporary assets kept at %q", cfg.TempDirectory)
+		l.Debugf("Temporary assets kept at %q", tempDir)
 	}
 
 	chartPath, err := wrap.ResolveInputChartPath(
@@ -285,7 +290,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		),
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve input chart path: %w", err)
 	}
 
 	wrap, err := wrapping.Load(chartPath)
@@ -356,10 +361,15 @@ func unwrapContainer(inputContainer, registryURL string, opts ...Option) (string
 		return "", fmt.Errorf("the registry cannot be empty")
 	}
 
+	tempDir, err := cfg.GetTemporaryDirectory()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
 	l := parentLog.StartSection(fmt.Sprintf("Unwrapping container image %q", inputContainer))
 
 	if cfg.KeepArtifacts {
-		l.Debugf("Temporary assets kept at %q", cfg.TempDirectory)
+		l.Debugf("Temporary assets kept at %q", tempDir)
 	}
 
 	containerPath, err := wrap.ResolveInputContainerPath(
@@ -373,7 +383,7 @@ func unwrapContainer(inputContainer, registryURL string, opts ...Option) (string
 		),
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve input container path: %w", err)
 	}
 
 	wrapContainer, err := wrapping.LoadContainer(containerPath)

@@ -75,11 +75,6 @@ func Load(dir string, opts ...chartutils.Option) (Wrap, error) {
 	return &wrap{rootDir: dir, chart: chart}, nil
 }
 
-// LoadContainer loads a directory containing a wrapped container and returns a WrapContainer
-func LoadContainer(dir string) (WrapContainer, error) {
-	return &wrapContainer{rootDir: dir}, nil
-}
-
 // Create receives a path to a source Helm chart and a destination directory where to wrap it and returns a Wrap
 func Create(chartSrc string, destDir string, opts ...chartutils.Option) (Wrap, error) {
 	// Check we got a chart dir

@@ -43,6 +43,11 @@ func (w *wrapContainer) absFilePath(name string) string {
 	return filepath.Join(w.rootDir, name)
 }
 
+// LoadContainer loads a directory containing a wrapped container and returns a WrapContainer
+func LoadContainer(dir string) (WrapContainer, error) {
+	return &wrapContainer{rootDir: dir}, nil
+}
+
 // CreateContainer creates a new empty container wrap directory structure at destDir and returns a WrapContainer
 func CreateContainer(destDir string) (WrapContainer, error) {
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
