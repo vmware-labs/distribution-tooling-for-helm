@@ -183,8 +183,24 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 	}
 }
 
+// pushMetadataTags pushes the same local oci-layout artifact to the registry
+// under both the sha256-based tag (sha256-<hex>.<suffix>) and the image-tag-based
+// tag (<imgTag>-<suffix>). It returns the sha256 tag so callers can reference it
+// when chaining further artifacts (e.g. the metadata signature).
+func pushMetadataTags(ctx context.Context, image string, dest string, tagSuffix string, opts ...Option) (sha256Tag string, err error) {
+	sha256Tag, err = pushArtifact(ctx, image, dest, tagSuffix, append(opts, WithResolveReference(true))...)
+	if err != nil {
+		return "", err
+	}
+	_, err = pushArtifact(ctx, image, dest, tagSuffix, append(opts, WithResolveReference(false))...)
+	if err != nil {
+		return sha256Tag, err
+	}
+	return sha256Tag, nil
+}
+
 func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, opts ...Option) error {
-	tag, err := pushArtifact(ctx, imageRef, destDir, "metadata", opts...)
+	sha256Tag, err := pushMetadataTags(ctx, imageRef, destDir, "metadata", opts...)
 	if err != nil {
 		return err
 	}
@@ -192,11 +208,10 @@ func pushAssetMetadata(ctx context.Context, imageRef string, destDir string, opt
 	if err != nil {
 		return fmt.Errorf("failed to get image repository: %w", err)
 	}
-	metadataImg := fmt.Sprintf("%s:%s", repo, tag)
+	// The metadata signature is always referenced via the sha256 tag of the metadata artifact.
+	metadataImg := fmt.Sprintf("%s:%s", repo, sha256Tag)
 
 	metadataSigDir := fmt.Sprintf("%s.sig", destDir)
-	// For the metadata pull, we may want to not resolve the tag to the shasum, but for the signature, we need to do it,
-	// so we enfoce it here
 	_, err = pushArtifact(ctx, metadataImg, metadataSigDir, "sig", append(opts, WithResolveReference(true))...)
 	if err != nil {
 		return err
