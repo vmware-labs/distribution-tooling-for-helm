@@ -14,6 +14,8 @@ type Auth struct {
 type Config struct {
 	InsecureMode              bool
 	AnnotationsKey            string
+	ImageReplacementKey       string
+	ImageReplacementValue     string
 	Context                   context.Context
 	Auth                      Auth
 	Platforms                 []string
@@ -76,6 +78,22 @@ func WithContext(ctx context.Context) func(ic *Config) {
 func WithAnnotationsKey(str string) func(ic *Config) {
 	return func(ic *Config) {
 		ic.AnnotationsKey = str
+	}
+}
+
+// WithImageReplacementKey provides a custom annotation key to use when
+// reading/writing the list of images
+func WithImageReplacementKey(str string) func(ic *Config) {
+	return func(ic *Config) {
+		ic.ImageReplacementKey = str
+	}
+}
+
+// WithImageReplacementKey provides a custom annotation key to use when
+// reading/writing the list of images
+func WithImageReplacementValue(str string) func(ic *Config) {
+	return func(ic *Config) {
+		ic.ImageReplacementValue = str
 	}
 }
 
