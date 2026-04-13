@@ -17,16 +17,17 @@ type Auth struct {
 
 // Configuration defines configuration settings used in chartutils functions
 type Configuration struct {
-	AnnotationsKey string
-	Log            dtlog.Logger
-	Context        context.Context
-	ProgressBar    dtlog.ProgressBar
-	ArtifactsDir   string
-	FetchArtifacts bool
-	MaxRetries     int
-	InsecureMode   bool
-	Auth           Auth
-	ValuesFiles    []string
+	AnnotationsKey     string
+	Log                dtlog.Logger
+	Context            context.Context
+	ProgressBar        dtlog.ProgressBar
+	ArtifactsDir       string
+	FetchArtifacts     bool
+	MaxRetries         int
+	InsecureMode       bool
+	Auth               Auth
+	ValuesFiles        []string
+	PreserveRepository bool
 }
 
 // WithInsecureMode configures Insecure transport
@@ -84,15 +85,16 @@ func WithProgressBar(pb dtlog.ProgressBar) func(cfg *Configuration) {
 // NewConfiguration returns a new Configuration
 func NewConfiguration(opts ...Option) *Configuration {
 	cfg := &Configuration{
-		AnnotationsKey: imagelock.DefaultAnnotationsKey,
-		Context:        context.Background(),
-		ProgressBar:    silent.NewProgressBar(),
-		ArtifactsDir:   "",
-		FetchArtifacts: false,
-		MaxRetries:     3,
-		Log:            silent.NewLogger(),
-		InsecureMode:   false,
-		ValuesFiles:    []string{"values.yaml"},
+		AnnotationsKey:     imagelock.DefaultAnnotationsKey,
+		Context:            context.Background(),
+		ProgressBar:        silent.NewProgressBar(),
+		ArtifactsDir:       "",
+		FetchArtifacts:     false,
+		MaxRetries:         3,
+		Log:                silent.NewLogger(),
+		InsecureMode:       false,
+		ValuesFiles:        []string{"values.yaml"},
+		PreserveRepository: true,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -122,5 +124,12 @@ func WithAnnotationsKey(str string) func(cfg *Configuration) {
 func WithValuesFiles(files ...string) func(cfg *Configuration) {
 	return func(cfg *Configuration) {
 		cfg.ValuesFiles = files
+	}
+}
+
+// WithPreserveRepository configures whether to preserve repository paths during relocation
+func WithPreserveRepository(preserve bool) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.PreserveRepository = preserve
 	}
 }

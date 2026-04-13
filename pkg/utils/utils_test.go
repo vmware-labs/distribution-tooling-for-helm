@@ -232,6 +232,34 @@ func TestRelocateImageURL(t *testing.T) {
 			},
 			expectedErr: "failed to relocate url: could not parse reference",
 		},
+		"Fails on empty URL": {
+			args: args{
+				url:    "",
+				prefix: newReg,
+			},
+			expectedErr: "failed to relocate url: image URL cannot be empty",
+		},
+		"Fails on whitespace-only URL": {
+			args: args{
+				url:    "   ",
+				prefix: newReg,
+			},
+			expectedErr: "failed to relocate url: image URL cannot be empty",
+		},
+		"Fails on empty prefix": {
+			args: args{
+				url:    "bitnami/wordpress:latest",
+				prefix: "",
+			},
+			expectedErr: "failed to relocate url: prefix cannot be empty",
+		},
+		"Fails on whitespace-only prefix": {
+			args: args{
+				url:    "bitnami/wordpress:latest",
+				prefix: "   ",
+			},
+			expectedErr: "failed to relocate url: prefix cannot be empty",
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

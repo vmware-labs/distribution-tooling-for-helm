@@ -131,6 +131,13 @@ var relocateRepoRe = regexp.MustCompile("^.*?/(([^/]+/)?[^/]+)$")
 // Use true for Helm chart wraps where the repository structure is meaningful, and false
 // for standalone container image wraps where only the image name matters.
 func RelocateImageURL(url string, prefix string, includeIdentifier, preserveRepository bool) (string, error) {
+	if strings.TrimSpace(url) == "" {
+		return "", fmt.Errorf("failed to relocate url: image URL cannot be empty")
+	}
+	if strings.TrimSpace(prefix) == "" {
+		return "", fmt.Errorf("failed to relocate url: prefix cannot be empty")
+	}
+
 	ref, err := name.ParseReference(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to relocate url: %v", err)
@@ -143,7 +150,7 @@ func RelocateImageURL(url string, prefix string, includeIdentifier, preserveRepo
 		// We will preserve the last part of the repository
 		match := relocateRepoRe.FindStringSubmatch(normalizedURL)
 		if match == nil {
-			return "", fmt.Errorf("failed to parse normalized URL")
+			return "", fmt.Errorf("failed to parse normalized URL: could not extract repository from %q", normalizedURL)
 		}
 		newURL = fmt.Sprintf("%s/%s", strings.TrimRight(prefix, "/"), match[1])
 	}

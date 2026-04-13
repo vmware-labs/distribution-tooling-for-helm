@@ -12,19 +12,20 @@ func RelocateAnnotations(chartDir string, prefix string, opts ...chartutils.Opti
 	if err != nil {
 		return "", fmt.Errorf("failed to relocate annotations: %w", err)
 	}
-	res, err := relocateAnnotations(c, prefix)
+	cfg := chartutils.NewConfiguration(opts...)
+	res, err := relocateAnnotations(c, prefix, cfg.PreserveRepository)
 	if err != nil {
 		return "", fmt.Errorf("failed to relocate annotations: %w", err)
 	}
 	return string(res.Data), nil
 }
 
-func relocateAnnotations(c *chartutils.Chart, prefix string) (*RelocationResult, error) {
+func relocateAnnotations(c *chartutils.Chart, prefix string, preserveRepository bool) (*RelocationResult, error) {
 	images, err := c.GetAnnotatedImages()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read images from annotations: %v", err)
 	}
-	count, err := relocateImages(images, prefix, true)
+	count, err := relocateImages(images, prefix, preserveRepository)
 	if err != nil {
 		return nil, fmt.Errorf("failed to relocate annotations: %v", err)
 	}

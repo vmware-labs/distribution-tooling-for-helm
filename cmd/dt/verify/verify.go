@@ -21,9 +21,10 @@ type Auth struct {
 
 // Config defines the configuration of the verify command
 type Config struct {
-	AnnotationsKey string
-	Insecure       bool
-	Auth           Auth
+	AnnotationsKey     string
+	Insecure           bool
+	PreserveRepository bool
+	Auth               Auth
 }
 
 // Lock verifies the images in an Images.lock
@@ -46,6 +47,7 @@ func Lock(chartPath string, lockFile string, cfg Config) error {
 		imagelock.WithContext(context.Background()),
 		imagelock.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 		imagelock.WithInsecure(cfg.Insecure),
+		imagelock.WithPreserveRepository(cfg.PreserveRepository),
 	)
 
 	if err != nil {
@@ -89,7 +91,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 			}
 
 			if err := l.ExecuteStep("Verifying Images.lock", func() error {
-				return Lock(chartPath, lockFile, Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey})
+				return Lock(chartPath, lockFile, Config{Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey, PreserveRepository: true})
 			}); err != nil {
 				return l.Failf("failed to verify %q lock: %w", chartPath, err)
 			}

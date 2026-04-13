@@ -18,14 +18,16 @@ type Config struct {
 	Auth                      Auth
 	Platforms                 []string
 	SkipImageDigestResolution bool
+	PreserveRepository        bool
 }
 
 // NewImagesLockConfig returns a new ImageLockConfig with default values
 func NewImagesLockConfig(opts ...Option) *Config {
 	cfg := &Config{
-		AnnotationsKey: DefaultAnnotationsKey,
-		Context:        context.Background(),
-		Platforms:      make([]string, 0),
+		AnnotationsKey:     DefaultAnnotationsKey,
+		Context:            context.Background(),
+		Platforms:          make([]string, 0),
+		PreserveRepository: true,
 	}
 
 	for _, opt := range opts {
@@ -83,5 +85,12 @@ func WithAnnotationsKey(str string) func(ic *Config) {
 func WithSkipImageDigestResolution(skipImageResolution bool) func(ic *Config) {
 	return func(ic *Config) {
 		ic.SkipImageDigestResolution = skipImageResolution
+	}
+}
+
+// WithPreserveRepository configures the PreserveRepository of the Config
+func WithPreserveRepository(preserve bool) func(ic *Config) {
+	return func(ic *Config) {
+		ic.PreserveRepository = preserve
 	}
 }

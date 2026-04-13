@@ -31,7 +31,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 		return allErrors
 	}
 
-	valuesReplRes, err := relocateValues(chart, prefix)
+	valuesReplRes, err := relocateValues(chart, prefix, cfg.PreserveRepository)
 	if err != nil {
 		return fmt.Errorf("failed to relocate chart: %v", err)
 	}
@@ -45,7 +45,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	}
 
 	// TODO: Compare annotations with values replacements
-	annotationsRelocResult, err := relocateAnnotations(chart, prefix)
+	annotationsRelocResult, err := relocateAnnotations(chart, prefix, cfg.PreserveRepository)
 	if err != nil {
 		allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm chart: %v", err))
 	} else {
@@ -61,7 +61,7 @@ func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 
 	lockFile := chart.LockFilePath()
 	if utils.FileExists(lockFile) {
-		err = RelocateLockFile(lockFile, prefix, true)
+		err = RelocateLockFile(lockFile, prefix, cfg.PreserveRepository)
 		if err != nil {
 			allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Images.lock file: %v", err))
 		}

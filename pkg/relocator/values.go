@@ -9,7 +9,7 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 )
 
-func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*RelocationResult, error) {
+func relocateValuesData(valuesFile string, valuesData []byte, prefix string, preserveRepository bool) (*RelocationResult, error) {
 	valuesMap, err := chartutil.ReadValues(valuesData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Helm chart values: %v", err)
@@ -24,7 +24,7 @@ func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*R
 
 	data := make(map[string]string, 0)
 	for _, e := range imageElems {
-		if err = e.Relocate(prefix); err != nil {
+		if err = e.Relocate(prefix, preserveRepository); err != nil {
 			return nil, fmt.Errorf("unexpected error relocating: %v", err)
 		}
 		for k, v := range e.YamlReplaceMap() {
@@ -38,14 +38,14 @@ func relocateValuesData(valuesFile string, valuesData []byte, prefix string) (*R
 	return &RelocationResult{Name: valuesFile, Data: relocatedData, Count: len(imageElems)}, nil
 }
 
-func relocateValues(c *cu.Chart, prefix string) ([]*RelocationResult, error) {
+func relocateValues(c *cu.Chart, prefix string, preserveRepository bool) ([]*RelocationResult, error) {
 	result := make([]*RelocationResult, 0, len(c.ValuesFiles()))
 	for _, values := range c.ValuesFiles() {
 		if values == nil {
 			result = append(result, &RelocationResult{})
 			continue
 		}
-		res, err := relocateValuesData(values.Name, values.Data, prefix)
+		res, err := relocateValuesData(values.Name, values.Data, prefix, preserveRepository)
 		if err != nil {
 			return nil, err
 		}

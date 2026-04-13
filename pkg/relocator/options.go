@@ -15,6 +15,7 @@ type RelocateConfig struct {
 	Recursive           bool
 	SkipImageRelocation bool
 	ValuesFiles         []string
+	PreserveRepository  bool
 }
 
 // NewRelocateConfig returns a new RelocateConfig with default settings
@@ -23,6 +24,7 @@ func NewRelocateConfig(opts ...RelocateOption) *RelocateConfig {
 		Log:                 silentLog.NewLogger(),
 		SkipImageRelocation: false,
 		RelocateLockFile:    true,
+		PreserveRepository:  true,
 		ImageLockConfig:     *imagelock.NewImagesLockConfig(),
 		ValuesFiles:         []string{"values.yaml"},
 	}
@@ -73,5 +75,15 @@ func WithLog(l dtlog.Logger) func(rc *RelocateConfig) {
 func WithValuesFiles(files ...string) func(rc *RelocateConfig) {
 	return func(rc *RelocateConfig) {
 		rc.ValuesFiles = files
+	}
+}
+
+// WithPreserveRepository controls whether the source repository path is preserved in the
+// relocated URL. When true, the last part of the repository is preserved (e.g., "bitnami/wordpress").
+// When false, only the image base name is kept (e.g., "wordpress").
+// Use false for respecting destination URLs that already include repository structure.
+func WithPreserveRepository(preserve bool) func(rc *RelocateConfig) {
+	return func(rc *RelocateConfig) {
+		rc.PreserveRepository = preserve
 	}
 }
