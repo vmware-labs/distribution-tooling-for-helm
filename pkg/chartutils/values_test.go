@@ -13,12 +13,13 @@ func TestValuesImageElement_Relocate(t *testing.T) {
 		name             string
 		elem             *ValuesImageElement
 		prefix           string
+		preserveRepo     bool
 		expectedErr      bool
 		expectedRegistry string
 		expectedRepo     string
 	}{
 		{
-			name: "relocate with registry field with default project",
+			name: "relocate with registry field with default project (preserve=true)",
 			elem: &ValuesImageElement{
 				Registry:    "docker.io",
 				Repository:  "nginx",
@@ -26,12 +27,27 @@ func TestValuesImageElement_Relocate(t *testing.T) {
 				foundFields: []string{"registry", "repository", "tag"},
 			},
 			prefix:           "registry.example.com/myrepo",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "registry.example.com",
 			expectedRepo:     "myrepo/library/nginx",
 		},
 		{
-			name: "relocate with registry field with non default project",
+			name: "relocate with registry field with default project (preserve=false)",
+			elem: &ValuesImageElement{
+				Registry:    "docker.io",
+				Repository:  "nginx",
+				Tag:         "latest",
+				foundFields: []string{"registry", "repository", "tag"},
+			},
+			prefix:           "registry.example.com/myrepo",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "registry.example.com",
+			expectedRepo:     "myrepo/nginx",
+		},
+		{
+			name: "relocate with registry field with non default project (preserve=true)",
 			elem: &ValuesImageElement{
 				Registry:    "docker.io",
 				Repository:  "redpandadata/redpanda",
@@ -39,63 +55,134 @@ func TestValuesImageElement_Relocate(t *testing.T) {
 				foundFields: []string{"registry", "repository", "tag"},
 			},
 			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com/kafka",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "007439368137.dkr.ecr.us-east-2.amazonaws.com",
 			expectedRepo:     "kafka/redpandadata/redpanda",
 		},
 		{
-			name: "relocate without registry field",
+			name: "relocate with registry field with non default project (preserve=false)",
+			elem: &ValuesImageElement{
+				Registry:    "docker.io",
+				Repository:  "redpandadata/redpanda",
+				Tag:         "latest",
+				foundFields: []string{"registry", "repository", "tag"},
+			},
+			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com/kafka",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "007439368137.dkr.ecr.us-east-2.amazonaws.com",
+			expectedRepo:     "kafka/redpanda",
+		},
+		{
+			name: "relocate without registry field (preserve=true)",
 			elem: &ValuesImageElement{
 				Repository:  "quay.io/cert-manager-controller",
 				Tag:         "latest",
 				foundFields: []string{"repository", "tag"},
 			},
 			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "",
 			expectedRepo:     "007439368137.dkr.ecr.us-east-2.amazonaws.com/cert-manager-controller",
 		},
 		{
-			name: "relocate without registry field and non default project",
+			name: "relocate without registry field (preserve=false)",
+			elem: &ValuesImageElement{
+				Repository:  "quay.io/cert-manager-controller",
+				Tag:         "latest",
+				foundFields: []string{"repository", "tag"},
+			},
+			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "",
+			expectedRepo:     "007439368137.dkr.ecr.us-east-2.amazonaws.com/cert-manager-controller",
+		},
+		{
+			name: "relocate without registry field and non default project (preserve=true)",
 			elem: &ValuesImageElement{
 				Repository:  "quay.io/jetstack/cert-manager-controller",
 				Tag:         "latest",
 				foundFields: []string{"repository", "tag"},
 			},
 			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "",
 			expectedRepo:     "007439368137.dkr.ecr.us-east-2.amazonaws.com/jetstack/cert-manager-controller",
 		},
 		{
-			name: "relocate without registry field with default project",
+			name: "relocate without registry field and non default project (preserve=false)",
+			elem: &ValuesImageElement{
+				Repository:  "quay.io/jetstack/cert-manager-controller",
+				Tag:         "latest",
+				foundFields: []string{"repository", "tag"},
+			},
+			prefix:           "007439368137.dkr.ecr.us-east-2.amazonaws.com",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "",
+			expectedRepo:     "007439368137.dkr.ecr.us-east-2.amazonaws.com/cert-manager-controller",
+		},
+		{
+			name: "relocate without registry field with default project (preserve=true)",
 			elem: &ValuesImageElement{
 				Repository:  "nginx",
 				Tag:         "latest",
 				foundFields: []string{"repository", "tag"},
 			},
 			prefix:           "localhost:5000/myrepo",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "localhost:5000",
 			expectedRepo:     "myrepo/library/nginx",
 		},
 		{
-			name: "relocate without registry field with non default project",
+			name: "relocate without registry field with default project (preserve=false)",
+			elem: &ValuesImageElement{
+				Repository:  "nginx",
+				Tag:         "latest",
+				foundFields: []string{"repository", "tag"},
+			},
+			prefix:           "localhost:5000/myrepo",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "localhost:5000",
+			expectedRepo:     "myrepo/nginx",
+		},
+		{
+			name: "relocate without registry field with non default project (preserve=true)",
 			elem: &ValuesImageElement{
 				Repository:  "redpandadata/redpanda",
 				Tag:         "latest",
 				foundFields: []string{"repository", "tag"},
 			},
 			prefix:           "localhost:5000/kafka",
+			preserveRepo:     true,
 			expectedErr:      false,
 			expectedRegistry: "localhost:5000",
 			expectedRepo:     "kafka/redpandadata/redpanda",
+		},
+		{
+			name: "relocate without registry field with non default project (preserve=false)",
+			elem: &ValuesImageElement{
+				Repository:  "redpandadata/redpanda",
+				Tag:         "latest",
+				foundFields: []string{"repository", "tag"},
+			},
+			prefix:           "localhost:5000/kafka",
+			preserveRepo:     false,
+			expectedErr:      false,
+			expectedRegistry: "localhost:5000",
+			expectedRepo:     "kafka/redpanda",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.elem.Relocate(tt.prefix)
+			err := tt.elem.Relocate(tt.prefix, tt.preserveRepo)
 
 			if tt.expectedErr && err == nil {
 				t.Error("Expected error but got none")

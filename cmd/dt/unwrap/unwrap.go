@@ -49,6 +49,7 @@ type Config struct {
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 	ValuesFiles           []string
+	PreserveRepository    bool
 
 	// Interactive enables interacting with the user
 	Interactive bool
@@ -220,15 +221,23 @@ func WithValuesFiles(files ...string) func(c *Config) {
 	}
 }
 
+// WithPreserveRepository configures the PreserveRepository of the Config
+func WithPreserveRepository(preserve bool) func(c *Config) {
+	return func(c *Config) {
+		c.PreserveRepository = preserve
+	}
+}
+
 // NewConfig returns a new WrapConfig with default values
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
-		Context:        context.Background(),
-		TempDirectory:  "",
-		logger:         logrus.NewSectionLogger(),
-		AnnotationsKey: imagelock.DefaultAnnotationsKey,
-		Platforms:      []string{},
-		ValuesFiles:    []string{"values.yaml"},
+		Context:            context.Background(),
+		TempDirectory:      "",
+		logger:             logrus.NewSectionLogger(),
+		AnnotationsKey:     imagelock.DefaultAnnotationsKey,
+		Platforms:          []string{},
+		ValuesFiles:        []string{"values.yaml"},
+		PreserveRepository: true,
 	}
 
 	for _, opt := range opts {
@@ -302,6 +311,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 			wrap.ChartDir(), registryURL, relocator.WithLog(l),
 			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey), relocator.WithValuesFiles(cfg.ValuesFiles...),
 			relocator.WithSkipImageRelocation(cfg.SkipImageRelocation),
+			relocator.WithPreserveRepository(cfg.PreserveRepository),
 		)
 	}); err != nil {
 		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
@@ -444,7 +454,8 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 
 		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{
 			Insecure: cfg.Insecure, AnnotationsKey: cfg.AnnotationsKey,
-			Auth: verify.Auth{Username: cfg.ContainerRegistryAuth.Username, Password: cfg.ContainerRegistryAuth.Password},
+			PreserveRepository: cfg.PreserveRepository,
+			Auth:               verify.Auth{Username: cfg.ContainerRegistryAuth.Username, Password: cfg.ContainerRegistryAuth.Password},
 		})
 	}); err != nil {
 		return fmt.Errorf("failed to verify Helm chart Images.lock: %w", err)
