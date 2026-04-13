@@ -9,7 +9,7 @@ import (
 )
 
 // Version is the tool version
-var Version = "0.6.1"
+var Version = "0.7.0"
 
 // BuildDate is the tool build date
 var BuildDate = ""
