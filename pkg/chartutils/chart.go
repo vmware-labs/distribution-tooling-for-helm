@@ -3,6 +3,7 @@ package chartutils
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
@@ -137,16 +138,84 @@ func (c *Chart) GetAnnotatedImages() (imagelock.ImageList, error) {
 	)
 }
 
+// resolveDependencyPath is the shared implementation for resolving dependency paths
+func resolveDependencyPath(chartRoot string, dep *chart.Chart) (string, error) {
+	chartsDir := filepath.Join(chartRoot, "charts")
+	depName := dep.Name()
+
+	// First, check for directory-based dependency (traditional format)
+	dirPath := filepath.Join(chartsDir, depName)
+	if info, err := os.Stat(dirPath); err == nil && info.IsDir() {
+		return dirPath, nil
+	}
+
+	// Second, check for compressed dependency (.tgz format)
+	// Try common patterns: dep-name-version.tgz or dep-name.tgz
+	tgzPatterns := []string{
+		fmt.Sprintf("%s-%s.tgz", depName, dep.Metadata.Version),
+		fmt.Sprintf("%s.tgz", depName),
+	}
+
+	for _, pattern := range tgzPatterns {
+		tgzPath := filepath.Join(chartsDir, pattern)
+		if info, err := os.Stat(tgzPath); err == nil && !info.IsDir() {
+			// Found a compressed dependency, extract it
+			extractedPath, err := extractCompressedDependency(tgzPath, depName)
+			if err != nil {
+				return "", fmt.Errorf("failed to extract compressed dependency %q: %w", tgzPath, err)
+			}
+			return extractedPath, nil
+		}
+	}
+
+	// If neither format exists, return the directory path (for backward compatibility)
+	// This will allow the error to be handled by the loader
+	return dirPath, nil
+}
+
+// extractCompressedDependency is the shared implementation for extracting compressed dependencies
+func extractCompressedDependency(tgzPath, depName string) (string, error) {
+	chartsDir := filepath.Dir(tgzPath)
+	extractDir := filepath.Join(chartsDir, depName)
+
+	// Check if already extracted (directory exists)
+	if info, err := os.Stat(extractDir); err == nil && info.IsDir() {
+		return extractDir, nil
+	}
+
+	// Extract directly to the final location using existing utils
+	// StripComponents: 1 removes the top-level directory from the tar (e.g., "chart-name/")
+	if err := utils.Untar(tgzPath, extractDir, utils.TarConfig{StripComponents: 1}); err != nil {
+		return "", fmt.Errorf("failed to extract tgz: %w", err)
+	}
+
+	// Verify the extraction worked by checking for Chart.yaml
+	chartYaml := filepath.Join(extractDir, "Chart.yaml")
+	if !utils.FileExists(chartYaml) {
+		return "", fmt.Errorf("extracted directory does not contain Chart.yaml: %s", extractDir)
+	}
+
+	// Remove the original .tgz file after successful extraction
+	if err := os.Remove(tgzPath); err != nil {
+		return "", fmt.Errorf("failed to remove %s dependency tarball: %w", tgzPath, err)
+	}
+
+	return extractDir, nil
+}
+
 // Dependencies returns the chart dependencies
-func (c *Chart) Dependencies() []*Chart {
+func (c *Chart) Dependencies() ([]*Chart, error) {
 	cfg := NewConfiguration(WithAnnotationsKey(c.annotationsKey), WithValuesFiles(c.valuesFiles...))
 	deps := make([]*Chart, 0)
 
 	for _, dep := range c.chart.Dependencies() {
-		subChart := filepath.Join(c.RootDir(), "charts", dep.Name())
-		deps = append(deps, newChart(dep, subChart, cfg))
+		subChartPath, err := resolveDependencyPath(c.RootDir(), dep)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve dependency path for %q: %w", dep.Name(), err)
+		}
+		deps = append(deps, newChart(dep, subChartPath, cfg))
 	}
-	return deps
+	return deps, nil
 }
 
 // LoadChart returns the Chart defined by path

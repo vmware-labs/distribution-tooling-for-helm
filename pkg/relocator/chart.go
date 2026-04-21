@@ -97,7 +97,11 @@ func RelocateChartDir(chartPath string, prefix string, opts ...RelocateOption) e
 	var allErrors error
 
 	if cfg.Recursive {
-		for _, dep := range chart.Dependencies() {
+		dependencies, err := chart.Dependencies()
+		if err != nil {
+			return fmt.Errorf("failed to get chart dependencies: %w", err)
+		}
+		for _, dep := range dependencies {
 			if err := RelocateChartDir(dep.ChartDir(), prefix, opts...); err != nil {
 				allErrors = errors.Join(allErrors, fmt.Errorf("failed to relocate Helm SubChart %q: %v", dep.Chart().ChartFullPath(), err))
 			}
