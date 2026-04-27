@@ -58,8 +58,14 @@ func AnnotateChart(chartPath string, opts ...Option) error {
 
 	var allErrors error
 	for _, dep := range chart.Dependencies() {
-		subChart := filepath.Join(chartRoot, "charts", dep.Name())
-		if err := AnnotateChart(subChart, opts...); err != nil {
+		// Resolve dependency path, handling extraction of .tgz files automatically
+		subChartPath, err := resolveDependencyPath(chartRoot, dep)
+		if err != nil {
+			allErrors = errors.Join(allErrors, fmt.Errorf("failed to resolve dependency path for %q: %v", dep.Name(), err))
+			continue
+		}
+
+		if err := AnnotateChart(subChartPath, opts...); err != nil {
 			// Ignore the error if its ErrNoImagesToAnnotate
 			if !errors.Is(err, ErrNoImagesToAnnotate) {
 				allErrors = errors.Join(allErrors, fmt.Errorf("failed to annotate sub-chart %q: %v", dep.ChartFullPath(), err))
@@ -77,16 +83,23 @@ func AnnotateChart(chartPath string, opts ...Option) error {
 	return allErrors
 }
 
-// GetChartRoot returns the chart root directory to the chart provided (which may point to its Chart.yaml file)
+// GetChartRoot returns the chart root directory to the chart provided (which may point to its Chart.yaml file or .tgz archive)
 func GetChartRoot(chartPath string) (string, error) {
 	fi, err := os.Stat(chartPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot access path %q: %v", chartPath, err)
 	}
-	// we either got the path to chart dir, or to the chart yaml
+	// we either got the path to chart dir, chart yaml, or chart .tgz file
 	if fi.IsDir() {
 		return filepath.Abs(chartPath)
 	}
+
+	// For .tgz files, return the file path itself as Helm's loader can handle it directly
+	if strings.HasSuffix(chartPath, ".tgz") {
+		return filepath.Abs(chartPath)
+	}
+
+	// For other files (like Chart.yaml), return the directory containing the file
 	return filepath.Abs(filepath.Dir(chartPath))
 }
 

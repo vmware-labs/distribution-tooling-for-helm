@@ -76,7 +76,8 @@ func (suite *ChartUtilsTestSuite) TestLoadChart() {
 				assert.Equal(t, f[0].Name, "values.yaml")
 			})
 			t.Run("Dependencies", func(t *testing.T) {
-				dependencies := chart.Dependencies()
+				dependencies, err := chart.Dependencies()
+				require.NoError(t, err)
 				d, err := readRawChart(filepath.Join(chartDir, "Chart.yaml"))
 				require.NoError(t, err)
 				assert.Equal(t, len(dependencies), len(d.Dependencies))
@@ -120,6 +121,57 @@ func (suite *ChartUtilsTestSuite) TestLoadChart() {
 
 			})
 
+		})
+
+		t.Run("Loads a chart with compressed dependencies", func(t *testing.T) {
+			compressedChartDir := sb.TempFile()
+			serverURL := "localhost"
+
+			require.NoError(t, tu.RenderScenario("../../testdata/scenarios/compressed-deps-chart", compressedChartDir, map[string]interface{}{"ServerURL": serverURL}))
+
+			chart, err := LoadChart(compressedChartDir)
+			require.NoError(t, err)
+
+			t.Run("Dependencies with compressed files", func(t *testing.T) {
+				dependencies, err := chart.Dependencies()
+				require.NoError(t, err)
+
+				// Should still find dependencies even though they were originally .tgz files
+				require.Greater(t, len(dependencies), 0, "Should find compressed dependencies")
+
+				// Verify that the dependencies are now extracted to directories
+				found := false
+				for _, dep := range dependencies {
+					if dep.Name() == "mariadb" {
+						found = true
+						// After extraction, ChartDir should point to the extracted directory
+						expectedPath := filepath.Join(compressedChartDir, "charts", "mariadb")
+						assert.Equal(t, expectedPath, dep.ChartDir(), "Dependency path should point to extracted directory")
+
+						// Verify the directory was created and contains Chart.yaml
+						assert.DirExists(t, expectedPath, "Extracted directory should exist")
+						chartYaml := filepath.Join(expectedPath, "Chart.yaml")
+						assert.FileExists(t, chartYaml, "Chart.yaml should exist in extracted directory")
+
+						// Verify the original .tgz file was removed
+						originalTgz := filepath.Join(compressedChartDir, "charts", "mariadb-12.2.8.tgz")
+						assert.NoFileExists(t, originalTgz, "Original .tgz file should be removed after extraction")
+						break
+					}
+				}
+				assert.True(t, found, "Should find mariadb dependency")
+			})
+
+			t.Run("LoadChart works with compressed dependencies", func(t *testing.T) {
+				// This tests that LoadChart can actually load the compressed dependencies
+				dependencies, err := chart.Dependencies()
+				require.NoError(t, err)
+				for _, dep := range dependencies {
+					// Try to load each dependency - this should not fail
+					_, err := LoadChart(dep.ChartDir())
+					assert.NoError(t, err, "Should be able to load compressed dependency %s", dep.Name())
+				}
+			})
 		})
 	})
 
