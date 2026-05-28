@@ -18,9 +18,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/unwrap"
+	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/wrap"
 	tu "github.com/vmware-labs/distribution-tooling-for-helm/internal/testutil"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/dtlog/logrus"
+	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
 
 	"helm.sh/helm/v3/pkg/repo/repotest"
 )
@@ -426,4 +428,120 @@ func (suite *CmdSuite) TestEndToEnd() {
 			})
 		})
 	}
+}
+
+// TestInnerManifestSignaturePreservedThroughWrapUnwrap verifies that a cosign signature
+// created for an inner platform manifest (rather than the manifest list) is correctly
+// preserved through wrap+unwrap with the per-architecture storage model:
+//
+//  1. Pull side (dt wrap): PullImageSignatures stores the inner-manifest sig at
+//     <tag>.<arch>.sig/ (e.g. latest.linux_amd64.sig/) rather than the shared <tag>.sig/.
+//
+//  2. Push side (dt unwrap): PushImageSignatures pushes <tag>.<arch>.sig/ under the
+//     matching sha256-<inner-digest>.sig tag on the target registry, so CRI-O/containerd
+//     runtimes that resolve the manifest list and verify the selected platform's inner
+//     manifest can locate and validate the correct signature.
+func (suite *CmdSuite) TestInnerManifestSignaturePreservedThroughWrapUnwrap() {
+	require := suite.Require()
+	assert := suite.Assert()
+
+	silentLog := log.New(io.Discard, "", 0)
+	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+	defer s.Close()
+	u, err := url.Parse(s.URL)
+	require.NoError(err)
+	serverURL := u.Host
+
+	sb := suite.sb
+	scenarioDir := "../../testdata/scenarios/complete-chart"
+	chartName := "test"
+	version := "1.0.0"
+	imageName := "test"
+
+	srcNS := "inner-sig-src"
+	dstNS := "inner-sig-dst"
+	srcRegistry := fmt.Sprintf("%s/%s", serverURL, srcNS)
+	targetRegistry := fmt.Sprintf("%s/%s", serverURL, dstNS)
+
+	certDir, err := sb.Mkdir(sb.TempFile(), 0755)
+	require.NoError(err)
+	keyFile, pubKey, err := tu.GenerateCosignCertificateFiles(certDir)
+	require.NoError(err)
+
+	// Push the image WITHOUT manifest-list-level signing so that only the inner platform
+	// manifest digest tag is present on the source registry after we sign below.
+	images, err := tu.AddSampleImagesToRegistry(imageName, srcRegistry)
+	require.NoError(err)
+	require.NotEmpty(images)
+	require.NotEmpty(images[0].Digests)
+
+	// Locate the linux/amd64 inner platform manifest digest.
+	var amd64Hex, amd64Full string
+	for _, dgst := range images[0].Digests {
+		if dgst.Arch == "linux/amd64" {
+			amd64Hex = dgst.Digest.Hex()
+			amd64Full = dgst.Digest.String()
+			break
+		}
+	}
+	require.NotEmpty(amd64Hex, "linux/amd64 digest must be present in the sample image set")
+
+	// Sign the inner platform manifest by its digest — this is the standard cosign workflow
+	// used by Kubernetes clusters with sigstoreSigned admission policy, where the runtime
+	// resolves the manifest list and then looks for sha256-<inner-digest>.sig.
+	innerSrcRef := fmt.Sprintf("%s/%s@%s", srcRegistry, imageName, amd64Full)
+	require.NoError(tu.CosignImage(innerSrcRef, keyFile))
+
+	// Set up the Helm chart referencing the source images.
+	chartDir := sb.TempFile()
+	require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+		map[string]interface{}{"ServerURL": srcRegistry, "Images": images, "Name": chartName, "Version": version, "RepositoryURL": srcRegistry},
+	))
+
+	// Wrap with --fetch-artifacts. PullImageSignatures should detect sha256-<amd64-hex>.sig
+	// on the source and save it to latest.linux_amd64.sig/ inside the bundle.
+	tempWrapFile := sb.TempFile() + ".wrap.tgz"
+	l1 := logrus.NewSectionLogger()
+	l1.SetWriter(io.Discard)
+	_, err = wrap.Chart(chartDir,
+		wrap.WithLogger(l1),
+		wrap.WithUsePlainHTTP(true),
+		wrap.WithFetchArtifacts(true),
+		wrap.WithOutputFile(tempWrapFile),
+	)
+	require.NoError(err)
+
+	// Extract the bundle and confirm the per-arch sig OCI layout was captured.
+	// With the new per-arch storage model the sig is stored at <tag>.<arch>.sig/ rather than
+	// the shared <tag>.sig/ (which is reserved for the manifest-list level signature).
+	wrapExtractDir := sb.TempFile()
+	require.NoError(utils.Untar(tempWrapFile, wrapExtractDir, utils.TarConfig{StripComponents: 1}))
+	sigArtifactDir := filepath.Join(wrapExtractDir, "artifacts", "images", chartName, imageName, "latest.linux_amd64.sig")
+	require.DirExists(sigArtifactDir, "per-arch sig artifact must be present in the wrap bundle at latest.linux_amd64.sig/")
+
+	// Unwrap to the target registry. PushImageSignatures should push the per-arch sig stored
+	// at latest.linux_amd64.sig/ under sha256-<amd64-inner-digest>.sig on the target.
+	l2 := logrus.NewSectionLogger()
+	l2.SetWriter(io.Discard)
+	_, err = unwrap.Chart(tempWrapFile, targetRegistry, "",
+		unwrap.WithLogger(l2),
+		unwrap.WithUsePlainHTTP(true),
+		unwrap.WithSayYes(true),
+	)
+	require.NoError(err)
+
+	// With PreserveRepository=true (default) the source namespace is appended to the target.
+	targetImageRepo := fmt.Sprintf("%s/%s/%s/%s", serverURL, dstNS, srcNS, imageName)
+
+	tags, err := artifacts.ListTags(context.Background(), targetImageRepo, crane.Insecure)
+	require.NoError(err)
+
+	expectedSigTag := fmt.Sprintf("sha256-%s.sig", amd64Hex)
+	assert.Contains(tags, expectedSigTag,
+		"sig tag for the linux/amd64 inner manifest digest must exist on the target registry after unwrap")
+
+	// Confirm cosign can validate the signature on the target using the inner digest reference.
+	innerTargetRef := fmt.Sprintf("%s/%s/%s/%s@%s", serverURL, dstNS, srcNS, imageName, amd64Full)
+	assert.NoError(tu.CosignVerifyImage(innerTargetRef, pubKey),
+		"cosign signature validation must succeed for the inner manifest on the target registry")
 }

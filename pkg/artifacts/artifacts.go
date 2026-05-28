@@ -139,6 +139,25 @@ func getImageArtifactsDir(image *imagelock.ChartImage, destDir string, suffix st
 	return filepath.Join(destDir, image.Chart, image.Name, fmt.Sprintf("%s.%s", imgTag, suffix)), nil
 }
 
+// sanitizeArch converts an arch string (e.g. "linux/amd64") into a filesystem-safe
+// segment by replacing "/" with "_" (e.g. "linux_amd64").
+func sanitizeArch(arch string) string {
+	return strings.ReplaceAll(arch, "/", "_")
+}
+
+// getImageArchArtifactsDir returns the local path for a per-architecture artifact.
+// The path follows the convention <destDir>/<chart>/<name>/<tag>.<sanitizedArch>.<suffix>/,
+// keeping each platform's artifact distinct from the manifest-list level artifact.
+func getImageArchArtifactsDir(image *imagelock.ChartImage, destDir string, suffix string, arch string, opts ...Option) (string, error) {
+	imgTag, _, err := getImageTagAndDigest(image.Image, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse image reference: %w", err)
+	}
+
+	return filepath.Join(destDir, image.Chart, image.Name,
+		fmt.Sprintf("%s.%s.%s", imgTag, sanitizeArch(arch), suffix)), nil
+}
+
 func pushArtifact(ctx context.Context, image string, dest string, tagSuffix string, opts ...Option) (string, error) {
 	cfg := NewConfig(opts...)
 	if !utils.FileExists(dest) {
@@ -176,6 +195,44 @@ func pushArtifact(ctx context.Context, image string, dest string, tagSuffix stri
 	newImg := fmt.Sprintf("%s:%s", repo, tag)
 
 	switch t := img.(type) {
+	case v1.Image:
+		return tag, crane.Push(t, newImg, craneOpts...)
+	default:
+		return "", fmt.Errorf("unsupported image type %T", t)
+	}
+}
+
+// pushArtifactWithHex pushes the local oci-layout artifact at dest to the registry under the
+// tag sha256-<hex>.<tagSuffix>, using the provided hex directly rather than resolving the
+// image reference against the remote registry. This is used to push signatures under
+// content-addressed (inner platform manifest) digest tags that remain stable across registries.
+func pushArtifactWithHex(ctx context.Context, image string, dest string, hex string, tagSuffix string, opts ...Option) (string, error) {
+	cfg := NewConfig(opts...)
+	if !utils.FileExists(dest) {
+		return "", ErrLocalArtifactNotExist
+	}
+	craneOpts := []crane.Option{crane.WithContext(ctx)}
+
+	if cfg.Auth.Password != "" && cfg.Auth.Username != "" {
+		craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{
+			Username: cfg.Auth.Username,
+			Password: cfg.Auth.Password,
+		}))
+	}
+	repo, err := getImageRepository(image)
+	if err != nil {
+		return "", fmt.Errorf("failed to get image repository: %w", err)
+	}
+
+	tag := fmt.Sprintf("sha256-%s.%s", hex, tagSuffix)
+	artifact, err := loadImage(dest)
+	if err != nil {
+		return "", err
+	}
+
+	newImg := fmt.Sprintf("%s:%s", repo, tag)
+
+	switch t := artifact.(type) {
 	case v1.Image:
 		return tag, crane.Push(t, newImg, craneOpts...)
 	default:
@@ -231,16 +288,50 @@ func PushImageMetadata(ctx context.Context, image *imagelock.ChartImage, destDir
 	return pushAssetMetadata(ctx, imageRef, dir, opts...)
 }
 
-// PushImageSignatures pushes a oci-layout directory to the registry as the image signature
+// PushImageSignatures pushes all locally stored cosign signatures for an image to the
+// target registry. It handles two separate cases independently:
+//
+//  1. Manifest-list level signature: if <tag>.sig/ exists locally, it is pushed under the
+//     sha256-<resolved-target-manifest-list-digest>.sig tag.
+//
+//  2. Per-architecture inner manifest signatures: for each platform digest in image.Digests,
+//     if <tag>.<sanitizedArch>.sig/ exists locally (e.g. latest.linux_amd64.sig/), it is
+//     pushed under sha256-<inner-digest>.sig.
+//
+// Returns ErrLocalArtifactNotExist when no local signature exists for any of the above cases.
 func PushImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
 	imageRef := image.Image
-	dir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
+	pushedAny := false
+
+	// 1. Push manifest-list level sig under the resolved target manifest-list digest tag.
+	manifestListDir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
-	_, err = pushArtifact(ctx, imageRef, dir, "sig", opts...)
-	if err != nil {
-		return err
+	if utils.FileExists(manifestListDir) {
+		if _, err := pushArtifact(ctx, imageRef, manifestListDir, "sig", opts...); err != nil {
+			return err
+		}
+		pushedAny = true
+	}
+
+	// 2. Push each per-architecture inner manifest sig under sha256-<inner-digest>.sig.
+	// Each arch sig has its own correct payload digest, so it is only pushed under the tag
+	// that matches its payload — no cross-platform sig duplication.
+	for _, dgst := range image.Digests {
+		archDir, err := getImageArchArtifactsDir(image, destDir, "sig", dgst.Arch, opts...)
+		if err != nil || !utils.FileExists(archDir) {
+			continue
+		}
+		innerHex := dgst.Digest.Hex()
+		if _, err := pushArtifactWithHex(ctx, imageRef, archDir, innerHex, "sig", opts...); err != nil {
+			return err
+		}
+		pushedAny = true
+	}
+
+	if !pushedAny {
+		return ErrLocalArtifactNotExist
 	}
 	return nil
 }
@@ -341,16 +432,84 @@ func pullAssetMetadata(ctx context.Context, imageRef string, dir string, opts ..
 	return nil
 }
 
-// PullImageSignatures pulls the image signature and stores it locally as an oci-layout
+// pullArchSignatures pulls the per-architecture inner manifest signatures for all platforms
+// listed in image.Digests, saving each to <tag>.<sanitizedArch>.sig/. It returns true when
+// at least one sig was saved successfully.
+func pullArchSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) bool {
+	cfg := NewConfig(opts...)
+	craneOpts := []crane.Option{crane.WithContext(ctx)}
+	if cfg.InsecureMode {
+		craneOpts = append(craneOpts, crane.Insecure)
+	}
+	if cfg.Auth.Password != "" && cfg.Auth.Username != "" {
+		craneOpts = append(craneOpts, crane.WithAuth(&authn.Basic{
+			Username: cfg.Auth.Username,
+			Password: cfg.Auth.Password,
+		}))
+	}
+	o := crane.GetOptions(craneOpts...)
+
+	repo, err := getImageRepository(image.Image)
+	if err != nil {
+		return false
+	}
+
+	foundAny := false
+	for _, dgst := range image.Digests {
+		innerHex := dgst.Digest.Hex()
+		tag := fmt.Sprintf("sha256-%s.sig", innerHex)
+
+		exists, err := TagExist(ctx, repo, tag, o)
+		if err != nil || !exists {
+			continue
+		}
+		archDir, err := getImageArchArtifactsDir(image, destDir, "sig", dgst.Arch, opts...)
+		if err != nil {
+			continue
+		}
+		rmt, err := imagelock.GetImageRemoteDescriptor(fmt.Sprintf("%s:%s", repo, tag), craneOpts...)
+		if err != nil {
+			continue
+		}
+		img, err := rmt.Image()
+		if err != nil {
+			continue
+		}
+		if err := saveImage(img, archDir); err != nil {
+			continue
+		}
+		foundAny = true
+	}
+	return foundAny
+}
+
+// PullImageSignatures pulls all available cosign signatures for an image and stores them
+// locally as OCI layouts. It handles two separate cases independently:
+//
+//  1. Manifest-list level signature: if sha256-<manifest-list-digest>.sig exists on the
+//     source, it is saved to <tag>.sig/.
+//
+//  2. Per-architecture inner manifest signatures: for each platform digest in image.Digests,
+//     if sha256-<inner-digest>.sig exists on the source, it is saved to
+//     <tag>.<sanitizedArch>.sig/ (e.g. latest.linux_amd64.sig/).
+//
+// Returns ErrTagDoesNotExist only when no signature at all was found.
 func PullImageSignatures(ctx context.Context, image *imagelock.ChartImage, destDir string, opts ...Option) error {
-	imageRef := image.Image
-	dir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
+	// 1. Manifest-list level sig → <tag>.sig/
+	manifestListDir, err := getImageArtifactsDir(image, destDir, "sig", opts...)
 	if err != nil {
 		return fmt.Errorf("failed to obtain signature location: %v", err)
 	}
-	_, err = pullArtifact(ctx, imageRef, dir, "sig", opts...)
-	if err != nil {
-		return err
+	_, primaryErr := pullArtifact(ctx, image.Image, manifestListDir, "sig", opts...)
+	if primaryErr != nil && primaryErr != ErrTagDoesNotExist {
+		return primaryErr
+	}
+
+	// 2. Per-architecture inner manifest sigs → <tag>.<arch>.sig/
+	archFound := pullArchSignatures(ctx, image, destDir, opts...)
+
+	if primaryErr != nil && !archFound {
+		return ErrTagDoesNotExist
 	}
 	return nil
 }
