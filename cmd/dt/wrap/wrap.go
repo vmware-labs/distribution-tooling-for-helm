@@ -36,6 +36,8 @@ type Auth struct {
 type Config struct {
 	Context               context.Context
 	AnnotationsKey        string
+	ImageReplacementKey   string
+	ImageReplacementValue string
 	UsePlainHTTP          bool
 	Insecure              bool
 	Platforms             []string
@@ -159,6 +161,22 @@ func WithContext(ctx context.Context) func(c *Config) {
 	}
 }
 
+// WithImageReplacementKey provides a custom annotation key to use when
+// reading/writing the list of images
+func WithImageReplacementKey(str string) func(c *Config) {
+	return func(c *Config) {
+		c.ImageReplacementKey = str
+	}
+}
+
+// WithImageReplacementKey provides a custom annotation key to use when
+// reading/writing the list of images
+func WithImageReplacementValue(str string) func(c *Config) {
+	return func(c *Config) {
+		c.ImageReplacementValue = str
+	}
+}
+
 // GetTemporaryDirectory returns the temporary directory of the WrapConfig
 func (c *Config) GetTemporaryDirectory() (string, error) {
 	if c.TempDirectory != "" {
@@ -198,11 +216,13 @@ func WithTempDirectory(tempDir string) func(c *Config) {
 // NewConfig returns a new WrapConfig with default values
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
-		Context:        context.Background(),
-		TempDirectory:  "",
-		logger:         logrus.NewSectionLogger(),
-		AnnotationsKey: imagelock.DefaultAnnotationsKey,
-		Platforms:      []string{},
+		Context:               context.Background(),
+		TempDirectory:         "",
+		logger:                logrus.NewSectionLogger(),
+		AnnotationsKey:        imagelock.DefaultAnnotationsKey,
+		ImageReplacementKey:   "",
+		ImageReplacementValue: "",
+		Platforms:             []string{},
 	}
 
 	for _, opt := range opts {
@@ -331,6 +351,8 @@ func validateWrapLock(wrap wrapping.Wrap, cfg *Config) error {
 			func() error {
 				return lock.Create(chart.RootDir(), lockFile, silent.NewLogger(),
 					imagelock.WithAnnotationsKey(cfg.AnnotationsKey),
+					imagelock.WithImageReplacementKey(cfg.ImageReplacementKey),
+					imagelock.WithImageReplacementValue(cfg.ImageReplacementValue),
 					imagelock.WithSkipImageDigestResolution(cfg.SkipPullImages),
 					imagelock.WithInsecure(cfg.Insecure),
 					imagelock.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
@@ -478,6 +500,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var fetchArtifacts bool
 	var carvelize bool
 	var skipPullImages bool
+	var imageReplacementKey string
+	var imageReplacementValue string
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
@@ -509,6 +533,8 @@ This command will pull all the container images and wrap it into a single tarbal
 			wrappedChart, err := wrapChart(chartPath,
 				WithLogger(parentLog),
 				WithAnnotationsKey(cfg.AnnotationsKey), WithContext(ctx),
+				WithImageReplacementKey(imageReplacementKey),
+				WithImageReplacementValue(imageReplacementValue),
 				WithPlatforms(platforms), WithVersion(version),
 				WithFetchArtifacts(fetchArtifacts), WithCarvelize(carvelize),
 				WithUsePlainHTTP(cfg.UsePlainHTTP), WithInsecure(cfg.Insecure),
@@ -533,6 +559,9 @@ This command will pull all the container images and wrap it into a single tarbal
 
 	cmd.PersistentFlags().StringVar(&version, "version", version, "when wrapping remote Helm charts from OCI, version to request")
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "generate a tar.gz with the output of the pull operation")
+	cmd.PersistentFlags().StringVar(&imageReplacementKey, "image-replacement-key", outputFile, "generate a tar.gz with the output of the pull operation")
+	cmd.PersistentFlags().StringVar(&imageReplacementValue, "image-replacement-value", outputFile, "generate a tar.gz with the output of the pull operation")
+
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file")
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")

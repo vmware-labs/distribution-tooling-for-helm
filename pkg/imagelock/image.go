@@ -130,9 +130,16 @@ func GetImagesFromChartAnnotations(c *chart.Chart, cfg *Config) (ImageList, erro
 		return images, fmt.Errorf("failed to parse images metadata: %v", err)
 	}
 
+	imageReplacementKey := cfg.ImageReplacementKey
+	imageReplacementValue := cfg.ImageReplacementValue
+
 	// Fill up chart ownership
 	for _, img := range images {
 		img.Chart = c.Name()
+
+		if imageReplacementKey != "" && imageReplacementValue != "" {
+			img.Image = strings.ReplaceAll(img.Image, imageReplacementKey, imageReplacementValue)
+		}
 	}
 
 	return images, nil
