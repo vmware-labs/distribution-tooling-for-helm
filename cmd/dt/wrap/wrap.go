@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/carvelize"
@@ -49,6 +50,8 @@ type Config struct {
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 	OutputFile            string
+	PreserveDigest        bool
+	PreservedSourceRef    string
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
@@ -135,6 +138,25 @@ func WithFetchArtifacts(fetchArtifacts bool) func(c *Config) {
 func WithSkipPullImages(skipPullImages bool) func(c *Config) {
 	return func(c *Config) {
 		c.SkipPullImages = skipPullImages
+	}
+}
+
+// WithPreserveDigest configures the PreserveDigest of the WrapConfig
+func WithPreserveDigest(preserveDigest bool) func(c *Config) {
+	return func(c *Config) {
+		c.PreserveDigest = preserveDigest
+	}
+}
+
+// WithPreservedSourceRef configures the PreservedSourceRef of the WrapConfig.
+// When set, --preserve-digest captures the pristine chart artifact from this
+// oci:// reference instead of inspecting inputPath, letting a caller that has
+// already resolved inputPath to a local .tgz for other purposes (e.g.
+// dependency inspection) still get true manifest byte-preservation, without a
+// second, redundant full-chart download through ResolveInputChartPath.
+func WithPreservedSourceRef(ref string) func(c *Config) {
+	return func(c *Config) {
+		c.PreservedSourceRef = ref
 	}
 }
 
@@ -377,6 +399,7 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 				chartutils.WithInsecureMode(cfg.Insecure),
+				chartutils.WithPreserveDigest(cfg.PreserveDigest),
 			); err != nil {
 				return childLog.Failf("%v", err)
 			}
@@ -385,6 +408,64 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 		})
 	}
 	return nil
+}
+
+// validatePreserveDigest rejects flag/input combinations that are
+// contradictory when PreserveDigest is requested: digest preservation
+// requires an already-packaged chart artifact (there is no canonical
+// byte-serialization of a source directory), the full unfiltered manifest
+// list (platform filtering defeats the point), and unmodified chart content
+// (Carvelize writes new files into the chart).
+func validatePreserveDigest(inputPath string, cfg *Config) error {
+	if !cfg.PreserveDigest {
+		return nil
+	}
+	if len(cfg.Platforms) > 0 {
+		return fmt.Errorf("cannot combine --preserve-digest with --platforms: digest preservation requires the full, unfiltered manifest list")
+	}
+	if cfg.Carvelize {
+		return fmt.Errorf("cannot combine --preserve-digest with --add-carvel-bundle: it would modify chart content, defeating byte preservation")
+	}
+	if cfg.PreservedSourceRef != "" || chartutils.IsRemoteChart(inputPath) {
+		return nil
+	}
+	if isTar, _ := utils.IsTarFile(inputPath); isTar {
+		return nil
+	}
+	return fmt.Errorf("cannot preserve digest: input %q must be an already-packaged chart (a .tgz file or an oci:// reference), not a directory", inputPath)
+}
+
+// capturePreservedChart saves the original, byte-for-byte chart artifact into
+// the wrap bundle for later use by `dt unwrap --preserve-digest`, so the
+// destination chart never goes through an untar/copy/re-tar round trip (or,
+// for oci:// sources, a re-push through Helm's registry client, which always
+// rebuilds the manifest with a fresh creation-time annotation).
+func capturePreservedChart(inputPath string, version string, wrap wrapping.Wrap, cfg *Config) error {
+	sourceRef := cfg.PreservedSourceRef
+	if sourceRef == "" && chartutils.IsRemoteChart(inputPath) {
+		sourceRef = inputPath
+	}
+
+	if sourceRef != "" {
+		// sourceRef is already resolved to a concrete chart version by the
+		// time this runs (chart.Version() reflects what ResolveInputChartPath
+		// actually fetched, or what the caller supplied via
+		// PreservedSourceRef), so re-fetching that exact tag via a raw OCI
+		// artifact copy is consistent with what was already downloaded.
+		ref := fmt.Sprintf("%s:%s", strings.TrimPrefix(sourceRef, "oci://"), version)
+		chartOCIDir := filepath.Join(wrap.RootDir(), "chart.oci")
+		if _, err := artifacts.PullVerbatim(cfg.Context, ref, chartOCIDir,
+			artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			artifacts.WithInsecureMode(cfg.Insecure)); err != nil {
+			return fmt.Errorf("failed to fetch original chart artifact %q: %w", ref, err)
+		}
+		return nil
+	}
+
+	// Local .tgz input (validated by validatePreserveDigest): carry the exact
+	// original bytes into the bundle untouched.
+	chartTgzPath := filepath.Join(wrap.RootDir(), "chart.tgz")
+	return utils.CopyFile(inputPath, chartTgzPath)
 }
 
 func wrapChart(inputPath string, opts ...Option) (string, error) {
@@ -396,6 +477,10 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 	l := parentLog.StartSection(fmt.Sprintf("Wrapping Helm chart %q", inputPath))
 
 	subCfg := NewConfig(append(opts, WithLogger(l))...)
+
+	if err := validatePreserveDigest(inputPath, cfg); err != nil {
+		return "", l.Failf("%w", err)
+	}
 
 	chartPath, err := ResolveInputChartPath(inputPath, subCfg)
 	if err != nil {
@@ -415,6 +500,12 @@ func wrapChart(inputPath string, opts ...Option) (string, error) {
 	}
 
 	chart := wrap.Chart()
+
+	if cfg.PreserveDigest {
+		if err = capturePreservedChart(inputPath, chart.Version(), wrap, subCfg); err != nil {
+			return "", l.Failf("failed to preserve chart digest: %w", err)
+		}
+	}
 
 	if cfg.ShouldFetchChartArtifacts(inputPath) {
 		chartURL := fmt.Sprintf("%s:%s", inputPath, chart.Version())
@@ -478,6 +569,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var fetchArtifacts bool
 	var carvelize bool
 	var skipPullImages bool
+	var preserveDigest bool
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
@@ -515,6 +607,7 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
 				WithSkipPullImages(skipPullImages),
+				WithPreserveDigest(preserveDigest),
 			)
 			if err != nil {
 				if _, ok := err.(*dtlog.LoggedError); ok {
@@ -537,6 +630,10 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "skip pulling images when wrapping a Helm Chart")
+	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
+		"transfer the chart and its images byte-for-byte so their digests are unchanged. "+
+			"Requires an already-packaged chart (a .tgz file or an oci:// reference); "+
+			"incompatible with --platforms and --add-carvel-bundle")
 
 	return cmd
 }
@@ -552,6 +649,10 @@ func wrapContainer(imageRef string, opts ...Option) (string, error) {
 	ctx := cfg.Context
 	l := cfg.GetLogger().StartSection(fmt.Sprintf("Wrapping container image %q", imageRef))
 	cfg.logger = l
+
+	if cfg.PreserveDigest && len(cfg.Platforms) > 0 {
+		return "", l.Failf("cannot combine --preserve-digest with --platforms: digest preservation requires the full, unfiltered manifest list")
+	}
 
 	tmpDir, err := cfg.GetTemporaryDirectory()
 	if err != nil {
@@ -606,6 +707,7 @@ func wrapContainer(imageRef string, opts ...Option) (string, error) {
 				chartutils.WithArtifactsDir(wc.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 				chartutils.WithInsecureMode(cfg.Insecure),
+				chartutils.WithPreserveDigest(cfg.PreserveDigest),
 			)
 		})
 		if err != nil {
@@ -646,6 +748,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	var outputFile string
 	var platforms []string
 	var fetchArtifacts bool
+	var preserveDigest bool
 
 	cmd := &cobra.Command{
 		Use:   "wrap OCI_REF",
@@ -687,6 +790,7 @@ with an Images.lock file into a single tarball.`,
 				WithInsecure(cfg.Insecure),
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
+				WithPreserveDigest(preserveDigest),
 			)
 			if err != nil {
 				if _, ok := err.(*dtlog.LoggedError); ok {
@@ -705,6 +809,8 @@ with an Images.lock file into a single tarball.`,
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "output tarball path (defaults to <name>-<tag>.container.wrap.tgz)")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file (e.g. linux/amd64,linux/arm64)")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
+	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
+		"transfer the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged. Incompatible with --platforms")
 
 	return cmd
 }

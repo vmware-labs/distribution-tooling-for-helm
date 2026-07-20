@@ -38,6 +38,71 @@ func getArtifactsDir(defaultValue string, cfg *Configuration) string {
 	return defaultValue
 }
 
+// pullImageVerbatim pulls imgDesc's full, unfiltered manifest/index exactly as
+// served upstream, then cross-checks it against the digests recorded in
+// Images.lock. Used when Configuration.PreserveDigest is set.
+func pullImageVerbatim(ctx context.Context, imgDesc *imagelock.ChartImage, imagesDir string, cfg *Configuration, p dtlog.ProgressBar) error {
+	select {
+	// Early abort if the context is done
+	case <-ctx.Done():
+		return fmt.Errorf("cancelled execution")
+	default:
+	}
+	p.Add(len(imgDesc.Digests))
+	p.UpdateTitle(fmt.Sprintf("Saving image %s/%s %s (verbatim)", imgDesc.Chart, imgDesc.Name, imgDesc.Image))
+	err := utils.ExecuteWithRetry(cfg.MaxRetries, func(try int, prevErr error) error {
+		if try > 0 {
+			if ctx.Err() != nil {
+				return prevErr
+			}
+			cfg.Log.Debugf("Failed to pull image: %v", prevErr)
+			p.Warnf("Failed to pull image: retrying %d/%d", try, cfg.MaxRetries)
+		}
+		desc, pullErr := artifacts.PullVerbatim(ctx, imgDesc.Image, verbatimImageDir(imagesDir, imgDesc),
+			artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			artifacts.WithInsecureMode(cfg.InsecureMode))
+		if pullErr != nil {
+			return pullErr
+		}
+		return artifacts.VerifyLockedDigests(imgDesc, desc)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to pull image %q: %w", imgDesc.Name, err)
+	}
+	return nil
+}
+
+// pullImagePerPlatform pulls each of imgDesc's recorded per-platform digests
+// individually. Used when Configuration.PreserveDigest is not set.
+func pullImagePerPlatform(ctx context.Context, imgDesc *imagelock.ChartImage, imagesDir string, cfg *Configuration, o crane.Options, p dtlog.ProgressBar) error {
+	for _, dgst := range imgDesc.Digests {
+		select {
+		// Early abort if the context is done
+		case <-ctx.Done():
+			return fmt.Errorf("cancelled execution")
+		default:
+			p.Add(1)
+			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s %s (%s)", imgDesc.Chart, imgDesc.Name, imgDesc.Image, dgst.Arch))
+			err := utils.ExecuteWithRetry(cfg.MaxRetries, func(try int, prevErr error) error {
+				if try > 0 {
+					// The context is done, so we are not retrying, just return the error
+					if ctx.Err() != nil {
+						return prevErr
+					}
+					cfg.Log.Debugf("Failed to pull image: %v", prevErr)
+					p.Warnf("Failed to pull image: retrying %d/%d", try, cfg.MaxRetries)
+				}
+				_, pullErr := pullImage(imgDesc.Image, dgst, imagesDir, o)
+				return pullErr
+			})
+			if err != nil {
+				return fmt.Errorf("failed to pull image %q: %w", imgDesc.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
 // PullImages downloads the list of images specified in the provided ImagesLock
 func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) error {
 
@@ -67,36 +132,16 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 
 	p, _ := cfg.ProgressBar.WithTotal(getNumberOfArtifacts(lock.Images)).UpdateTitle("Pulling Images").Start()
 	defer p.Stop()
-	maxRetries := cfg.MaxRetries
 
 	for _, imgDesc := range lock.Images {
-		for _, dgst := range imgDesc.Digests {
-			select {
-			// Early abort if the context is done
-			case <-ctx.Done():
-				return fmt.Errorf("cancelled execution")
-			default:
-				p.Add(1)
-				p.UpdateTitle(fmt.Sprintf("Saving image %s/%s %s (%s)", imgDesc.Chart, imgDesc.Name, imgDesc.Image, dgst.Arch))
-				err := utils.ExecuteWithRetry(maxRetries, func(try int, prevErr error) error {
-					if try > 0 {
-						// The context is done, so we are not retrying, just return the error
-						if ctx.Err() != nil {
-							return prevErr
-						}
-						l.Debugf("Failed to pull image: %v", prevErr)
-						p.Warnf("Failed to pull image: retrying %d/%d", try, maxRetries)
-					}
-					if _, err := pullImage(imgDesc.Image, dgst, imagesDir, o); err != nil {
-						return err
-					}
-					return nil
-				})
-
-				if err != nil {
-					return fmt.Errorf("failed to pull image %q: %w", imgDesc.Name, err)
-				}
-			}
+		var err error
+		if cfg.PreserveDigest {
+			err = pullImageVerbatim(ctx, imgDesc, imagesDir, cfg, p)
+		} else {
+			err = pullImagePerPlatform(ctx, imgDesc, imagesDir, cfg, o, p)
+		}
+		if err != nil {
+			return err
 		}
 		if cfg.FetchArtifacts {
 			p.UpdateTitle(fmt.Sprintf("Saving image %s/%s signature", imgDesc.Chart, imgDesc.Name))
@@ -165,7 +210,13 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					l.Debugf("Failed to push image: %v", prevErr)
 					p.Warnf("Failed to push image: retrying %d/%d", try, maxRetries)
 				}
-				if err := pushImage(imgData, imagesDir, l, o); err != nil {
+				if cfg.PreserveDigest {
+					if err := artifacts.PushVerbatim(ctx, verbatimImageDir(imagesDir, imgData), imgData.Image,
+						artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+						artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
+						return err
+					}
+				} else if err := pushImage(imgData, imagesDir, l, o); err != nil {
 					return err
 				}
 				if err := artifacts.PushImageSignatures(context.Background(),
@@ -289,6 +340,15 @@ func pushImage(imgData *imagelock.ChartImage, imagesDir string, log dtlog.Logger
 
 func getImageLayoutDir(imagesDir string, dgst imagelock.DigestInfo) string {
 	return filepath.Join(imagesDir, fmt.Sprintf("%s.layout", dgst.Digest.Encoded()))
+}
+
+// verbatimImageDir returns the local OCI layout directory used to stage a
+// digest-preserving (PreserveDigest) pull/push of the given image. Unlike
+// getImageLayoutDir, this is keyed by the image's chart/name rather than a
+// per-platform digest, since a digest-preserving transfer captures the whole
+// manifest/index in one shot, before any digest is known locally.
+func verbatimImageDir(imagesDir string, imgDesc *imagelock.ChartImage) string {
+	return filepath.Join(imagesDir, "verbatim", imgDesc.Chart, imgDesc.Name)
 }
 
 func pullImage(image string, digest imagelock.DigestInfo, imagesDir string, o crane.Options) (string, error) {
