@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
@@ -50,6 +51,7 @@ type Config struct {
 	ContainerRegistryAuth Auth
 	ValuesFiles           []string
 	PreserveRepository    bool
+	PreserveDigest        bool
 
 	// Interactive enables interacting with the user
 	Interactive bool
@@ -228,6 +230,13 @@ func WithPreserveRepository(preserve bool) func(c *Config) {
 	}
 }
 
+// WithPreserveDigest configures the PreserveDigest of the Config
+func WithPreserveDigest(preserveDigest bool) func(c *Config) {
+	return func(c *Config) {
+		c.PreserveDigest = preserveDigest
+	}
+}
+
 // NewConfig returns a new WrapConfig with default values
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
@@ -288,6 +297,11 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		l.Debugf("Temporary assets kept at %q", tempDir)
 	}
 
+	if cfg.PreserveDigest && !cfg.SkipImageRelocation {
+		l.Debugf("--preserve-digest implies --skip-image-relocation: no chart content will be rewritten")
+		cfg.SkipImageRelocation = true
+	}
+
 	chartPath, err := wrap.ResolveInputChartPath(
 		inputChart,
 		wrap.NewConfig(
@@ -327,7 +341,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		}
 		if askYesNoQuestion(l.PrefixText("Do you want to push the wrapped images to the OCI registry?"), cfg) {
 			if err := l.Section("Pushing Images", func(subLog dtlog.SectionLogger) error {
-				return pushChartImagesAndVerify(ctx, wrap, NewConfig(append(opts, WithLogger(subLog))...))
+				return pushChartImagesAndVerify(ctx, wrap, registryURL, NewConfig(append(opts, WithLogger(subLog))...))
 			}); err != nil {
 				return "", l.Failf("Failed to push images: %w", err)
 			}
@@ -430,13 +444,25 @@ func unwrapContainer(inputContainer, registryURL string, opts ...Option) (string
 	return "", nil
 }
 
-func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Config) error {
+func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, registryURL string, cfg *Config) error {
 	lockFile := wrap.LockFilePath()
 
 	l := cfg.GetLogger()
 	if !utils.FileExists(lockFile) {
 		return fmt.Errorf("lock file %q does not exist", lockFile)
 	}
+
+	if cfg.PreserveDigest {
+		// --preserve-digest forces SkipImageRelocation, which also skips
+		// relocating Images.lock itself (both live behind the same gate in
+		// relocator.relocateChart). Images still need to land at
+		// registryURL, so relocate the lock file directly here, mirroring
+		// what unwrapContainer already does unconditionally.
+		if err := relocator.RelocateLockFile(lockFile, strings.TrimPrefix(registryURL, "oci://"), cfg.PreserveRepository); err != nil {
+			return fmt.Errorf("failed to relocate Images.lock file: %w", err)
+		}
+	}
+
 	if err := push.ChartImages(
 		wrap,
 		wrap.ImagesDir(),
@@ -446,10 +472,22 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, cfg *Conf
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
 		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+		chartutils.WithPreserveDigest(cfg.PreserveDigest),
 	); err != nil {
 		return err
 	}
 	l.Infof("All images pushed successfully")
+
+	if cfg.PreserveDigest {
+		// The chart's own declared image references were deliberately left
+		// unrelocated to preserve its byte-for-byte digest, so they no
+		// longer match the Images.lock just relocated above. Digest
+		// correctness against the source was already checked at pull time
+		// (pullImageVerbatim -> VerifyLockedDigests), so the usual
+		// values.yaml-vs-Images.lock cross-check doesn't apply here.
+		return nil
+	}
+
 	if err := l.ExecuteStep("Verifying Images.lock", func() error {
 
 		return verify.Lock(wrap.ChartDir(), lockFile, verify.Config{
@@ -480,7 +518,8 @@ func pushImages(ctx context.Context, wrap wrapping.WrapContainer, cfg *Config) e
 		chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
-		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password))
+		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+		chartutils.WithPreserveDigest(cfg.PreserveDigest))
 }
 
 func getImageList(wrap wrapping.Lockable, l dtlog.SectionLogger) imagelock.ImageList {
@@ -516,6 +555,10 @@ func normalizeOCIURL(url string) string {
 }
 
 func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg *Config) error {
+	if cfg.PreserveDigest {
+		return pushPreservedChart(ctx, wrap, pushChartURL, cfg)
+	}
+
 	var tmpDir, dir string
 	var err error
 	tmpDir, err = cfg.GetTemporaryDirectory()
@@ -559,6 +602,58 @@ func pushChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg
 	return nil
 }
 
+// pushPreservedChart pushes the chart artifact captured by
+// `dt wrap --preserve-digest` (see capturePreservedChart in cmd/dt/wrap)
+// exactly as stored, bypassing Helm's push action entirely when a raw OCI
+// manifest was captured. This matters because Helm's own registry.Client.Push
+// always stamps a fresh creation-time annotation into a freshly-built
+// manifest on every push, so pushing through it can never reproduce the
+// source's original manifest digest, even given byte-identical tgz content.
+func pushPreservedChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL string, cfg *Config) error {
+	chart := wrap.Chart()
+	fullChartURL := fmt.Sprintf("%s/%s", pushChartURL, chart.Name())
+	dstRef := fmt.Sprintf("%s:%s", strings.TrimPrefix(fullChartURL, "oci://"), chart.Version())
+
+	chartOCIDir := filepath.Join(wrap.RootDir(), "chart.oci")
+	chartTgzPath := filepath.Join(wrap.RootDir(), "chart.tgz")
+
+	switch {
+	case utils.FileExists(chartOCIDir):
+		// Source was oci://: push the exact original manifest+config+layer
+		// bytes, reproducing the source's manifest digest.
+		if err := artifacts.PushVerbatim(ctx, chartOCIDir, dstRef,
+			artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
+			artifacts.WithInsecureMode(cfg.Insecure)); err != nil {
+			return fmt.Errorf("failed to push preserved chart artifact: %w", err)
+		}
+	case utils.FileExists(chartTgzPath):
+		// Source was a local .tgz: there is no pre-existing OCI manifest to
+		// preserve, but the tgz blob itself is the pristine original bytes.
+		tmpDir, err := cfg.GetTemporaryDirectory()
+		if err != nil {
+			return fmt.Errorf("failed to get temp dir: %w", err)
+		}
+		if err := artifacts.PushChart(chartTgzPath, pushChartURL,
+			artifacts.WithInsecure(cfg.Insecure),
+			artifacts.WithPlainHTTP(cfg.UsePlainHTTP),
+			artifacts.WithRegistryAuth(cfg.Auth.Username, cfg.Auth.Password),
+			artifacts.WithTempDir(tmpDir),
+		); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf(
+			"bundle %q does not contain a preserved chart artifact; re-run \"dt wrap --preserve-digest\" to produce a compatible bundle",
+			wrap.RootDir())
+	}
+
+	metadataArtifactDir := filepath.Join(chart.RootDir(), artifacts.HelmChartArtifactMetadataDir)
+	if utils.FileExists(metadataArtifactDir) {
+		return artifacts.PushChartMetadata(ctx, fmt.Sprintf("%s:%s", fullChartURL, chart.Version()), metadataArtifactDir, artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password))
+	}
+	return nil
+}
+
 // NewCmd returns a new unwrap command
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
@@ -567,6 +662,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		version             string
 		skipImageRelocation bool
 		skipPullImages      bool
+		preserveDigest      bool
 	)
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
@@ -603,6 +699,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithValuesFiles(valuesFiles...),
 				WithSkipImageRelocation(skipImageRelocation),
 				WithSkipPullImages(skipPullImages),
+				WithPreserveDigest(preserveDigest),
 			)
 			if err != nil {
 				return err
@@ -623,6 +720,9 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
+	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
+		"push the chart and its images byte-for-byte so their digests are unchanged. "+
+			"Implies --skip-image-relocation, and requires a bundle produced by \"dt wrap --preserve-digest\"")
 
 	return cmd
 }
@@ -630,6 +730,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 // NewContainerCmd returns a new unwrap command for container images
 func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	var sayYes bool
+	var preserveDigest bool
 	cmd := &cobra.Command{
 		Use:   "unwrap FILE OCI_REF",
 		Short: "Unwraps a wrapped container image",
@@ -659,6 +760,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 				WithTempDirectory(tempDir),
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
 				WithInteractive(true),
+				WithPreserveDigest(preserveDigest),
 			)
 			if err != nil {
 				return err
@@ -670,6 +772,8 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
+	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
+		"push the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged")
 
 	return cmd
 }

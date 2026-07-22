@@ -28,6 +28,7 @@ type Configuration struct {
 	Auth               Auth
 	ValuesFiles        []string
 	PreserveRepository bool
+	PreserveDigest     bool
 }
 
 // WithInsecureMode configures Insecure transport
@@ -131,5 +132,14 @@ func WithValuesFiles(files ...string) func(cfg *Configuration) {
 func WithPreserveRepository(preserve bool) func(cfg *Configuration) {
 	return func(cfg *Configuration) {
 		cfg.PreserveRepository = preserve
+	}
+}
+
+// WithPreserveDigest configures whether images are pulled/pushed byte-for-byte
+// (full, unfiltered manifest/index, no reconstruction) instead of being
+// rebuilt from the per-platform digests recorded in Images.lock
+func WithPreserveDigest(preserve bool) func(cfg *Configuration) {
+	return func(cfg *Configuration) {
+		cfg.PreserveDigest = preserve
 	}
 }

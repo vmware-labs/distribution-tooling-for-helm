@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
@@ -170,4 +171,62 @@ func (suite *ChartUtilsTestSuite) TestPushImages() {
 			}
 		})
 	})
+}
+
+// TestPullPushImagesPreserveDigest proves that with PreserveDigest set,
+// PullImages+PushImages round-trip a multi-arch image such that the
+// destination's manifest-list digest is identical to the source's - the
+// property the default pullImage/buildImageIndex path cannot guarantee (it
+// always reconstructs the index via mutate, forcing DockerManifestList media
+// type and re-deriving each entry rather than preserving the original bytes).
+func (suite *ChartUtilsTestSuite) TestPullPushImagesPreserveDigest() {
+	sb := suite.sb
+	require := suite.Require()
+
+	silentLog := log.New(io.Discard, "", 0)
+	s := httptest.NewServer(registry.New(registry.Logger(silentLog)))
+	defer s.Close()
+
+	u, err := url.Parse(s.URL)
+	require.NoError(err)
+	serverURL := u.Host
+
+	imageName := "test:mytag"
+
+	images, err := tu.AddSampleImagesToRegistry(imageName, serverURL)
+	require.NoError(err)
+
+	scenarioDir := "../../testdata/scenarios/complete-chart"
+	chartName := "test"
+	chartDir := sb.TempFile()
+	require.NoError(tu.RenderScenario(scenarioDir, chartDir,
+		map[string]any{"ServerURL": serverURL, "Images": images, "Name": chartName, "RepositoryURL": serverURL},
+	))
+
+	lock, err := imagelock.FromYAMLFile(filepath.Join(chartDir, "Images.lock"))
+	require.NoError(err)
+	require.NotEmpty(lock.Images)
+
+	srcRef := fmt.Sprintf("%s/%s", serverURL, imageName)
+	srcDigest, err := crane.Digest(srcRef)
+	require.NoError(err)
+
+	imagesDir := filepath.Join(chartDir, "images")
+	require.NoError(PullImages(lock, imagesDir, WithPreserveDigest(true)))
+
+	// Point the (in-memory) lock at a different destination namespace,
+	// mirroring how relocation computes push targets without touching the
+	// persisted Images.lock on disk.
+	dstNamespace := serverURL + "/dst-ns"
+	for _, img := range lock.Images {
+		img.Image = strings.Replace(img.Image, serverURL, dstNamespace, 1)
+	}
+
+	require.NoError(PushImages(lock, imagesDir, WithPreserveDigest(true)))
+
+	dstRef := fmt.Sprintf("%s/%s", dstNamespace, imageName)
+	dstDigest, err := crane.Digest(dstRef)
+	require.NoError(err)
+
+	require.Equal(srcDigest, dstDigest, "manifest-list digest must be preserved end to end")
 }
