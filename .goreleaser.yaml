@@ -17,7 +17,7 @@ builds:
     ldflags:
       - >-
         -X main.Version={{ .Tag }}
-        -X main.GitCommit={{ .Commit }}
+        -X main.Commit={{ .Commit }}
         -X main.BuildDate={{ .Date }}
 archives:
   - builds:
