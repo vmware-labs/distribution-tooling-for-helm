@@ -27,6 +27,11 @@ type RelocationResult struct {
 
 func relocateChart(chart *cu.Chart, prefix string, cfg *RelocateConfig) error {
 	var allErrors error
+	if cfg.LocalizeDependencies {
+		if err := localizeDependencies(chart); err != nil {
+			allErrors = errors.Join(allErrors, fmt.Errorf("failed to localize chart dependencies: %v", err))
+		}
+	}
 	if cfg.SkipImageRelocation {
 		return allErrors
 	}

@@ -51,6 +51,7 @@ type Config struct {
 	ContainerRegistryAuth Auth
 	ValuesFiles           []string
 	PreserveRepository    bool
+	LocalizeDependencies  bool
 	PreserveDigest        bool
 
 	// Interactive enables interacting with the user
@@ -223,6 +224,13 @@ func WithValuesFiles(files ...string) func(c *Config) {
 	}
 }
 
+// WithLocalizeDependencies configures the LocalizeDependencies of the Config
+func WithLocalizeDependencies(localize bool) func(c *Config) {
+	return func(c *Config) {
+		c.LocalizeDependencies = localize
+	}
+}
+
 // WithPreserveRepository configures the PreserveRepository of the Config
 func WithPreserveRepository(preserve bool) func(c *Config) {
 	return func(c *Config) {
@@ -326,6 +334,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey), relocator.WithValuesFiles(cfg.ValuesFiles...),
 			relocator.WithSkipImageRelocation(cfg.SkipImageRelocation),
 			relocator.WithPreserveRepository(cfg.PreserveRepository),
+			relocator.WithLocalizeDependencies(cfg.LocalizeDependencies),
 		)
 	}); err != nil {
 		return "", l.Failf("failed to relocate %q: %w", chartPath, err)

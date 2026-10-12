@@ -16,6 +16,8 @@ type RelocateConfig struct {
 	SkipImageRelocation bool
 	ValuesFiles         []string
 	PreserveRepository  bool
+	// LocalizeDependencies clears the repository of the Chart.yaml dependencies vendored in charts/
+	LocalizeDependencies bool
 }
 
 // NewRelocateConfig returns a new RelocateConfig with default settings
@@ -85,5 +87,14 @@ func WithValuesFiles(files ...string) func(rc *RelocateConfig) {
 func WithPreserveRepository(preserve bool) func(rc *RelocateConfig) {
 	return func(rc *RelocateConfig) {
 		rc.PreserveRepository = preserve
+	}
+}
+
+// WithLocalizeDependencies controls whether the repository of the dependencies that are already
+// vendored under charts/ is cleared in Chart.yaml (and Chart.lock), so Helm treats them as local
+// subcharts instead of trying to fetch them from the original repository.
+func WithLocalizeDependencies(localize bool) func(rc *RelocateConfig) {
+	return func(rc *RelocateConfig) {
+		rc.LocalizeDependencies = localize
 	}
 }
