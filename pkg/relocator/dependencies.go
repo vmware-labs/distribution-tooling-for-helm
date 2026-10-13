@@ -128,7 +128,7 @@ func localizeChartLock(lockFile string, deps []*chart.Dependency, localized map[
 		return fmt.Errorf("failed to read %q: %w", lockFile, err)
 	}
 	var lock chart.Lock
-	if err := sigsyaml.Unmarshal(data, &lock); err != nil {
+	if err = sigsyaml.Unmarshal(data, &lock); err != nil {
 		return fmt.Errorf("failed to parse %q: %w", lockFile, err)
 	}
 	for _, dep := range lock.Dependencies {
