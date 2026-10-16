@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -186,6 +187,74 @@ func TestAliasBundleRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAliasDiscoverySkipsArtifactRequests(t *testing.T) {
+	var recording atomic.Bool
+	var mu sync.Mutex
+	heads := make(map[string]int)
+	src := aliasRegistry(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if recording.Load() && r.Method == http.MethodHead {
+				if tag, ok := strings.CutPrefix(r.URL.Path, "/v2/postgresql/manifests/"); ok {
+					mu.Lock()
+					heads[tag]++
+					mu.Unlock()
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	repo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
+	fresh := aliasIndex(t, "new")
+	digest, err := fresh.Digest()
+	require.NoError(t, err)
+	aliases := []string{"18", "18.6.0", "sha256-custom", "sha256-" + digest.Hex,
+		"sha256-short.sig", "sha256-" + digest.Hex + ".custom", "release-metadata-preview"}
+	seedAliasImage(t, repo, fresh, append(aliases, aliasRevision)...)
+	seedAliasImage(t, repo, aliasIndex(t, "old"), "17")
+
+	metadataDigest, err := empty.Image.Digest()
+	require.NoError(t, err)
+	artifactTags := []string{
+		"sha256-" + digest.Hex + ".sig",
+		"sha256-" + digest.Hex + ".metadata",
+		"sha256-" + metadataDigest.Hex + ".sig",
+		aliasRevision + "-metadata",
+		"18-metadata",
+	}
+	manifest, err := fresh.IndexManifest()
+	require.NoError(t, err)
+	for _, platform := range manifest.Manifests {
+		artifactTags = append(artifactTags, "sha256-"+platform.Digest.Hex+".sig")
+	}
+	for _, tag := range artifactTags {
+		require.NoError(t, crane.Push(empty.Image, repo+":"+tag))
+	}
+
+	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
+	// Isolate discovery from the legitimate requests made when fetching artifacts.
+	recording.Store(true)
+	_, err = wrap.Container(repo+":"+aliasRevision, wrap.WithSyncAliasTags(true), wrap.WithFetchArtifacts(false),
+		wrap.WithOutputFile(bundle), wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
+	recording.Store(false)
+	require.NoError(t, err)
+	extracted := t.TempDir()
+	require.NoError(t, utils.Untar(bundle, extracted, utils.TarConfig{StripComponents: 1}))
+	lock, err := imagelock.FromYAMLFile(filepath.Join(extracted, "Images.lock"))
+	require.NoError(t, err)
+	require.Len(t, lock.Images, 1)
+	require.ElementsMatch(t, aliases, lock.Images[0].Aliases)
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, tag := range artifactTags {
+		require.Zero(t, heads[tag], "artifact tag %q must not be resolved during alias discovery", tag)
+	}
+	for _, tag := range aliases {
+		require.Equal(t, 1, heads[tag], "image alias %q must still be resolved", tag)
+	}
+	require.Equal(t, 1, heads["17"], "other image tags still need digest comparison")
+}
+
 func TestAliasDiscoveryIsOptInAndReportsErrors(t *testing.T) {
 	src := aliasRegistry(t, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,14 +297,18 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 	_, err = crane.Digest(dstHost + "/disabled/postgresql:18")
 	require.Error(t, err)
 
-	// Even if supplied in an external bundle, latest and revision tags must
-	// never be treated as aliases.
+	// Even if supplied in an external bundle, latest, revision and artifact
+	// tags must never be treated as aliases.
+	oldDigest, err := old.Digest()
+	require.NoError(t, err)
+	protectedTags := []string{"latest", "18.6.0-debian-12-r12",
+		"sha256-" + oldDigest.Hex + ".sig", "sha256-" + oldDigest.Hex + ".metadata", aliasRevision + "-metadata"}
 	extracted := t.TempDir()
 	require.NoError(t, utils.Untar(bundle, extracted, utils.TarConfig{StripComponents: 1}))
 	lockPath := filepath.Join(extracted, "Images.lock")
 	lock, err := imagelock.FromYAMLFile(lockPath)
 	require.NoError(t, err)
-	lock.Images[0].Aliases = []string{"18", "latest", "18.6.0-debian-12-r12", aliasRevision}
+	lock.Images[0].Aliases = append([]string{"18", aliasRevision}, protectedTags...)
 	f, err := os.Create(lockPath)
 	require.NoError(t, err)
 	require.NoError(t, lock.ToYAML(f))
@@ -243,13 +316,11 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 	modified := filepath.Join(t.TempDir(), "image.wrap.tgz")
 	require.NoError(t, utils.Tar(extracted, modified, utils.TarConfig{Prefix: "postgresql"}))
 	protectedRepo := dstHost + "/protected/postgresql"
-	seedAliasImage(t, protectedRepo, old, "latest", "18.6.0-debian-12-r12")
+	seedAliasImage(t, protectedRepo, old, protectedTags...)
 	_, err = unwrap.Container(modified, dstHost+"/protected", unwrap.WithSyncAliasTags(true), unwrap.WithSayYes(true),
 		unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
 	require.NoError(t, err)
-	oldDigest, err := old.Digest()
-	require.NoError(t, err)
-	for _, tag := range []string{"latest", "18.6.0-debian-12-r12"} {
+	for _, tag := range protectedTags {
 		require.Equal(t, oldDigest.String(), aliasDigest(t, protectedRepo+":"+tag))
 	}
 	require.Equal(t, aliasDigest(t, protectedRepo+":"+aliasRevision), aliasDigest(t, protectedRepo+":18"))

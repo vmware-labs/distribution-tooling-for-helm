@@ -276,6 +276,13 @@ container bundles. It defaults to disabled. Discovery lists tags in each selecte
 image's source repository and records only those with the same complete manifest/index
 digest. It excludes `latest` and revision tags ending in `-rNUMBER`.
 
+Discovery also skips DT's artifact tag conventions before resolving tags:
+`sha256-<64 lowercase hex characters>.sig`,
+`sha256-<64 lowercase hex characters>.metadata`, and `<image-tag>-metadata`.
+These names are treated as artifacts rather than image aliases, and unwrap also
+ignores them if they appear in a bundle's `aliases` list. Signature and
+metadata copying still follows the existing artifact options.
+
 The snapshot is stored as an optional `aliases` list on the corresponding image entry
 in the existing `Images.lock` (under `chart/` for chart bundles, at the bundle root for
 standalone containers):

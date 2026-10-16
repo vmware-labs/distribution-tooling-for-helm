@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -19,12 +20,19 @@ import (
 var (
 	// Protect revision tags even if their version/distro format is not one of
 	// the formats used by charts-syncer's standalone image discovery.
-	revisionTag   = regexp.MustCompile(`-r[0-9]+$`)
-	validAliasTag = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$`)
+	revisionTag       = regexp.MustCompile(`-r[0-9]+$`)
+	validAliasTag     = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$`)
+	digestArtifactTag = regexp.MustCompile(`^sha256-[0-9a-f]{64}\.(sig|metadata)$`)
 )
 
 func protectedTag(tag string) bool {
 	return tag == "latest" || revisionTag.MatchString(tag)
+}
+
+// artifactTag recognizes DT's signature and metadata naming conventions.
+// These artifacts are copied separately and need no alias-discovery requests.
+func artifactTag(tag string) bool {
+	return digestArtifactTag.MatchString(tag) || strings.HasSuffix(tag, "-metadata")
 }
 
 func manifestNotFound(err error) bool {
@@ -57,7 +65,7 @@ func (discovery aliasDiscovery) capture(img *imagelock.ChartImage, o crane.Optio
 		}
 		tagDigests = make(map[string]v1.Hash)
 		for _, tag := range tags {
-			if protectedTag(tag) {
+			if protectedTag(tag) || artifactTag(tag) {
 				continue
 			}
 			if !validAliasTag.MatchString(tag) {
@@ -100,7 +108,9 @@ func stageImageWithAliases(img *imagelock.ChartImage, imagesDir string, cfg *Con
 		if !validAliasTag.MatchString(alias) {
 			return nil, fmt.Errorf("invalid alias tag %q for %q", alias, img.Image)
 		}
-		if protectedTag(alias) || alias == ref.Identifier() || seen[alias] {
+		// Artifact tags never come from discovery; skip them so a hand-edited
+		// lock cannot overwrite signatures or metadata at the destination.
+		if protectedTag(alias) || artifactTag(alias) || alias == ref.Identifier() || seen[alias] {
 			continue
 		}
 		seen[alias] = true
