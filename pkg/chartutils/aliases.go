@@ -26,7 +26,7 @@ var (
 )
 
 func protectedTag(tag string) bool {
-	return tag == "latest" || revisionTag.MatchString(tag)
+	return revisionTag.MatchString(tag)
 }
 
 // artifactTag recognizes DT's signature and metadata naming conventions.

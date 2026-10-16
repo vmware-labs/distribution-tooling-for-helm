@@ -30,7 +30,7 @@ import (
 
 const aliasRevision = "18.6.0-debian-12-r13"
 
-var versionAliases = []string{"18", "18-debian-12", "18.6.0"}
+var imageAliases = []string{"18", "18-debian-12", "18.6.0", "latest"}
 
 func aliasRegistry(t *testing.T, handler func(http.Handler) http.Handler) *httptest.Server {
 	t.Helper()
@@ -76,7 +76,7 @@ func aliasDigest(t *testing.T, ref string) string {
 
 // Both bundle formats must carry aliases independently of source access, use
 // the actual destination index after filtering/reconstruction, and leave
-// unrelated images, latest, and revision tags alone.
+// unrelated images and revision tags alone.
 func TestAliasBundleRoundTrip(t *testing.T) {
 	for _, chart := range []bool{false, true} {
 		for _, mode := range []string{"rebuilt", "filtered", "preserved"} {
@@ -87,12 +87,12 @@ func TestAliasBundleRoundTrip(t *testing.T) {
 				dstPrefix := strings.TrimPrefix(dst.URL, "http://") + "/mirror"
 				dstRepo := dstPrefix + "/postgresql"
 				fresh, old := aliasIndex(t, "new"), aliasIndex(t, "old")
-				seedAliasImage(t, srcRepo, fresh, append(versionAliases, aliasRevision, "latest", "18.6.0-debian-12-r12")...)
+				seedAliasImage(t, srcRepo, fresh, append(imageAliases, aliasRevision, "18.6.0-debian-12-r12")...)
 				seedAliasImage(t, srcRepo, old, "17", "17.0.0-debian-12-r1")
 				// Sharing platform manifests is insufficient: aliases must match
 				// the complete source index, including its media type.
 				seedAliasImage(t, srcRepo, mutate.IndexMediaType(fresh, types.DockerManifestList), "18-other-index")
-				seedAliasImage(t, dstRepo, old, append(versionAliases, "latest", "18.6.0-debian-12-r12")...)
+				seedAliasImage(t, dstRepo, old, append(imageAliases, "18.6.0-debian-12-r12")...)
 				oldDigest, err := old.Digest()
 				require.NoError(t, err)
 				sourceDigest, err := fresh.Digest()
@@ -146,7 +146,7 @@ func TestAliasBundleRoundTrip(t *testing.T) {
 				lock, err := imagelock.FromYAMLFile(lockPath)
 				require.NoError(t, err)
 				require.Len(t, lock.Images, 1)
-				require.Equal(t, versionAliases, lock.Images[0].Aliases)
+				require.Equal(t, imageAliases, lock.Images[0].Aliases)
 				// The import must never need access to the source registry.
 				src.Close()
 				unwrapOpts := []unwrap.Option{unwrap.WithSyncAliasTags(true), unwrap.WithSayYes(true),
@@ -167,12 +167,10 @@ func TestAliasBundleRoundTrip(t *testing.T) {
 				require.Equal(t, metadataDigest.String(), aliasDigest(t, dstRepo+":"+aliasRevision+"-metadata"))
 				require.Equal(t, sigDigest.String(), aliasDigest(t, dstRepo+":sha256-"+metadataDigest.Hex+".sig"))
 
-				for _, alias := range versionAliases {
+				for _, alias := range imageAliases {
 					require.Equal(t, published, aliasDigest(t, dstRepo+":"+alias))
 				}
-				for _, protected := range []string{"latest", "18.6.0-debian-12-r12"} {
-					require.Equal(t, oldDigest.String(), aliasDigest(t, dstRepo+":"+protected))
-				}
+				require.Equal(t, oldDigest.String(), aliasDigest(t, dstRepo+":18.6.0-debian-12-r12"))
 				_, err = crane.Digest(dstRepo + ":17")
 				require.Error(t, err)
 				_, err = crane.Digest(dstRepo + ":18-other-index")
@@ -185,6 +183,59 @@ func TestAliasBundleRoundTrip(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestLatestAliasDoesNotFollowUnselectedImage(t *testing.T) {
+	src, dst := aliasRegistry(t, nil), aliasRegistry(t, nil)
+	srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
+	dstPrefix := strings.TrimPrefix(dst.URL, "http://") + "/mirror"
+	dstRepo := dstPrefix + "/postgresql"
+	selected, other := aliasIndex(t, "selected"), aliasIndex(t, "other")
+	seedAliasImage(t, srcRepo, selected, aliasRevision, "18")
+	seedAliasImage(t, srcRepo, other, "latest")
+	seedAliasImage(t, dstRepo, other, "latest")
+
+	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
+	_, err := wrap.Container(srcRepo+":"+aliasRevision, wrap.WithSyncAliasTags(true), wrap.WithOutputFile(bundle),
+		wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
+	require.NoError(t, err)
+	extracted := t.TempDir()
+	require.NoError(t, utils.Untar(bundle, extracted, utils.TarConfig{StripComponents: 1}))
+	lock, err := imagelock.FromYAMLFile(filepath.Join(extracted, "Images.lock"))
+	require.NoError(t, err)
+	require.Len(t, lock.Images, 1)
+	require.Equal(t, []string{"18"}, lock.Images[0].Aliases)
+	src.Close()
+	_, err = unwrap.Container(bundle, dstPrefix, unwrap.WithSyncAliasTags(true), unwrap.WithSayYes(true),
+		unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
+	require.NoError(t, err)
+	otherDigest, err := other.Digest()
+	require.NoError(t, err)
+	require.Equal(t, otherDigest.String(), aliasDigest(t, dstRepo+":latest"))
+	require.Equal(t, aliasDigest(t, dstRepo+":"+aliasRevision), aliasDigest(t, dstRepo+":18"))
+}
+
+func TestLatestPrimaryCanBeUpdated(t *testing.T) {
+	src, dst := aliasRegistry(t, nil), aliasRegistry(t, nil)
+	srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
+	dstPrefix := strings.TrimPrefix(dst.URL, "http://") + "/mirror"
+	dstRepo := dstPrefix + "/postgresql"
+	fresh, old := aliasIndex(t, "new"), aliasIndex(t, "old")
+	seedAliasImage(t, srcRepo, fresh, "latest", "18")
+	seedAliasImage(t, dstRepo, old, "latest")
+
+	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
+	_, err := wrap.Container(srcRepo+":latest", wrap.WithSyncAliasTags(true), wrap.WithPreserveDigest(true), wrap.WithOutputFile(bundle),
+		wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
+	require.NoError(t, err)
+	src.Close()
+	_, err = unwrap.Container(bundle, dstPrefix, unwrap.WithSyncAliasTags(true), unwrap.WithPreserveDigest(true), unwrap.WithSayYes(true),
+		unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
+	require.NoError(t, err)
+	want, err := fresh.Digest()
+	require.NoError(t, err)
+	require.Equal(t, want.String(), aliasDigest(t, dstRepo+":latest"))
+	require.Equal(t, want.String(), aliasDigest(t, dstRepo+":18"))
 }
 
 func TestAliasDiscoverySkipsArtifactRequests(t *testing.T) {
@@ -284,7 +335,7 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 	srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
 	dstHost := strings.TrimPrefix(dst.URL, "http://")
 	fresh, old := aliasIndex(t, "new"), aliasIndex(t, "old")
-	seedAliasImage(t, srcRepo, fresh, aliasRevision, "18")
+	seedAliasImage(t, srcRepo, fresh, aliasRevision, "18", "latest")
 	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
 	_, err := wrap.Container(srcRepo+":"+aliasRevision, wrap.WithSyncAliasTags(true), wrap.WithOutputFile(bundle),
 		wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
@@ -294,21 +345,23 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 	_, err = unwrap.Container(bundle, dstHost+"/disabled", unwrap.WithSayYes(true),
 		unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
 	require.NoError(t, err)
-	_, err = crane.Digest(dstHost + "/disabled/postgresql:18")
-	require.Error(t, err)
+	for _, alias := range []string{"18", "latest"} {
+		_, err = crane.Digest(dstHost + "/disabled/postgresql:" + alias)
+		require.Error(t, err)
+	}
 
-	// Even if supplied in an external bundle, latest, revision and artifact
+	// Even if supplied in an external bundle, revision and artifact
 	// tags must never be treated as aliases.
 	oldDigest, err := old.Digest()
 	require.NoError(t, err)
-	protectedTags := []string{"latest", "18.6.0-debian-12-r12",
+	protectedTags := []string{"18.6.0-debian-12-r12",
 		"sha256-" + oldDigest.Hex + ".sig", "sha256-" + oldDigest.Hex + ".metadata", aliasRevision + "-metadata"}
 	extracted := t.TempDir()
 	require.NoError(t, utils.Untar(bundle, extracted, utils.TarConfig{StripComponents: 1}))
 	lockPath := filepath.Join(extracted, "Images.lock")
 	lock, err := imagelock.FromYAMLFile(lockPath)
 	require.NoError(t, err)
-	lock.Images[0].Aliases = append([]string{"18", aliasRevision}, protectedTags...)
+	lock.Images[0].Aliases = append([]string{"18", "latest", aliasRevision}, protectedTags...)
 	f, err := os.Create(lockPath)
 	require.NoError(t, err)
 	require.NoError(t, lock.ToYAML(f))
@@ -323,7 +376,9 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 	for _, tag := range protectedTags {
 		require.Equal(t, oldDigest.String(), aliasDigest(t, protectedRepo+":"+tag))
 	}
-	require.Equal(t, aliasDigest(t, protectedRepo+":"+aliasRevision), aliasDigest(t, protectedRepo+":18"))
+	for _, alias := range []string{"18", "latest"} {
+		require.Equal(t, aliasDigest(t, protectedRepo+":"+aliasRevision), aliasDigest(t, protectedRepo+":"+alias))
+	}
 
 	// An existing primary revision must also be protected, including in the
 	// chart image push path which normally permits replacing primary tags.
@@ -353,7 +408,7 @@ func TestAliasFailureLeavesRevisionPending(t *testing.T) {
 	srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
 	dstPrefix := strings.TrimPrefix(dst.URL, "http://") + "/mirror"
 	dstRepo := dstPrefix + "/postgresql"
-	seedAliasImage(t, srcRepo, aliasIndex(t, "new"), append(versionAliases, aliasRevision)...)
+	seedAliasImage(t, srcRepo, aliasIndex(t, "new"), append(imageAliases, aliasRevision)...)
 	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
 	_, err := wrap.Container(srcRepo+":"+aliasRevision, wrap.WithSyncAliasTags(true), wrap.WithOutputFile(bundle),
 		wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
@@ -369,7 +424,7 @@ func TestAliasFailureLeavesRevisionPending(t *testing.T) {
 	_, err = unwrap.Container(bundle, dstPrefix, append(opts, unwrap.WithTempDirectory(t.TempDir()))...)
 	require.NoError(t, err)
 	published := aliasDigest(t, dstRepo+":"+aliasRevision)
-	for _, alias := range versionAliases {
+	for _, alias := range imageAliases {
 		require.Equal(t, published, aliasDigest(t, dstRepo+":"+alias))
 	}
 }

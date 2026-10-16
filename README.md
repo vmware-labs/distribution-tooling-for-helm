@@ -274,7 +274,9 @@ $ dt unwrap postgresql.wrap.tgz oci://registry.example.com/mirror --sync-alias-t
 The same flag is available on `dt images wrap` and `dt images unwrap` for standalone
 container bundles. It defaults to disabled. Discovery lists tags in each selected
 image's source repository and records only those with the same complete manifest/index
-digest. It excludes `latest` and revision tags ending in `-rNUMBER`.
+digest, including `latest` when it points to that image at the source. Revision tags
+ending in `-rNUMBER` are excluded. If source `latest` points to an image outside the
+bundle, destination `latest` is left untouched.
 
 Discovery also skips DT's artifact tag conventions before resolving tags:
 `sha256-<64 lowercase hex characters>.sig`,
@@ -291,7 +293,7 @@ standalone containers):
 images:
   - name: postgresql
     image: source.example.com/postgresql:18.6.0-debian-12-r13
-    aliases: ["18", "18-debian-12", "18.6.0"]
+    aliases: ["18", "18-debian-12", "18.6.0", "latest"]
     # Existing chart and per-platform digests fields are unchanged.
 ```
 

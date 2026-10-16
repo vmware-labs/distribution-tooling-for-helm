@@ -730,7 +730,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
-	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, excluding latest and revision tags")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"push the chart and its images byte-for-byte so their digests are unchanged. "+
 			"Implies --skip-image-relocation, and requires a bundle produced by \"dt wrap --preserve-digest\"")
@@ -785,7 +785,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
-	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, excluding latest and revision tags")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"push the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged")
 

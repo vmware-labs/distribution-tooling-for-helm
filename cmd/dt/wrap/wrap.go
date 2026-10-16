@@ -651,7 +651,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "skip pulling images when wrapping a Helm Chart")
-	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, excluding latest and revision tags")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"transfer the chart and its images byte-for-byte so their digests are unchanged. "+
 			"Requires an already-packaged chart (a .tgz file or an oci:// reference); "+
@@ -839,7 +839,7 @@ with an Images.lock file into a single tarball.`,
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "output tarball path (defaults to <name>-<tag>.container.wrap.tgz)")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file (e.g. linux/amd64,linux/arm64)")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
-	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, excluding latest and revision tags")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"transfer the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged. Incompatible with --platforms")
 
