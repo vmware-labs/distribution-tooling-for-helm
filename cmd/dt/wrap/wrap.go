@@ -13,7 +13,6 @@ import (
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/carvelize"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/config"
 	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/lock"
-	"github.com/vmware-labs/distribution-tooling-for-helm/cmd/dt/pull"
 	"github.com/vmware-labs/distribution-tooling-for-helm/internal/widgets"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/artifacts"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
@@ -50,8 +49,14 @@ type Config struct {
 	Auth                  Auth
 	ContainerRegistryAuth Auth
 	OutputFile            string
+	SyncAliasTags         bool
 	PreserveDigest        bool
 	PreservedSourceRef    string
+}
+
+// WithSyncAliasTags records additional source tags in the bundle Images.lock.
+func WithSyncAliasTags(enabled bool) Option {
+	return func(c *Config) { c.SyncAliasTags = enabled }
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
@@ -389,8 +394,8 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 		l.Warnf("No images found in Images.lock")
 	} else {
 		return l.Section(fmt.Sprintf("Pulling images into %q", wrap.ImagesDir()), func(childLog dtlog.SectionLogger) error {
-			if err := pull.ChartImages(
-				wrap,
+			if err := chartutils.PullImages(
+				lock,
 				wrap.ImagesDir(),
 				chartutils.WithLog(childLog),
 				chartutils.WithContext(cfg.Context),
@@ -399,15 +404,29 @@ func pullImages(wrap wrapping.Wrap, cfg *Config) error {
 				chartutils.WithArtifactsDir(wrap.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 				chartutils.WithInsecureMode(cfg.Insecure),
+				chartutils.WithSyncAliasTags(cfg.SyncAliasTags),
 				chartutils.WithPreserveDigest(cfg.PreserveDigest),
 			); err != nil {
 				return childLog.Failf("%v", err)
+			}
+			if cfg.SyncAliasTags {
+				if err := writeImagesLock(wrap.LockFilePath(), lock); err != nil {
+					return err
+				}
 			}
 			childLog.Infof("All images pulled successfully")
 			return nil
 		})
 	}
 	return nil
+}
+
+func writeImagesLock(path string, lock *imagelock.ImagesLock) error {
+	var buf bytes.Buffer
+	if err := lock.ToYAML(&buf); err != nil {
+		return err
+	}
+	return utils.SafeWriteFile(path, buf.Bytes(), 0600)
 }
 
 // validatePreserveDigest rejects flag/input combinations that are
@@ -570,6 +589,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	var carvelize bool
 	var skipPullImages bool
 	var preserveDigest bool
+	var syncAliasTags bool
 	var examples = `  # Wrap a Helm chart from a local folder
   $ dt wrap examples/mariadb
 
@@ -608,6 +628,7 @@ This command will pull all the container images and wrap it into a single tarbal
 				WithTempDirectory(tmpDir),
 				WithSkipPullImages(skipPullImages),
 				WithPreserveDigest(preserveDigest),
+				WithSyncAliasTags(syncAliasTags),
 			)
 			if err != nil {
 				if _, ok := err.(*dtlog.LoggedError); ok {
@@ -630,6 +651,7 @@ This command will pull all the container images and wrap it into a single tarbal
 	cmd.PersistentFlags().BoolVar(&carvelize, "add-carvel-bundle", carvelize, "whether the wrap should include a Carvel bundle or not")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "skip pulling images when wrapping a Helm Chart")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, excluding latest and revision tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"transfer the chart and its images byte-for-byte so their digests are unchanged. "+
 			"Requires an already-packaged chart (a .tgz file or an oci:// reference); "+
@@ -707,11 +729,17 @@ func wrapContainer(imageRef string, opts ...Option) (string, error) {
 				chartutils.WithArtifactsDir(wc.ImageArtifactsDir()),
 				chartutils.WithProgressBar(childLog.ProgressBar()),
 				chartutils.WithInsecureMode(cfg.Insecure),
+				chartutils.WithSyncAliasTags(cfg.SyncAliasTags),
 				chartutils.WithPreserveDigest(cfg.PreserveDigest),
 			)
 		})
 		if err != nil {
 			return "", l.Failf("failed to pull container image: %w", err)
+		}
+		if cfg.SyncAliasTags {
+			if err = writeImagesLock(wc.LockFilePath(), lock); err != nil {
+				return "", err
+			}
 		}
 		l.Infof("Container image pulled successfully")
 	}
@@ -749,6 +777,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	var platforms []string
 	var fetchArtifacts bool
 	var preserveDigest bool
+	var syncAliasTags bool
 
 	cmd := &cobra.Command{
 		Use:   "wrap OCI_REF",
@@ -791,6 +820,7 @@ with an Images.lock file into a single tarball.`,
 				WithOutputFile(outputFile),
 				WithTempDirectory(tmpDir),
 				WithPreserveDigest(preserveDigest),
+				WithSyncAliasTags(syncAliasTags),
 			)
 			if err != nil {
 				if _, ok := err.(*dtlog.LoggedError); ok {
@@ -809,6 +839,7 @@ with an Images.lock file into a single tarball.`,
 	cmd.PersistentFlags().StringVar(&outputFile, "output-file", outputFile, "output tarball path (defaults to <name>-<tag>.container.wrap.tgz)")
 	cmd.PersistentFlags().StringSliceVar(&platforms, "platforms", platforms, "platforms to include in the Images.lock file (e.g. linux/amd64,linux/arm64)")
 	cmd.PersistentFlags().BoolVar(&fetchArtifacts, "fetch-artifacts", fetchArtifacts, "fetch remote metadata and signature artifacts")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "record additional image tags in Images.lock, excluding latest and revision tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"transfer the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged. Incompatible with --platforms")
 

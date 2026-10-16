@@ -29,6 +29,12 @@ type Configuration struct {
 	ValuesFiles        []string
 	PreserveRepository bool
 	PreserveDigest     bool
+	SyncAliasTags      bool
+}
+
+// WithSyncAliasTags discovers aliases during pull and overwrites them during push.
+func WithSyncAliasTags(enabled bool) Option {
+	return func(cfg *Configuration) { cfg.SyncAliasTags = enabled }
 }
 
 // WithInsecureMode configures Insecure transport

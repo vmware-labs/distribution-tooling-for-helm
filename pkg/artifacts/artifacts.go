@@ -50,6 +50,19 @@ type Config struct {
 	ResolveReference bool
 	InsecureMode     bool
 	Auth             Auth
+	ResolvedDigests  map[string]v1.Hash
+}
+
+// WithResolvedDigest supplies the digest of content already published by the
+// caller. This allows artifacts to be pushed before the image's tag is created.
+// It applies only to this reference, not to references of its metadata/signatures.
+func WithResolvedDigest(image string, digest v1.Hash) Option {
+	return func(cfg *Config) {
+		if cfg.ResolvedDigests == nil {
+			cfg.ResolvedDigests = make(map[string]v1.Hash)
+		}
+		cfg.ResolvedDigests[image] = digest
+	}
 }
 
 // Option defines a Config option
@@ -100,6 +113,9 @@ func getImageTagAndDigest(image string, opts ...Option) (string, string, error) 
 	switch v := ref.(type) {
 	case name.Tag:
 		cfg := NewConfig(opts...)
+		if resolved, ok := cfg.ResolvedDigests[image]; ok {
+			return v.TagStr(), resolved.Hex, nil
+		}
 		craneOpts := make([]crane.Option, 0)
 		if cfg.InsecureMode {
 			craneOpts = append(craneOpts, crane.Insecure)

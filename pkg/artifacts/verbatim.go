@@ -112,6 +112,22 @@ func loadVerbatimEntry(dir string) (any, error) {
 	}
 }
 
+// VerbatimDigest returns the digest of the original manifest stored in a layout.
+func VerbatimDigest(dir string) (v1.Hash, error) {
+	entry, err := loadVerbatimEntry(dir)
+	if err != nil {
+		return v1.Hash{}, err
+	}
+	switch artifact := entry.(type) {
+	case v1.Image:
+		return artifact.Digest()
+	case v1.ImageIndex:
+		return artifact.Digest()
+	default:
+		return v1.Hash{}, fmt.Errorf("unsupported artifact type %T in %q", entry, dir)
+	}
+}
+
 // PushVerbatim reads the single-entry OCI layout directory previously written
 // by PullVerbatim at srcDir and pushes it to dstRef exactly as stored - again,
 // never through pkg/v1/mutate - preserving its digest. After pushing, it
