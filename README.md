@@ -261,6 +261,58 @@ By default `Images.lock` creation expects an `images` annotation in your Helm ch
 $ helm dt images lock ../charts/jenkins --annotations-key artifacthub.io/images
 ```
 
+### Including image aliases in a wrap
+
+Use `--sync-alias-tags` on both wrap and unwrap to transfer additional tags of the
+images in a bundle:
+
+```console
+$ dt wrap ./postgresql --sync-alias-tags --output-file postgresql.wrap.tgz
+$ dt unwrap postgresql.wrap.tgz oci://registry.example.com/mirror --sync-alias-tags --yes
+```
+
+The same flag is available on `dt images wrap` and `dt images unwrap` for standalone
+container bundles. It defaults to disabled. Discovery lists tags in each selected
+image's source repository and records only those with the same complete manifest/index
+digest, including `latest` when it points to that image at the source. Revision tags
+ending in `-rNUMBER` are excluded. If source `latest` points to an image outside the
+bundle, destination `latest` is left untouched.
+
+Discovery also skips DT's artifact tag conventions before resolving tags:
+`sha256-<64 lowercase hex characters>.sig`,
+`sha256-<64 lowercase hex characters>.metadata`, and `<image-tag>-metadata`.
+These names are treated as artifacts rather than image aliases, and unwrap also
+ignores them if they appear in a bundle's `aliases` list. Signature and
+metadata copying still follows the existing artifact options.
+
+The snapshot is stored as an optional `aliases` list on the corresponding image entry
+in the existing `Images.lock` (under `chart/` for chart bundles, at the bundle root for
+standalone containers):
+
+```yaml
+images:
+  - name: postgresql
+    image: source.example.com/postgresql:18.6.0-debian-12-r13
+    aliases: ["18", "18-debian-12", "18.6.0", "latest"]
+    # Existing chart and per-platform digests fields are unchanged.
+```
+
+Unwrap first uploads image content by digest, then its artifacts and aliases, and
+finally its primary reference. Existing aliases are overwritten; aliases already
+pointing to the desired digest need no write. Existing revision tags are protected:
+a different bundled destination digest produces an error instead of overwriting them.
+Alias updates use the actual published manifest, including when platform filtering
+or reconstruction changes its digest. `--preserve-digest` is also supported.
+
+Import needs no connection to the source registry. An older bundle can therefore move
+aliases back to an older image. Bundles without `aliases` remain supported; older DT
+versions ignore the new field and may discard it when rewriting the lock. Alias
+metadata is a snapshot and is not part of the chart's image dependency validation.
+
+Alias updates are not transactional. A failure can leave some aliases updated, but
+new primary revision tags and the chart are published only after their alias updates
+succeed. A retry can complete the remaining writes.
+
 ### Targetting specific architectures
 
 The above `lock` command can be constrained to specific architectures. This is pretty useful to create lighter wraps as many of the images will be dropped when wrapping.

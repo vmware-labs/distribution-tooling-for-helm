@@ -18,6 +18,9 @@ type ChartImage struct {
 	Image   string       // The image reference.
 	Chart   string       // The chart containing the image.
 	Digests []DigestInfo // List of image digests associated with the image.
+	// Aliases is a snapshot of additional source tags for this image's manifest.
+	// These names are applied to the relocated repository only when explicitly enabled.
+	Aliases []string `yaml:"aliases,omitempty"`
 }
 
 // ImageList defines a list of images
