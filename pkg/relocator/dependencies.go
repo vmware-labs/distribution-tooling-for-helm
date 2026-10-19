@@ -59,17 +59,7 @@ func isDependencyVendored(chartsDir string, dep *chart.Dependency) bool {
 // leave them out of sync.
 func localizeDependencies(c *cu.Chart) error {
 	metadata := c.Metadata()
-	if metadata == nil {
-		return nil
-	}
-	hasRemoteDeps := false
-	for _, dep := range metadata.Dependencies {
-		if dep.Repository != "" {
-			hasRemoteDeps = true
-			break
-		}
-	}
-	if !hasRemoteDeps {
+	if metadata == nil || !hasRemoteDependencies(metadata.Dependencies) {
 		return nil
 	}
 
@@ -77,16 +67,7 @@ func localizeDependencies(c *cu.Chart) error {
 		return fmt.Errorf("failed to unpack chart dependencies: %w", err)
 	}
 
-	chartsDir := c.AbsFilePath("charts")
-	// Chart.yaml dependency index -> localized
-	localized := make(map[int]bool)
-	localizedNames := make(map[string]*chart.Dependency)
-	for i, dep := range metadata.Dependencies {
-		if dep.Repository != "" && isDependencyVendored(chartsDir, dep) {
-			localized[i] = true
-			localizedNames[dep.Name] = dep
-		}
-	}
+	localized, localizedNames := findVendoredDependencies(c.AbsFilePath("charts"), metadata.Dependencies)
 	if len(localized) == 0 {
 		return nil
 	}
@@ -119,17 +100,8 @@ func localizeDependencies(c *cu.Chart) error {
 		}
 	}
 
-	if err = utils.SafeWriteFile(chartYamlFile, newChartYaml, 0644); err != nil {
-		return fmt.Errorf("failed to write %q: %w", chartYamlFile, err)
-	}
-	if newLock != nil {
-		if err = utils.SafeWriteFile(lockFile, newLock, 0644); err != nil {
-			// Do not leave Chart.yaml and Chart.lock out of sync
-			if rErr := utils.SafeWriteFile(chartYamlFile, chartYamlData, 0644); rErr != nil {
-				return fmt.Errorf("failed to write %q: %w (and failed to restore %q: %v)", lockFile, err, chartYamlFile, rErr)
-			}
-			return fmt.Errorf("failed to write %q: %w", lockFile, err)
-		}
+	if err = writeLocalizedFiles(chartYamlFile, chartYamlData, newChartYaml, lockFile, newLock); err != nil {
+		return err
 	}
 
 	for i, dep := range metadata.Dependencies {
@@ -138,6 +110,49 @@ func localizeDependencies(c *cu.Chart) error {
 		}
 	}
 	return nil
+}
+
+// hasRemoteDependencies returns true if any of the dependencies has a repository
+func hasRemoteDependencies(deps []*chart.Dependency) bool {
+	for _, dep := range deps {
+		if dep.Repository != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// findVendoredDependencies returns the dependencies with a repository that are vendored in
+// chartsDir, both by their index in the Chart.yaml dependencies and by name
+func findVendoredDependencies(chartsDir string, deps []*chart.Dependency) (map[int]bool, map[string]*chart.Dependency) {
+	byIndex := make(map[int]bool)
+	byName := make(map[string]*chart.Dependency)
+	for i, dep := range deps {
+		if dep.Repository != "" && isDependencyVendored(chartsDir, dep) {
+			byIndex[i] = true
+			byName[dep.Name] = dep
+		}
+	}
+	return byIndex, byName
+}
+
+// writeLocalizedFiles writes the new Chart.yaml and, if provided, the new Chart.lock.
+// If the lock cannot be written, Chart.yaml is restored so they are not left out of sync.
+func writeLocalizedFiles(chartYamlFile string, oldChartYaml, newChartYaml []byte, lockFile string, newLock []byte) error {
+	if err := utils.SafeWriteFile(chartYamlFile, newChartYaml, 0644); err != nil {
+		return fmt.Errorf("failed to write %q: %w", chartYamlFile, err)
+	}
+	if newLock == nil {
+		return nil
+	}
+	err := utils.SafeWriteFile(lockFile, newLock, 0644)
+	if err == nil {
+		return nil
+	}
+	if rErr := utils.SafeWriteFile(chartYamlFile, oldChartYaml, 0644); rErr != nil {
+		return fmt.Errorf("failed to write %q: %w (and failed to restore %q: %v)", lockFile, err, chartYamlFile, rErr)
+	}
+	return fmt.Errorf("failed to write %q: %w", lockFile, err)
 }
 
 // clearChartYamlRepositories sets to empty the repository of the Chart.yaml dependencies

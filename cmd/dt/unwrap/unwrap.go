@@ -283,6 +283,22 @@ func askYesNoQuestion(msg string, cfg *Config) bool {
 	return widgets.ShowYesNoQuestion(msg)
 }
 
+// applyPreserveDigest disables the options that rewrite the chart content when preserving the digest,
+// as the chart is pushed byte-for-byte
+func applyPreserveDigest(cfg *Config, l dtlog.Logger) {
+	if !cfg.PreserveDigest {
+		return
+	}
+	if !cfg.SkipImageRelocation {
+		l.Debugf("--preserve-digest implies --skip-image-relocation: no chart content will be rewritten")
+		cfg.SkipImageRelocation = true
+	}
+	if cfg.LocalizeDependencies {
+		l.Debugf("--preserve-digest implies not localizing dependencies: no chart content will be rewritten")
+		cfg.LocalizeDependencies = false
+	}
+}
+
 func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
 
 	cfg := NewConfig(opts...)
@@ -305,15 +321,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		l.Debugf("Temporary assets kept at %q", tempDir)
 	}
 
-	if cfg.PreserveDigest && !cfg.SkipImageRelocation {
-		l.Debugf("--preserve-digest implies --skip-image-relocation: no chart content will be rewritten")
-		cfg.SkipImageRelocation = true
-	}
-
-	if cfg.PreserveDigest && cfg.LocalizeDependencies {
-		l.Debugf("--preserve-digest implies not localizing dependencies: no chart content will be rewritten")
-		cfg.LocalizeDependencies = false
-	}
+	applyPreserveDigest(cfg, l)
 
 	chartPath, err := wrap.ResolveInputChartPath(
 		inputChart,
