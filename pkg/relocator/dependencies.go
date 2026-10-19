@@ -7,148 +7,183 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Masterminds/semver/v3"
 	cu "github.com/vmware-labs/distribution-tooling-for-helm/pkg/chartutils"
 	"github.com/vmware-labs/distribution-tooling-for-helm/pkg/utils"
-	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/provenance"
 	sigsyaml "sigs.k8s.io/yaml"
 )
 
-// isDependencyVendored returns true if the dependency is already bundled in the
-// charts/ directory of the chart, either unpacked or as a .tgz
+// isDependencyVendored returns true if the dependency is bundled, unpacked, in the charts/
+// directory of the chart and its version satisfies the version constraint of the dependency.
+//
+// Both conditions are required for Helm to treat the dependency as a local subchart: with an
+// empty repository, 'helm dependency build/update' loads charts/<name> as a directory and
+// validates its version against the constraint.
 func isDependencyVendored(chartsDir string, dep *chart.Dependency) bool {
-	if info, err := os.Stat(filepath.Join(chartsDir, dep.Name)); err == nil && info.IsDir() {
-		return true
+	depDir := filepath.Join(chartsDir, dep.Name)
+	if info, err := os.Stat(depDir); err != nil || !info.IsDir() {
+		return false
 	}
-	if utils.FileExists(filepath.Join(chartsDir, dep.Name+".tgz")) {
-		return true
+	depMetadata, err := chartutil.LoadChartfile(filepath.Join(depDir, "Chart.yaml"))
+	if err != nil {
+		return false
 	}
-	matches, err := filepath.Glob(filepath.Join(chartsDir, dep.Name+"-*.tgz"))
-	return err == nil && len(matches) > 0
+
+	constraint := dep.Version
+	if constraint == "" {
+		constraint = "*"
+	}
+	c, err := semver.NewConstraint(constraint)
+	if err != nil {
+		return false
+	}
+	v, err := semver.NewVersion(depMetadata.Version)
+	if err != nil {
+		return false
+	}
+	return c.Check(v)
 }
 
 // localizeDependencies clears the repository of the Chart.yaml dependencies that are already
 // vendored under charts/, so Helm treats them as local subcharts and does not try to reach
 // the original repository (i.e. on 'helm dependency build/update').
 // If a Chart.lock file exists, it is updated accordingly, including its digest.
+//
+// Dependencies bundled as .tgz archives are unpacked first, like the recursive relocation does,
+// as Helm requires an unpacked charts/<name> directory when the repository is empty.
+//
+// Both Chart.yaml and Chart.lock are computed before writing anything, so a failure does not
+// leave them out of sync.
 func localizeDependencies(c *cu.Chart) error {
 	metadata := c.Metadata()
-	if metadata == nil || len(metadata.Dependencies) == 0 {
+	if metadata == nil {
+		return nil
+	}
+	hasRemoteDeps := false
+	for _, dep := range metadata.Dependencies {
+		if dep.Repository != "" {
+			hasRemoteDeps = true
+			break
+		}
+	}
+	if !hasRemoteDeps {
 		return nil
 	}
 
+	if _, err := c.Dependencies(); err != nil {
+		return fmt.Errorf("failed to unpack chart dependencies: %w", err)
+	}
+
 	chartsDir := c.AbsFilePath("charts")
-	localized := make(map[string]bool)
-	for _, dep := range metadata.Dependencies {
+	// Chart.yaml dependency index -> localized
+	localized := make(map[int]bool)
+	localizedNames := make(map[string]*chart.Dependency)
+	for i, dep := range metadata.Dependencies {
 		if dep.Repository != "" && isDependencyVendored(chartsDir, dep) {
-			localized[dep.Name] = true
+			localized[i] = true
+			localizedNames[dep.Name] = dep
 		}
 	}
 	if len(localized) == 0 {
 		return nil
 	}
 
-	if err := clearChartYamlRepositories(c.AbsFilePath("Chart.yaml"), localized); err != nil {
-		return err
+	chartYamlFile := c.AbsFilePath("Chart.yaml")
+	chartYamlData, err := os.ReadFile(chartYamlFile)
+	if err != nil {
+		return fmt.Errorf("failed to read %q: %w", chartYamlFile, err)
 	}
-	for _, dep := range metadata.Dependencies {
-		if localized[dep.Name] {
-			dep.Repository = ""
+	newChartYaml, err := clearChartYamlRepositories(chartYamlData, localized)
+	if err != nil {
+		return fmt.Errorf("failed to update %q: %w", chartYamlFile, err)
+	}
+
+	// Dependencies as they will be after clearing the repositories
+	newDeps := make([]*chart.Dependency, len(metadata.Dependencies))
+	for i, dep := range metadata.Dependencies {
+		newDep := *dep
+		if localized[i] {
+			newDep.Repository = ""
 		}
+		newDeps[i] = &newDep
 	}
 
 	lockFile := c.AbsFilePath("Chart.lock")
+	var newLock []byte
 	if utils.FileExists(lockFile) {
-		if err := localizeChartLock(lockFile, metadata.Dependencies, localized); err != nil {
+		if newLock, err = localizeChartLock(lockFile, newDeps, localizedNames); err != nil {
 			return err
+		}
+	}
+
+	if err = utils.SafeWriteFile(chartYamlFile, newChartYaml, 0644); err != nil {
+		return fmt.Errorf("failed to write %q: %w", chartYamlFile, err)
+	}
+	if newLock != nil {
+		if err = utils.SafeWriteFile(lockFile, newLock, 0644); err != nil {
+			// Do not leave Chart.yaml and Chart.lock out of sync
+			if rErr := utils.SafeWriteFile(chartYamlFile, chartYamlData, 0644); rErr != nil {
+				return fmt.Errorf("failed to write %q: %w (and failed to restore %q: %v)", lockFile, err, chartYamlFile, rErr)
+			}
+			return fmt.Errorf("failed to write %q: %w", lockFile, err)
+		}
+	}
+
+	for i, dep := range metadata.Dependencies {
+		if localized[i] {
+			dep.Repository = ""
 		}
 	}
 	return nil
 }
 
-// clearChartYamlRepositories sets to empty the repository of the named dependencies,
-// editing the YAML tree to preserve the rest of the file
-func clearChartYamlRepositories(chartYaml string, names map[string]bool) error {
-	data, err := os.ReadFile(chartYaml)
-	if err != nil {
-		return fmt.Errorf("failed to read %q: %w", chartYaml, err)
+// clearChartYamlRepositories sets to empty the repository of the Chart.yaml dependencies
+// at the specified indexes
+func clearChartYamlRepositories(chartYaml []byte, indexes map[int]bool) ([]byte, error) {
+	values := make(map[string]string, len(indexes))
+	for i := range indexes {
+		values[fmt.Sprintf("$.dependencies[%d].repository", i)] = ""
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("failed to parse %q: %w", chartYaml, err)
-	}
-	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-		return fmt.Errorf("unexpected format of %q", chartYaml)
-	}
-
-	root := doc.Content[0]
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value != "dependencies" || root.Content[i+1].Kind != yaml.SequenceNode {
-			continue
-		}
-		for _, dep := range root.Content[i+1].Content {
-			if dep.Kind != yaml.MappingNode || !names[mappingValue(dep, "name")] {
-				continue
-			}
-			for j := 0; j+1 < len(dep.Content); j += 2 {
-				if dep.Content[j].Value == "repository" {
-					dep.Content[j+1].SetString("")
-				}
-			}
-		}
-	}
-
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(&doc); err != nil {
-		return fmt.Errorf("failed to format %q: %w", chartYaml, err)
-	}
-	if err := enc.Close(); err != nil {
-		return fmt.Errorf("failed to format %q: %w", chartYaml, err)
-	}
-	return utils.SafeWriteFile(chartYaml, buf.Bytes(), 0644)
+	return utils.YamlSet(chartYaml, values)
 }
 
-func mappingValue(n *yaml.Node, key string) string {
-	for i := 0; i+1 < len(n.Content); i += 2 {
-		if n.Content[i].Value == key {
-			return n.Content[i+1].Value
-		}
-	}
-	return ""
-}
-
-// localizeChartLock clears the repository of the localized dependencies in the Chart.lock
-// and recomputes its digest, so it stays in sync with the updated Chart.yaml
-func localizeChartLock(lockFile string, deps []*chart.Dependency, localized map[string]bool) error {
+// localizeChartLock returns the contents of the Chart.lock with the repository of the localized
+// dependencies cleared and the digest recomputed, so it stays in sync with the updated Chart.yaml.
+//
+// For dependencies without a repository, Helm records in the lock the version constraint of the
+// Chart.yaml instead of a resolved version, so we do the same to match what Helm would generate.
+func localizeChartLock(lockFile string, deps []*chart.Dependency, localized map[string]*chart.Dependency) ([]byte, error) {
 	data, err := os.ReadFile(lockFile)
 	if err != nil {
-		return fmt.Errorf("failed to read %q: %w", lockFile, err)
+		return nil, fmt.Errorf("failed to read %q: %w", lockFile, err)
 	}
 	var lock chart.Lock
 	if err = sigsyaml.Unmarshal(data, &lock); err != nil {
-		return fmt.Errorf("failed to parse %q: %w", lockFile, err)
+		return nil, fmt.Errorf("failed to parse %q: %w", lockFile, err)
 	}
-	for _, dep := range lock.Dependencies {
-		if localized[dep.Name] {
-			dep.Repository = ""
+	for _, lockDep := range lock.Dependencies {
+		if dep, ok := localized[lockDep.Name]; ok {
+			lockDep.Repository = ""
+			lockDep.Version = dep.Version
 		}
 	}
 	if lock.Digest, err = hashDependencies(deps, lock.Dependencies); err != nil {
-		return fmt.Errorf("failed to compute digest of %q: %w", lockFile, err)
+		return nil, fmt.Errorf("failed to compute digest of %q: %w", lockFile, err)
 	}
 
 	data, err = sigsyaml.Marshal(&lock)
 	if err != nil {
-		return fmt.Errorf("failed to format %q: %w", lockFile, err)
+		return nil, fmt.Errorf("failed to format %q: %w", lockFile, err)
 	}
-	return utils.SafeWriteFile(lockFile, data, 0644)
+	return data, nil
 }
 
 // hashDependencies mimics the Helm digest used to detect Chart.lock files out of sync
-// with Chart.yaml (helm.sh/helm/v3/internal/resolver.HashReq, which is not importable)
+// with Chart.yaml (helm.sh/helm/v3/internal/resolver.HashReq, which is not importable).
+// Tests validate it against Helm itself.
 func hashDependencies(req, lock []*chart.Dependency) (string, error) {
 	data, err := json.Marshal([2][]*chart.Dependency{req, lock})
 	if err != nil {

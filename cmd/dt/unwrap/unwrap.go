@@ -310,6 +310,11 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		cfg.SkipImageRelocation = true
 	}
 
+	if cfg.PreserveDigest && cfg.LocalizeDependencies {
+		l.Debugf("--preserve-digest implies not localizing dependencies: no chart content will be rewritten")
+		cfg.LocalizeDependencies = false
+	}
+
 	chartPath, err := wrap.ResolveInputChartPath(
 		inputChart,
 		wrap.NewConfig(
@@ -672,6 +677,8 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		skipImageRelocation bool
 		skipPullImages      bool
 		preserveDigest      bool
+
+		localizeDependencies bool
 	)
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
@@ -709,6 +716,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithSkipImageRelocation(skipImageRelocation),
 				WithSkipPullImages(skipPullImages),
 				WithPreserveDigest(preserveDigest),
+				WithLocalizeDependencies(localizeDependencies),
 			)
 			if err != nil {
 				return err
@@ -729,6 +737,9 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
+	cmd.PersistentFlags().BoolVar(&localizeDependencies, "localize-dependencies", localizeDependencies,
+		"clear the repository of the Chart.yaml dependencies already bundled in charts/ (also updating Chart.lock), "+
+			"so Helm does not try to fetch them from the original repository. Ignored with --preserve-digest")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"push the chart and its images byte-for-byte so their digests are unchanged. "+
 			"Implies --skip-image-relocation, and requires a bundle produced by \"dt wrap --preserve-digest\"")
