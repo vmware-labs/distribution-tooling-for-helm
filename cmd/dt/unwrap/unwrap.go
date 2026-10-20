@@ -687,13 +687,13 @@ func pushPreservedChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL st
 // NewCmd returns a new unwrap command
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
-		sayYes              bool
-		pushChartURL        string
-		version             string
-		skipImageRelocation bool
-		skipPullImages      bool
-		preserveDigest      bool
-		syncAliasTags       bool
+		sayYes               bool
+		pushChartURL         string
+		version              string
+		skipImageRelocation  bool
+		skipPullImages       bool
+		preserveDigest       bool
+		syncAliasTags        bool
 		localizeDependencies bool
 	)
 	valuesFiles := []string{"values.yaml"}
