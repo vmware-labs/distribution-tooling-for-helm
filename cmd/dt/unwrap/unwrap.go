@@ -52,6 +52,7 @@ type Config struct {
 	ValuesFiles           []string
 	PreserveRepository    bool
 	SyncAliasTags         bool
+	LocalizeDependencies  bool
 	PreserveDigest        bool
 
 	// Interactive enables interacting with the user
@@ -229,6 +230,13 @@ func WithValuesFiles(files ...string) func(c *Config) {
 	}
 }
 
+// WithLocalizeDependencies configures the LocalizeDependencies of the Config
+func WithLocalizeDependencies(localize bool) func(c *Config) {
+	return func(c *Config) {
+		c.LocalizeDependencies = localize
+	}
+}
+
 // WithPreserveRepository configures the PreserveRepository of the Config
 func WithPreserveRepository(preserve bool) func(c *Config) {
 	return func(c *Config) {
@@ -281,6 +289,22 @@ func askYesNoQuestion(msg string, cfg *Config) bool {
 	return widgets.ShowYesNoQuestion(msg)
 }
 
+// applyPreserveDigest disables the options that rewrite the chart content when preserving the digest,
+// as the chart is pushed byte-for-byte
+func applyPreserveDigest(cfg *Config, l dtlog.Logger) {
+	if !cfg.PreserveDigest {
+		return
+	}
+	if !cfg.SkipImageRelocation {
+		l.Debugf("--preserve-digest implies --skip-image-relocation: no chart content will be rewritten")
+		cfg.SkipImageRelocation = true
+	}
+	if cfg.LocalizeDependencies {
+		l.Debugf("--preserve-digest implies not localizing dependencies: no chart content will be rewritten")
+		cfg.LocalizeDependencies = false
+	}
+}
+
 func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (string, error) {
 
 	cfg := NewConfig(opts...)
@@ -303,10 +327,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 		l.Debugf("Temporary assets kept at %q", tempDir)
 	}
 
-	if cfg.PreserveDigest && !cfg.SkipImageRelocation {
-		l.Debugf("--preserve-digest implies --skip-image-relocation: no chart content will be rewritten")
-		cfg.SkipImageRelocation = true
-	}
+	applyPreserveDigest(cfg, l)
 
 	chartPath, err := wrap.ResolveInputChartPath(
 		inputChart,
@@ -332,6 +353,7 @@ func unwrapChart(inputChart, registryURL, pushChartURL string, opts ...Option) (
 			relocator.Recursive, relocator.WithAnnotationsKey(cfg.AnnotationsKey), relocator.WithValuesFiles(cfg.ValuesFiles...),
 			relocator.WithSkipImageRelocation(cfg.SkipImageRelocation),
 			relocator.WithPreserveRepository(cfg.PreserveRepository),
+			relocator.WithLocalizeDependencies(cfg.LocalizeDependencies),
 		)
 	}); err != nil {
 		return "", l.Failf("failed to relocate %q: %w", chartPath, err)
@@ -672,6 +694,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 		skipPullImages      bool
 		preserveDigest      bool
 		syncAliasTags       bool
+		localizeDependencies bool
 	)
 	valuesFiles := []string{"values.yaml"}
 	cmd := &cobra.Command{
@@ -710,6 +733,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithSkipPullImages(skipPullImages),
 				WithPreserveDigest(preserveDigest),
 				WithSyncAliasTags(syncAliasTags),
+				WithLocalizeDependencies(localizeDependencies),
 			)
 			if err != nil {
 				return err
@@ -731,6 +755,9 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
 	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, including latest but excluding revision and artifact tags")
+	cmd.PersistentFlags().BoolVar(&localizeDependencies, "localize-dependencies", localizeDependencies,
+		"clear the repository of the Chart.yaml dependencies already bundled in charts/ (also updating Chart.lock), "+
+			"so Helm does not try to fetch them from the original repository. Ignored with --preserve-digest")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"push the chart and its images byte-for-byte so their digests are unchanged. "+
 			"Implies --skip-image-relocation, and requires a bundle produced by \"dt wrap --preserve-digest\"")

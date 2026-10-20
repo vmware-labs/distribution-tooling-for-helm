@@ -416,6 +416,18 @@ images:
 
 Note that in some scenarios one might actually not be interested in relocating the images. Perhaps one is only interested in pushing the Helm chart to a different registry but retaining the images. For such scenarios the `--skip-relocation` flag can be used when unwrapping the chart.
 
+#### Chart dependencies
+
+Relocation does not change the `repository` of the `dependencies` listed in `Chart.yaml`. When the subcharts are already bundled in the `charts/` folder, the relocated chart still points to the original repository, so `helm dependency build` or `helm dependency update` would try to reach it. That fails in air-gapped environments or for users without access to the source registry.
+
+The `--localize-dependencies` flag, available in `dt charts relocate` and `dt unwrap`, clears the `repository` of the dependencies that are bundled in `charts/`, so Helm treats them as local subcharts. A dependency is considered bundled if there is a `charts/<name>` directory (`.tgz` archives are unpacked first) whose version satisfies the constraint of the dependency. If there is a `Chart.lock`, it is updated accordingly, including its digest.
+
+```console
+$ helm dt charts relocate --localize-dependencies examples/wordpress acme.com/federal
+```
+
+Dependencies that are not bundled in `charts/` keep their `repository`, as there is no guarantee they are available at the target registry. The flag is ignored with `--preserve-digest`, as no chart content is rewritten in that mode.
+
 ### Pushing images
 
 Based on the `Images.lock` file, this command pushes all images (that must have been previously pulled into the `images/` folder) into their respective registries. Note that this command does not relocate anything. It will simply try to push the images to wherever they are pointing.

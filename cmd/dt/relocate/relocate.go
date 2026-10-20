@@ -13,6 +13,7 @@ import (
 func NewCmd(cfg *config.Config) *cobra.Command {
 	valuesFiles := []string{"values.yaml"}
 	skipImageRelocation := false
+	localizeDependencies := false
 	cmd := &cobra.Command{
 		Use:   "relocate CHART_PATH OCI_URI",
 		Short: "Relocates a Helm chart",
@@ -37,6 +38,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 					relocator.WithAnnotationsKey(cfg.AnnotationsKey),
 					relocator.WithValuesFiles(valuesFiles...),
 					relocator.WithSkipImageRelocation(skipImageRelocation),
+					relocator.WithLocalizeDependencies(localizeDependencies),
 				)
 			}); err != nil {
 				return l.Failf("failed to relocate Helm chart %q: %w", chartPath, err)
@@ -49,6 +51,9 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-relocation", skipImageRelocation, "skip relocating image references in the different files")
+	cmd.PersistentFlags().BoolVar(&localizeDependencies, "localize-dependencies", localizeDependencies,
+		"clear the repository of the Chart.yaml dependencies already bundled in charts/ (also updating Chart.lock), "+
+			"so Helm does not try to fetch them from the original repository")
 
 	return cmd
 }
