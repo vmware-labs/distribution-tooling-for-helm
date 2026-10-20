@@ -51,6 +51,7 @@ type Config struct {
 	ContainerRegistryAuth Auth
 	ValuesFiles           []string
 	PreserveRepository    bool
+	SyncAliasTags         bool
 	LocalizeDependencies  bool
 	PreserveDigest        bool
 
@@ -90,6 +91,11 @@ func WithSayYes(sayYes bool) func(c *Config) {
 	return func(c *Config) {
 		c.SayYes = sayYes
 	}
+}
+
+// WithSyncAliasTags publishes recorded aliases, overwriting destination aliases.
+func WithSyncAliasTags(enabled bool) Option {
+	return func(c *Config) { c.SyncAliasTags = enabled }
 }
 
 // WithKeepArtifacts configures the KeepArtifacts of the WrapConfig
@@ -494,6 +500,7 @@ func pushChartImagesAndVerify(ctx context.Context, wrap wrapping.Wrap, registryU
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
 		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+		chartutils.WithSyncAliasTags(cfg.SyncAliasTags),
 		chartutils.WithPreserveDigest(cfg.PreserveDigest),
 	); err != nil {
 		return err
@@ -541,6 +548,7 @@ func pushImages(ctx context.Context, wrap wrapping.WrapContainer, cfg *Config) e
 		chartutils.WithProgressBar(l.ProgressBar()),
 		chartutils.WithInsecureMode(cfg.Insecure),
 		chartutils.WithAuth(cfg.ContainerRegistryAuth.Username, cfg.ContainerRegistryAuth.Password),
+		chartutils.WithSyncAliasTags(cfg.SyncAliasTags),
 		chartutils.WithPreserveDigest(cfg.PreserveDigest))
 }
 
@@ -679,13 +687,13 @@ func pushPreservedChart(ctx context.Context, wrap wrapping.Wrap, pushChartURL st
 // NewCmd returns a new unwrap command
 func NewCmd(cfg *config.Config) *cobra.Command {
 	var (
-		sayYes              bool
-		pushChartURL        string
-		version             string
-		skipImageRelocation bool
-		skipPullImages      bool
-		preserveDigest      bool
-
+		sayYes               bool
+		pushChartURL         string
+		version              string
+		skipImageRelocation  bool
+		skipPullImages       bool
+		preserveDigest       bool
+		syncAliasTags        bool
 		localizeDependencies bool
 	)
 	valuesFiles := []string{"values.yaml"}
@@ -724,6 +732,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 				WithSkipImageRelocation(skipImageRelocation),
 				WithSkipPullImages(skipPullImages),
 				WithPreserveDigest(preserveDigest),
+				WithSyncAliasTags(syncAliasTags),
 				WithLocalizeDependencies(localizeDependencies),
 			)
 			if err != nil {
@@ -745,6 +754,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd.PersistentFlags().StringSliceVar(&valuesFiles, "values", valuesFiles, "values files to relocate images (can specify multiple)")
 	cmd.PersistentFlags().BoolVar(&skipImageRelocation, "skip-image-relocation", skipImageRelocation, "Skip relocating image references in the different files")
 	cmd.PersistentFlags().BoolVar(&skipPullImages, "skip-pull-images", skipPullImages, "Skip pulling images")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&localizeDependencies, "localize-dependencies", localizeDependencies,
 		"clear the repository of the Chart.yaml dependencies already bundled in charts/ (also updating Chart.lock), "+
 			"so Helm does not try to fetch them from the original repository. Ignored with --preserve-digest")
@@ -759,6 +769,7 @@ func NewCmd(cfg *config.Config) *cobra.Command {
 func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	var sayYes bool
 	var preserveDigest bool
+	var syncAliasTags bool
 	cmd := &cobra.Command{
 		Use:   "unwrap FILE OCI_REF",
 		Short: "Unwraps a wrapped container image",
@@ -789,6 +800,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 				WithUsePlainHTTP(cfg.UsePlainHTTP),
 				WithInteractive(true),
 				WithPreserveDigest(preserveDigest),
+				WithSyncAliasTags(syncAliasTags),
 			)
 			if err != nil {
 				return err
@@ -800,6 +812,7 @@ func NewContainerCmd(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.PersistentFlags().BoolVar(&sayYes, "yes", sayYes, "respond 'yes' to any yes/no question")
+	cmd.PersistentFlags().BoolVar(&syncAliasTags, "sync-alias-tags", false, "create or overwrite recorded image aliases, including latest but excluding revision and artifact tags")
 	cmd.PersistentFlags().BoolVar(&preserveDigest, "preserve-digest", preserveDigest,
 		"push the image byte-for-byte instead of relocating/re-packaging it, so its digest (and any signature made against it) remains unchanged")
 

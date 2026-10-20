@@ -133,10 +133,19 @@ func PullImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 	p, _ := cfg.ProgressBar.WithTotal(getNumberOfArtifacts(lock.Images)).UpdateTitle("Pulling Images").Start()
 	defer p.Stop()
 
+	discovery := make(aliasDiscovery)
 	for _, imgDesc := range lock.Images {
+		pullDesc := *imgDesc
+		if cfg.SyncAliasTags {
+			pinned, err := discovery.capture(imgDesc, o)
+			if err != nil {
+				return fmt.Errorf("discovering aliases for %q: %w", imgDesc.Image, err)
+			}
+			pullDesc.Image = pinned.Name()
+		}
 		var err error
 		if cfg.PreserveDigest {
-			err = pullImageVerbatim(ctx, imgDesc, imagesDir, cfg, p)
+			err = pullImageVerbatim(ctx, &pullDesc, imagesDir, cfg, p)
 		} else {
 			err = pullImagePerPlatform(ctx, imgDesc, imagesDir, cfg, o, p)
 		}
@@ -210,7 +219,16 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 					l.Debugf("Failed to push image: %v", prevErr)
 					p.Warnf("Failed to push image: retrying %d/%d", try, maxRetries)
 				}
-				if cfg.PreserveDigest {
+				var staged *stagedImage
+				artifactOpts := []artifacts.Option{artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password), artifacts.WithInsecureMode(cfg.InsecureMode)}
+				if cfg.SyncAliasTags {
+					var err error
+					staged, err = stageImageWithAliases(imgData, imagesDir, cfg, o)
+					if err != nil {
+						return err
+					}
+					artifactOpts = append(artifactOpts, artifacts.WithResolvedDigest(imgData.Image, staged.digest))
+				} else if cfg.PreserveDigest {
 					if err := artifacts.PushVerbatim(ctx, verbatimImageDir(imagesDir, imgData), imgData.Image,
 						artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
 						artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
@@ -219,32 +237,11 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				} else if err := pushImage(imgData, imagesDir, l, o); err != nil {
 					return err
 				}
-				if err := artifacts.PushImageSignatures(context.Background(),
-					imgData,
-					artifactsDir,
-					artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
-					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
-					if err == artifacts.ErrLocalArtifactNotExist {
-						l.Debugf("image %q does not have a local signature stored", imgData.Image)
-					} else {
-						return fmt.Errorf("failed to push image signatures: %w", err)
-					}
-				} else {
-					p.UpdateTitle(fmt.Sprintf("Pushed image %q signature", imgData.Image))
+				if err := pushImageArtifacts(imgData, artifactsDir, cfg, p, artifactOpts...); err != nil {
+					return err
 				}
-
-				if err := artifacts.PushImageMetadata(context.Background(),
-					imgData,
-					artifactsDir,
-					artifacts.WithAuth(cfg.Auth.Username, cfg.Auth.Password),
-					artifacts.WithInsecureMode(cfg.InsecureMode)); err != nil {
-					if err == artifacts.ErrLocalArtifactNotExist {
-						l.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)
-					} else {
-						return fmt.Errorf("failed to push image metadata: %w", err)
-					}
-				} else {
-					p.UpdateTitle(fmt.Sprintf("Pushed image %q metadata", imgData.Image))
+				if staged != nil {
+					return staged.publishTags()
 				}
 				return nil
 			})
@@ -252,6 +249,29 @@ func PushImages(lock *imagelock.ImagesLock, imagesDir string, opts ...Option) er
 				return fmt.Errorf("failed to push image %q: %w", imgData.Name, err)
 			}
 		}
+	}
+	return nil
+}
+
+func pushImageArtifacts(imgData *imagelock.ChartImage, artifactsDir string, cfg *Configuration, p dtlog.ProgressBar, artifactOpts ...artifacts.Option) error {
+	if err := artifacts.PushImageSignatures(cfg.Context, imgData, artifactsDir, artifactOpts...); err != nil {
+		if err == artifacts.ErrLocalArtifactNotExist {
+			cfg.Log.Debugf("image %q does not have a local signature stored", imgData.Image)
+		} else {
+			return fmt.Errorf("failed to push image signatures: %w", err)
+		}
+	} else {
+		p.UpdateTitle(fmt.Sprintf("Pushed image %q signature", imgData.Image))
+	}
+
+	if err := artifacts.PushImageMetadata(cfg.Context, imgData, artifactsDir, artifactOpts...); err != nil {
+		if err == artifacts.ErrLocalArtifactNotExist {
+			cfg.Log.Debugf("image %q does not have a local metadata artifact stored", imgData.Image)
+		} else {
+			return fmt.Errorf("failed to push image metadata: %w", err)
+		}
+	} else {
+		p.UpdateTitle(fmt.Sprintf("Pushed image %q metadata", imgData.Image))
 	}
 	return nil
 }
