@@ -18,16 +18,12 @@ import (
 )
 
 var (
-	// Protect revision tags even if their version/distro format is not one of
-	// the formats used by charts-syncer's standalone image discovery.
+	// Exclude revision tags from aliases even if their version/distro format
+	// differs from charts-syncer's standalone image discovery formats.
 	revisionTag       = regexp.MustCompile(`-r[0-9]+$`)
 	validAliasTag     = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$`)
 	digestArtifactTag = regexp.MustCompile(`^sha256-[0-9a-f]{64}\.(sig|metadata)$`)
 )
-
-func protectedTag(tag string) bool {
-	return revisionTag.MatchString(tag)
-}
 
 // artifactTag recognizes DT's signature and metadata naming conventions.
 // These artifacts are copied separately and need no alias-discovery requests.
@@ -65,7 +61,7 @@ func (discovery aliasDiscovery) capture(img *imagelock.ChartImage, o crane.Optio
 		}
 		tagDigests = make(map[string]v1.Hash)
 		for _, tag := range tags {
-			if protectedTag(tag) || artifactTag(tag) {
+			if revisionTag.MatchString(tag) || artifactTag(tag) {
 				continue
 			}
 			if !validAliasTag.MatchString(tag) {
@@ -85,6 +81,8 @@ func (discovery aliasDiscovery) capture(img *imagelock.ChartImage, o crane.Optio
 	// Replace any snapshot inherited from a source chart's existing lock.
 	img.Aliases = nil
 	for tag, digest := range tagDigests {
+		// Exact manifest identity also excludes artifacts with unfamiliar tag
+		// names, including artifacts that use the OCI image manifest format.
 		if digest == desc.Digest && tag != ref.Identifier() {
 			img.Aliases = append(img.Aliases, tag)
 		}
@@ -110,7 +108,7 @@ func stageImageWithAliases(img *imagelock.ChartImage, imagesDir string, cfg *Con
 		}
 		// Artifact tags never come from discovery; skip them so a hand-edited
 		// lock cannot overwrite signatures or metadata at the destination.
-		if protectedTag(alias) || artifactTag(alias) || alias == ref.Identifier() || seen[alias] {
+		if revisionTag.MatchString(alias) || artifactTag(alias) || alias == ref.Identifier() || seen[alias] {
 			continue
 		}
 		seen[alias] = true
@@ -121,15 +119,6 @@ func stageImageWithAliases(img *imagelock.ChartImage, imagesDir string, cfg *Con
 	digest, upload, err := prepareImageUpload(img, imagesDir, cfg, o)
 	if err != nil {
 		return nil, err
-	}
-
-	primary, err := remote.Head(ref, o.Remote...)
-	if err != nil && !manifestNotFound(err) {
-		return nil, fmt.Errorf("checking destination image %q: %w", ref, err)
-	}
-	primaryExists := err == nil
-	if primaryExists && primary.Digest != digest && protectedTag(ref.Identifier()) {
-		return nil, fmt.Errorf("refusing to overwrite protected destination tag %q: existing digest %s differs from bundled digest %s", ref, primary.Digest, digest)
 	}
 
 	immutableRef := ref.Context().Digest(digest.String())
@@ -198,17 +187,13 @@ func publishAliases(repo name.Repository, aliases []string, published *remote.De
 }
 
 func publishPrimary(ref name.Reference, published *remote.Descriptor, o crane.Options) error {
-	// Recheck the primary reference after uploading content and aliases, since
-	// another writer may have published it in the meantime.
+	// The primary reference was explicitly selected for copying, so retain
+	// PushImages' overwrite behavior regardless of alias synchronization.
 	current, err := remote.Head(ref, o.Remote...)
-	if err == nil {
-		if current.Digest == published.Digest {
-			return nil
-		}
-		if protectedTag(ref.Identifier()) {
-			return fmt.Errorf("refusing to overwrite protected destination tag %q", ref)
-		}
-	} else if !manifestNotFound(err) {
+	if err == nil && current.Digest == published.Digest {
+		return nil
+	}
+	if err != nil && !manifestNotFound(err) {
 		return fmt.Errorf("checking destination image %q: %w", ref, err)
 	}
 	return remote.Put(ref, published, o.Remote...)

@@ -238,6 +238,111 @@ func TestLatestPrimaryCanBeUpdated(t *testing.T) {
 	require.Equal(t, want.String(), aliasDigest(t, dstRepo+":18"))
 }
 
+func TestPrimaryRevisionOverwriteIndependentOfAliases(t *testing.T) {
+	for _, mode := range []string{"rebuilt", "filtered", "preserved"} {
+		t.Run(mode, func(t *testing.T) {
+			src, dst := aliasRegistry(t, nil), aliasRegistry(t, nil)
+			srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
+			fresh, old := aliasIndex(t, "new"), aliasIndex(t, "old")
+			seedAliasImage(t, srcRepo, fresh, aliasRevision, "18", "latest")
+			oldDigest, err := old.Digest()
+			require.NoError(t, err)
+			bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
+			wrapOpts := []wrap.Option{wrap.WithSyncAliasTags(true), wrap.WithPreserveDigest(mode == "preserved"),
+				wrap.WithOutputFile(bundle), wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger())}
+			if mode == "filtered" {
+				wrapOpts = append(wrapOpts, wrap.WithPlatforms([]string{"linux/amd64"}))
+			}
+			_, err = wrap.Container(srcRepo+":"+aliasRevision, wrapOpts...)
+			require.NoError(t, err)
+			src.Close()
+
+			var withoutAliases string
+			for _, enabled := range []bool{false, true} {
+				t.Run(fmt.Sprintf("aliases=%t", enabled), func(t *testing.T) {
+					dstPrefix := fmt.Sprintf("%s/mirror-%t", strings.TrimPrefix(dst.URL, "http://"), enabled)
+					dstRepo := dstPrefix + "/postgresql"
+					seedAliasImage(t, dstRepo, old, aliasRevision, "18", "latest", "18.6.0-debian-12-r12")
+					_, err = unwrap.Container(bundle, dstPrefix, unwrap.WithSyncAliasTags(enabled),
+						unwrap.WithPreserveDigest(mode == "preserved"), unwrap.WithSayYes(true),
+						unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
+					require.NoError(t, err)
+					published := aliasDigest(t, dstRepo+":"+aliasRevision)
+					require.NotEqual(t, oldDigest.String(), published, "the explicitly selected revision must be overwritten")
+					wantAlias := oldDigest.String()
+					if enabled {
+						require.Equal(t, withoutAliases, published, "alias synchronization must not change primary-tag behavior")
+						wantAlias = published
+					} else {
+						withoutAliases = published
+					}
+					for _, alias := range []string{"18", "latest"} {
+						require.Equal(t, wantAlias, aliasDigest(t, dstRepo+":"+alias))
+					}
+					require.Equal(t, oldDigest.String(), aliasDigest(t, dstRepo+":18.6.0-debian-12-r12"))
+				})
+			}
+		})
+	}
+}
+
+func TestAliasDiscoveryIgnoresUnrecognizedArtifacts(t *testing.T) {
+	image := mutate.MediaType(empty.Image, types.OCIManifestSchema1)
+	selected, err := mutate.ConfigFile(image, &v1.ConfigFile{OS: "linux", Architecture: "amd64"})
+	require.NoError(t, err)
+	// Charts and attestations can use the same manifest media type as an image.
+	chart := mutate.ConfigMediaType(image, types.MediaType("application/vnd.cncf.helm.config.v1+json"))
+	attestation := mutate.ConfigMediaType(image, types.MediaType("application/vnd.in-toto+json"))
+	artifactImages := map[string]v1.Image{
+		"custom-chart":       chart,
+		"custom-attestation": attestation,
+		"custom-format":      mutate.MediaType(attestation, types.MediaType("application/vnd.example.artifact.v1+json")),
+	}
+	type requests struct{ heads, gets atomic.Int32 }
+	counts := make(map[string]*requests)
+	for tag := range artifactImages {
+		counts[tag] = &requests{}
+	}
+	var recording atomic.Bool
+	src := aliasRegistry(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tag := strings.TrimPrefix(r.URL.Path, "/v2/postgresql/manifests/")
+			if count := counts[tag]; recording.Load() && count != nil {
+				switch r.Method {
+				case http.MethodHead:
+					count.heads.Add(1)
+				case http.MethodGet:
+					count.gets.Add(1)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	repo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
+	for _, tag := range []string{aliasRevision, "18", "latest"} {
+		require.NoError(t, crane.Push(selected, repo+":"+tag))
+	}
+	for tag, artifact := range artifactImages {
+		require.NoError(t, crane.Push(artifact, repo+":"+tag))
+	}
+	bundle := filepath.Join(t.TempDir(), "image.wrap.tgz")
+	recording.Store(true)
+	_, err = wrap.Container(repo+":"+aliasRevision, wrap.WithSyncAliasTags(true), wrap.WithFetchArtifacts(false),
+		wrap.WithOutputFile(bundle), wrap.WithTempDirectory(t.TempDir()), wrap.WithLogger(silentLogger()))
+	recording.Store(false)
+	require.NoError(t, err)
+	extracted := t.TempDir()
+	require.NoError(t, utils.Untar(bundle, extracted, utils.TarConfig{StripComponents: 1}))
+	lock, err := imagelock.FromYAMLFile(filepath.Join(extracted, "Images.lock"))
+	require.NoError(t, err)
+	require.Len(t, lock.Images, 1)
+	require.Equal(t, []string{"18", "latest"}, lock.Images[0].Aliases)
+	for tag, count := range counts {
+		require.EqualValues(t, 1, count.heads.Load(), "unrecognized tag %q must be resolved", tag)
+		require.Zero(t, count.gets.Load(), "non-image artifact %q must not be downloaded", tag)
+	}
+}
+
 func TestAliasDiscoverySkipsArtifactRequests(t *testing.T) {
 	var recording atomic.Bool
 	var mu sync.Mutex
@@ -330,7 +435,7 @@ func TestAliasDiscoveryIsOptInAndReportsErrors(t *testing.T) {
 	}
 }
 
-func TestAliasImportOptInAndProtectedTags(t *testing.T) {
+func TestAliasImportOptInAndExcludedTags(t *testing.T) {
 	src, dst := aliasRegistry(t, nil), aliasRegistry(t, nil)
 	srcRepo := strings.TrimPrefix(src.URL, "http://") + "/postgresql"
 	dstHost := strings.TrimPrefix(dst.URL, "http://")
@@ -380,16 +485,6 @@ func TestAliasImportOptInAndProtectedTags(t *testing.T) {
 		require.Equal(t, aliasDigest(t, protectedRepo+":"+aliasRevision), aliasDigest(t, protectedRepo+":"+alias))
 	}
 
-	// An existing primary revision must also be protected, including in the
-	// chart image push path which normally permits replacing primary tags.
-	conflictRepo := dstHost + "/conflict/postgresql"
-	seedAliasImage(t, conflictRepo, old, aliasRevision, "18")
-	_, err = unwrap.Container(bundle, dstHost+"/conflict", unwrap.WithSyncAliasTags(true), unwrap.WithSayYes(true),
-		unwrap.WithTempDirectory(t.TempDir()), unwrap.WithLogger(silentLogger()))
-	require.ErrorContains(t, err, "refusing to overwrite protected destination tag")
-	for _, tag := range []string{aliasRevision, "18"} {
-		require.Equal(t, oldDigest.String(), aliasDigest(t, conflictRepo+":"+tag))
-	}
 }
 
 func TestAliasFailureLeavesRevisionPending(t *testing.T) {

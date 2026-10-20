@@ -284,6 +284,8 @@ Discovery also skips DT's artifact tag conventions before resolving tags:
 These names are treated as artifacts rather than image aliases, and unwrap also
 ignores them if they appear in a bundle's `aliases` list. Signature and
 metadata copying still follows the existing artifact options.
+Other tags are resolved and compared by their full manifest digest, so artifacts
+with unfamiliar tag names are not recorded as image aliases.
 
 The snapshot is stored as an optional `aliases` list on the corresponding image entry
 in the existing `Images.lock` (under `chart/` for chart bundles, at the bundle root for
@@ -299,8 +301,9 @@ images:
 
 Unwrap first uploads image content by digest, then its artifacts and aliases, and
 finally its primary reference. Existing aliases are overwritten; aliases already
-pointing to the desired digest need no write. Existing revision tags are protected:
-a different bundled destination digest produces an error instead of overwriting them.
+pointing to the desired digest need no write. An explicitly selected image's primary
+tag retains DT's existing overwrite behavior, including revision tags, with or without
+`--sync-alias-tags`. Revision tags are excluded only as additional aliases.
 Alias updates use the actual published manifest, including when platform filtering
 or reconstruction changes its digest. `--preserve-digest` is also supported.
 
