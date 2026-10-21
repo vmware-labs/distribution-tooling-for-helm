@@ -27,6 +27,8 @@ endif
 
 GOIMPORTS     = $(GOBIN)/goimports
 GOLANGCILINT  = $(GOBIN)/golangci-lint
+GOLANGCILINT_VERSION ?= v2.9.0
+GOIMPORTS_VERSION ?= v0.36.0
 
 ARCH          = $(shell uname -p)
 
@@ -37,7 +39,7 @@ LDFLAGS     := -w -s
 GOFLAGS     :=
 CGO_ENABLED ?= 0
 
-BUILD_DATE := $(shell date -u '+%Y-%m-%d %I:%M:%S UTC' 2> /dev/null)
+BUILD_DATE := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC' 2> /dev/null)
 GIT_HASH := $(shell git rev-parse HEAD 2> /dev/null)
 
 LDFLAGS += -X "main.BuildDate=$(BUILD_DATE)"
@@ -59,7 +61,7 @@ all: build
 build: $(BINDIR)/$(BINNAME)
 
 $(BINDIR)/$(BINNAME): $(SRC)
-	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) go build $(GOFLAGS) -trimpath -tags '$(TAGS)' -ldflags '$(LDFLAGS)' -o '$(BINDIR)'/$(BINNAME) ./cmd/$(TOOL)
+	CGO_ENABLED=$(CGO_ENABLED) go build $(GOFLAGS) -trimpath -tags '$(TAGS)' -ldflags '$(LDFLAGS)' -o '$(BINDIR)'/$(BINNAME) ./cmd/$(TOOL)
 
 # ------------------------------------------------------------------------------
 #  install
@@ -75,41 +77,49 @@ install: build
 #  test
 
 .PHONY: test
-test: build
-test: test-style 
+test: test-style
 test: test-unit
 
 .PHONY: test-unit
 test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	GO111MODULE=on go test $(GOFLAGS) -run $(TESTS) ./... $(TESTFLAGS)
+	go test $(GOFLAGS) -run $(TESTS) ./... $(TESTFLAGS)
 
 .PHONY: test-coverage
 test-coverage:
 	@echo
 	@echo "==> Running unit tests with coverage <=="
 	@mkdir -p $(BUILD_DIR)
-	GO111MODULE=on go test -v -covermode=count -coverprofile=$(BUILD_DIR)/cover.out ./...
-	GO111MODULE=on go tool cover -html=$(BUILD_DIR)/cover.out -o=$(BUILD_DIR)/coverage.html
+	go test -v -covermode=count -coverprofile=$(BUILD_DIR)/cover.out ./...
+	go tool cover -html=$(BUILD_DIR)/cover.out -o=$(BUILD_DIR)/coverage.html
 
 .PHONY: test-style
 test-style: $(GOLANGCILINT)
-	GO111MODULE=on $(GOLANGCILINT) run
+	$(GOLANGCILINT) run
 
 .PHONY: format
 format: $(GOIMPORTS)
-	GO111MODULE=on go list -f '{{.Dir}}' ./... | xargs $(GOIMPORTS) -w -local helm.sh/helm
+	go list -f '{{.Dir}}' ./... | xargs $(GOIMPORTS) -w -local helm.sh/helm
+
+
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: tidy
+tidy:
+	go mod tidy
 
 
 # ------------------------------------------------------------------------------
 #  dependencies
 
 $(GOLANGCILINT):
-	(cd /; GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.7)
+	(cd /; go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCILINT_VERSION))
 
 $(GOIMPORTS):
-	(cd /; GO111MODULE=on go install golang.org/x/tools/cmd/goimports@latest)
+	(cd /; go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION))
 
 
 # ------------------------------------------------------------------------------

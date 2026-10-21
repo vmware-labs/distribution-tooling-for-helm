@@ -8,9 +8,10 @@ permissions:
 jobs:
   Release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -18,29 +19,29 @@ jobs:
         run: |
           PLUGIN_VERSION=v$(cat plugin.yaml | grep "version" | cut -d '"' -f 2)
           LATEST_VERSION=$(git describe --tags --abbrev=0)
-          echo PLUGIN_VERSION=$PLUGIN_VERSION >> "$GITHUB_ENV"
-          echo LATEST_VERSION=$LATEST_VERSION >> "$GITHUB_ENV"
+          echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> "$GITHUB_ENV"
+          echo "LATEST_VERSION=$LATEST_VERSION" >> "$GITHUB_ENV"
 
       - name: Check Version
         if: ${{ env.PLUGIN_VERSION == env.LATEST_VERSION }}
         run: echo "Plugin version already released. Please make sure you have prepared the release first." && exit 1
 
       - name: Set Golang
-        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '^1.26'
+          go-version-file: go.mod
 
       - name: Build
         run: make build
 
       - name: Create tag
-        run: git tag $PLUGIN_VERSION
+        run: git tag "$PLUGIN_VERSION"
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@336e29918d653399e599bfca99fadc1d7ffbc9f7 # v4.3.0
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: latest
+          version: v2.18.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
